@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(Sonatrix VERSION 0.1.0 LANGUAGES CXX OBJCXX)
+project(Sonatrix VERSION 0.1.0 LANGUAGES CXX OBJCXX Swift)
 
 # Require C++20 for lock-free concurrency and modern DSP features
 set(CMAKE_CXX_STANDARD 20)
@@ -16,6 +16,8 @@ find_library(COREMIDI_FRAMEWORK CoreMIDI)
 find_library(AUDIOUNIT_FRAMEWORK AudioUnit)
 find_library(AVFOUNDATION_FRAMEWORK AVFoundation)
 find_library(FOUNDATION_FRAMEWORK Foundation)
+find_library(APPKIT_FRAMEWORK AppKit)
+find_library(SWIFTUI_FRAMEWORK SwiftUI)
 
 # ------------------------------------------------------------------------------
 # 1. The Core DSP and Event Engine (Static Library)
@@ -29,6 +31,9 @@ add_executable(SonatrixStandalone MACOSX_BUNDLE
     src/standalone/main.mm
     src/standalone/AppDelegate.h
     src/standalone/AppDelegate.mm
+    src/ui/ArrangementView.swift
+    src/ui/PatternBrowser.swift
+    src/ui/DeltaGraphEditor.swift
 )
 target_link_libraries(SonatrixStandalone PRIVATE 
     SonatrixCore
@@ -36,6 +41,8 @@ target_link_libraries(SonatrixStandalone PRIVATE
     ${COREMIDI_FRAMEWORK}
     ${AVFOUNDATION_FRAMEWORK}
     ${FOUNDATION_FRAMEWORK}
+    ${APPKIT_FRAMEWORK}
+    ${SWIFTUI_FRAMEWORK}
 )
 
 set_target_properties(SonatrixStandalone PROPERTIES
@@ -48,6 +55,9 @@ set_target_properties(SonatrixStandalone PROPERTIES
 add_library(SonatrixAUv3 MODULE
     src/plugin/SonatrixAudioUnit.mm
     src/plugin/SonatrixAudioUnit.h
+    src/ui/ArrangementView.swift
+    src/ui/PatternBrowser.swift
+    src/ui/DeltaGraphEditor.swift
 )
 target_link_libraries(SonatrixAUv3 PRIVATE
     SonatrixCore
@@ -58,6 +68,8 @@ target_link_libraries(SonatrixAUv3 PRIVATE
     ${COREMIDI_FRAMEWORK}
     ${AVFOUNDATION_FRAMEWORK}
     ${FOUNDATION_FRAMEWORK}
+    ${APPKIT_FRAMEWORK}
+    ${SWIFTUI_FRAMEWORK}
 )
 
 set_target_properties(SonatrixAUv3 PROPERTIES
