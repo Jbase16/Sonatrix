@@ -92,6 +92,8 @@
            // Render C++ Synthesizer
            manager->RenderAudio(channels, frameCount, numChannels);
 
+           *isSilence = NO;
+
            return noErr;
          }];
 
@@ -110,21 +112,49 @@ static void MIDIInputCallback(const MIDIPacketList *pktlist,
     return;
 
   const MIDIPacket *packet = &pktlist->packet[0];
+  uint8_t runningStatus = 0;
 
   for (int i = 0; i < pktlist->numPackets; ++i) {
-    // Parse basic 3-byte MIDI messages
-    if (packet->length >= 3) {
-      uint8_t status = packet->data[0] & 0xF0;
-      if (status == 0x90 || status == 0x80) { // Note On / Note Off
-        Sonatrix::Core::MIDI::MIDIEvent ev;
-        // ev.timestamp = packet->timeStamp; // Abstract
-        ev.data1 = packet->data[1];
-        ev.data2 = packet->data[2];
-        ev.type = (status == 0x90)
-                      ? Sonatrix::Core::MIDI::MIDIEventType::NoteOn
-                      : Sonatrix::Core::MIDI::MIDIEventType::NoteOff;
+    int index = 0;
+    while (index < packet->length) {
+      uint8_t byte = packet->data[index];
+      if (byte & 0x80) {
+        // High bit set: New Status byte
+        runningStatus = byte;
+        index++;
+      }
 
-        queue->Push(ev);
+      uint8_t type = runningStatus & 0xF0;
+      if (type == 0x90 || type == 0x80) {
+        if (index + 1 < packet->length) {
+          uint8_t data1 = packet->data[index];
+          uint8_t data2 = packet->data[index + 1];
+
+          if (type == 0x90 && data2 == 0)
+            type = 0x80;
+
+          Sonatrix::Core::MIDI::MIDIEvent ev;
+          ev.data1 = data1;
+          ev.data2 = data2;
+          ev.type = (type == 0x90)
+                        ? Sonatrix::Core::MIDI::MIDIEventType::NoteOn
+                        : Sonatrix::Core::MIDI::MIDIEventType::NoteOff;
+          queue->Push(ev);
+
+          index += 2;
+        } else {
+          break;
+        }
+      } else if (type == 0xC0 || type == 0xD0) {
+        index += 1; // 1 data byte
+      } else if (type == 0xF0) {
+        break; // System messages, just ignore rest of packet
+      } else {
+        if (index + 1 < packet->length) {
+          index += 2; // Default 2 data bytes (CC, PitchBend, etc)
+        } else {
+          break;
+        }
       }
     }
     packet = MIDIPacketNext(packet);

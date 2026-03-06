@@ -102,17 +102,8 @@ void AudioFileReader::GenerateTestTone(float frequencyHz, float durationSeconds,
   float currentPhase = 0.0f;
 
   for (uint32_t i = 0; i < numFrames; ++i) {
-    // Blended Sine / Triangle wave for harmonics
-    float sineVal = std::sin(currentPhase);
-
-    // Triangle wave generator (-1.0 to 1.0)
-    float normalizedPhase = currentPhase / twoPi;
-    float triVal =
-        4.0f * std::abs(normalizedPhase - std::floor(normalizedPhase + 0.75f)) -
-        1.0f;
-
-    // 70% Sine, 30% Triangle
-    float sample = (sineVal * 0.7f) + (triVal * 0.3f);
+    // Pure Sine Wave (-6dB ceiling to prevent distortion clipping)
+    float sample = std::sin(currentPhase) * 0.5f;
 
     // Interleave L and R identically
     outBuffer[i * 2] = sample;

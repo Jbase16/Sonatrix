@@ -73,8 +73,9 @@ void VoiceManager::InitializeTestTones() {
   masterZone.sampleRate = 44100;
   masterZone.numChannels = 2;
 
-  // Generate a 4-second middle C (261.63 Hz) hybrid Sine/Triangle blend
-  AudioFileReader::GenerateTestTone(261.63f, 4.0f, masterZone.audioData, 44100);
+  // Generate a 120-second middle C (261.63 Hz) pure sine wave
+  AudioFileReader::GenerateTestTone(261.63f, 120.0f, masterZone.audioData,
+                                    44100);
   masterZone.isLoaded = true;
 
   testArticulation_.zones.push_back(masterZone);
