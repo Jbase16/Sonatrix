@@ -1,6 +1,6 @@
 #pragma once
 
-#include "MusicalTime.h"
+#include "../mir/MusicalTime.h"
 #include <cstdint>
 #include <string_view>
 

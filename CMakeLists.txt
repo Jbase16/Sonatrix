@@ -10,6 +10,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ffast-math -Wall -Wextra")
 
 # Locate required Apple Frameworks
 find_library(COREAUDIO_FRAMEWORK CoreAudio)
+find_library(COREAUDIOKIT_FRAMEWORK CoreAudioKit)
+find_library(AUDIOTOOLBOX_FRAMEWORK AudioToolbox)
 find_library(COREMIDI_FRAMEWORK CoreMIDI)
 find_library(AUDIOUNIT_FRAMEWORK AudioUnit)
 find_library(AVFOUNDATION_FRAMEWORK AVFoundation)
@@ -25,6 +27,7 @@ add_subdirectory(src/core)
 # ------------------------------------------------------------------------------
 add_executable(SonatrixStandalone MACOSX_BUNDLE
     src/standalone/main.mm
+    src/standalone/AppDelegate.h
     src/standalone/AppDelegate.mm
 )
 target_link_libraries(SonatrixStandalone PRIVATE 
@@ -49,7 +52,9 @@ add_library(SonatrixAUv3 MODULE
 target_link_libraries(SonatrixAUv3 PRIVATE
     SonatrixCore
     ${AUDIOUNIT_FRAMEWORK}
+    ${AUDIOTOOLBOX_FRAMEWORK}
     ${COREAUDIO_FRAMEWORK}
+    ${COREAUDIOKIT_FRAMEWORK}
     ${COREMIDI_FRAMEWORK}
     ${AVFOUNDATION_FRAMEWORK}
     ${FOUNDATION_FRAMEWORK}

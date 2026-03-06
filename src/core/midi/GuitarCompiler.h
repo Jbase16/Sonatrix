@@ -1,0 +1,43 @@
+#pragma once
+
+#include "IMIRCompiler.h"
+
+namespace Sonatrix {
+namespace Core {
+namespace MIDI {
+
+// -----------------------------------------------------------------------------
+// Guitar Engine (Constraint-Based Solver)
+// Translates MIR strum commands into exact 6-string realizations.
+// -----------------------------------------------------------------------------
+
+class GuitarCompiler : public IMIRCompiler {
+public:
+    GuitarCompiler() = default;
+    ~GuitarCompiler() override = default;
+    
+    // Implements IMIRCompiler
+    MIDIStream CompileClip(
+        const EditorClip& clip, 
+        const std::vector<ChordTrackEvent>& chordTimeline
+    ) const override;
+    
+private:
+    // Helper to evaluate finger distance cost function between an old chord and a new target
+    int EvaluateVoiceLeadingCost(const ActiveChordContext& target) const;
+    
+    // Helper that adds strings sequentially based on Strum direction (micro-timing dispersion)
+    void EmitStrum(
+        MIDIStream& outStream, 
+        MusicalTime baseTime, 
+        ArticulationType direction, 
+        uint8_t baseVelocity
+    ) const;
+};
+
+// Provides instantiation without exposing the class externally
+std::unique_ptr<IMIRCompiler> CreateGuitarEngine();
+
+} // namespace MIDI
+} // namespace Core
+} // namespace Sonatrix
