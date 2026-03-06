@@ -29,10 +29,14 @@ void VoiceManager::ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
     } else if (ev.type == MIDI::MIDIEventType::NoteOff ||
                (ev.type == MIDI::MIDIEventType::NoteOn && ev.data2 == 0)) {
       // Find the active voice playing this pitch and release it.
-      // Note: In an actual implementation, we map MIDI Channel and active Note
-      // IDs to ensure we don't kill a newer note with the same pitch.
-      // Simplified for demonstration.
-      // (Mock constraint solver handles this logic upstream).
+      // Temporary Phase 6 hack: The real engine uses the Constraint Solver
+      // downstream for voice killing, but we need manual NoteOff to stop
+      // indefinite synth swelling during hardware tests.
+      for (auto &v : voices_) {
+        if (!v.IsFree() && v.GetCurrentPitch() == ev.data1) {
+          v.Stop();
+        }
+      }
     }
   }
 }
@@ -76,11 +80,11 @@ void VoiceManager::InitializeTestTones() {
   testArticulation_.zones.push_back(masterZone);
 }
 
-void VoiceManager::RenderAudio(float *outputBuffer, uint32_t numFrames,
+void VoiceManager::RenderAudio(float **outputChannels, uint32_t numFrames,
                                uint32_t numChannels) {
   // Process every voice and accumulate into the final output buffer
   for (auto &v : voices_) {
-    v.RenderNextBlock(outputBuffer, numFrames, numChannels);
+    v.RenderNextBlock(outputChannels, numFrames, numChannels);
   }
 }
 

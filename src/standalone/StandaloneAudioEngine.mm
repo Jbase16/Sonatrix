@@ -14,14 +14,17 @@
 
 @interface StandaloneAudioEngine ()
 @property(nonatomic, strong) AVAudioEngine *engine;
-@property(nonatomic, assign)
-    std::unique_ptr<Sonatrix::Core::Audio::VoiceManager>
-        voiceManager;
+- (Sonatrix::Core::Audio::VoiceManager *)getVoiceManager;
 @end
 
 @implementation StandaloneAudioEngine {
+  std::unique_ptr<Sonatrix::Core::Audio::VoiceManager> _voiceManager;
   MIDIClientRef _midiClient;
   MIDIPortRef _midiInputPort;
+}
+
+- (Sonatrix::Core::Audio::VoiceManager *)getVoiceManager {
+  return _voiceManager.get();
 }
 
 - (instancetype)init {
@@ -52,14 +55,16 @@
                                AVAudioFrameCount frameCount,
                                AudioBufferList *_Nonnull outputData) {
            // Zero out buffers
-           for (UInt32 i = 0; i < outputData->mNumberBuffers; ++i) {
+           float *channels[8];
+           UInt32 numChannels = MIN(outputData->mNumberBuffers, 8);
+           for (UInt32 i = 0; i < numChannels; ++i) {
              memset(outputData->mBuffers[i].mData, 0,
                     outputData->mBuffers[i].mDataByteSize);
+             channels[i] = (float *)outputData->mBuffers[i].mData;
            }
 
            // Render C++ Synthesizer
-           manager->RenderAudio((float *)outputData->mBuffers[0].mData,
-                                frameCount, 2);
+           manager->RenderAudio(channels, frameCount, numChannels);
 
            return noErr;
          }];
@@ -73,7 +78,7 @@ static void MIDIInputCallback(const MIDIPacketList *pktlist,
                               void *readProcRefCon, void *srcConnRefCon) {
   StandaloneAudioEngine *engine =
       (__bridge StandaloneAudioEngine *)readProcRefCon;
-  Sonatrix::Core::Audio::VoiceManager *manager = engine.voiceManager.get();
+  Sonatrix::Core::Audio::VoiceManager *manager = [engine getVoiceManager];
   if (!manager)
     return;
 
@@ -86,7 +91,7 @@ static void MIDIInputCallback(const MIDIPacketList *pktlist,
       uint8_t status = packet->data[0] & 0xF0;
       if (status == 0x90 || status == 0x80) { // Note On / Note Off
         Sonatrix::Core::MIDI::MIDIEvent ev;
-        ev.timestamp = packet->timeStamp; // Abstract
+        // ev.timestamp = packet->timeStamp; // Abstract
         ev.data1 = packet->data[1];
         ev.data2 = packet->data[2];
         ev.type = (status == 0x90)

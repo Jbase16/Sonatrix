@@ -28,7 +28,7 @@ public:
                    InstrumentArticulation &articulation);
 
   // Renders all active voices into the given output buffer
-  void RenderAudio(float *outputBuffer, uint32_t numFrames,
+  void RenderAudio(float **outputChannels, uint32_t numFrames,
                    uint32_t numChannels);
 
   // Phase 6 Offline Math Tone Generator loader

@@ -107,13 +107,16 @@
     manager->ProcessMIDI(events, manager->GetTestArticulation());
 
     // Initialize output buffers to zero
-    for (UInt32 i = 0; i < outputData->mNumberBuffers; ++i) {
+    float *channels[8];
+    UInt32 numChannels = MIN(outputData->mNumberBuffers, 8);
+    for (UInt32 i = 0; i < numChannels; ++i) {
       memset(outputData->mBuffers[i].mData, 0,
              outputData->mBuffers[i].mDataByteSize);
+      channels[i] = (float *)outputData->mBuffers[i].mData;
     }
 
     // 4. Execute C++ VoiceManager Synthesis
-    manager->RenderAudio((float *)outputData->mBuffers[0].mData, frameCount, 2);
+    manager->RenderAudio(channels, frameCount, numChannels);
 
     return noErr;
   } copy];
