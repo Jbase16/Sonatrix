@@ -28,9 +28,7 @@ add_subdirectory(src/core)
 # 2. Standalone macOS Application Target
 # ------------------------------------------------------------------------------
 add_executable(SonatrixStandalone MACOSX_BUNDLE
-    src/standalone/main.mm
-    src/standalone/AppDelegate.h
-    src/standalone/AppDelegate.mm
+    src/standalone/SonatrixApp.swift
     src/ui/ArrangementView.swift
     src/ui/PatternBrowser.swift
     src/ui/DeltaGraphEditor.swift
