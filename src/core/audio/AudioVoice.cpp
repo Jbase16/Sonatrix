@@ -64,9 +64,11 @@ void AudioVoice::RenderNextBlock(float **outputChannels, uint32_t numFrames,
   const float *rawAudio = activeZone_->audioData.data();
   size_t totalFrames = activeZone_->audioData.size() / activeZone_->numChannels;
 
-  // Very basic ADSR envelope constants (mock physical modeling)
-  const float attackRate = 0.05f;
-  const float releaseRate = 0.01f;
+  // Basic ADSR envelope constants (smoothed to prevent clicking)
+  // Attack: ~10ms at 44.1kHz -> 1.0 / 441 samples
+  const float attackRate = 0.00226f;
+  // Release: ~50ms at 44.1kHz -> 1.0 / 2205 samples
+  const float releaseRate = 0.00045f;
   const float maxVelocityAmp = static_cast<float>(currentVelocity_) / 127.0f;
 
   for (uint32_t i = 0; i < numFrames; ++i) {
@@ -114,12 +116,8 @@ void AudioVoice::RenderNextBlock(float **outputChannels, uint32_t numFrames,
       // Linear interpolation
       float sample = val1 + frac * (val2 - val1);
 
-      // Apply Neural Procedural Attack transient (if in early attack phase)
-      if (currentState == State::Attack && index1 < 2000) {
-        sample *= proceduralAttackScalar_; // Boost initial transient
-      }
-
-      // Apply ADSR and MIDI Velocity
+      // (Phase 4 mock transient logic removed to prevent floating-point hard
+      // clip) Apply ADSR and MIDI Velocity
       sample *= envelopeLevel_ * maxVelocityAmp;
 
       // Mix into output bus

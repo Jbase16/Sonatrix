@@ -10,15 +10,21 @@
 #include <vector>
 
 #include "../core/audio/VoiceManager.h"
+#include "../core/concurrency/SPSCQueue.h"
 #include "../core/midi/MIDIEvent.h"
 
 @interface StandaloneAudioEngine ()
 @property(nonatomic, strong) AVAudioEngine *engine;
 - (Sonatrix::Core::Audio::VoiceManager *)getVoiceManager;
+- (Sonatrix::Core::Concurrency::SPSCQueue<Sonatrix::Core::MIDI::MIDIEvent> *)
+    getMidiQueue;
 @end
 
 @implementation StandaloneAudioEngine {
   std::unique_ptr<Sonatrix::Core::Audio::VoiceManager> _voiceManager;
+  std::unique_ptr<
+      Sonatrix::Core::Concurrency::SPSCQueue<Sonatrix::Core::MIDI::MIDIEvent>>
+      _midiQueue;
   MIDIClientRef _midiClient;
   MIDIPortRef _midiInputPort;
 }
@@ -27,11 +33,18 @@
   return _voiceManager.get();
 }
 
+- (Sonatrix::Core::Concurrency::SPSCQueue<Sonatrix::Core::MIDI::MIDIEvent> *)
+    getMidiQueue {
+  return _midiQueue.get();
+}
+
 - (instancetype)init {
   self = [super init];
   if (self) {
     _voiceManager = std::make_unique<Sonatrix::Core::Audio::VoiceManager>();
     _voiceManager->InitializeTestTones();
+    _midiQueue = std::make_unique<Sonatrix::Core::Concurrency::SPSCQueue<
+        Sonatrix::Core::MIDI::MIDIEvent>>(1024);
 
     _engine = [[AVAudioEngine alloc] init];
     [self setupAudio];
@@ -47,6 +60,8 @@
 
   // Create an AVAudioSourceNode to pull from the C++ VoiceManager
   Sonatrix::Core::Audio::VoiceManager *manager = _voiceManager.get();
+  Sonatrix::Core::Concurrency::SPSCQueue<Sonatrix::Core::MIDI::MIDIEvent>
+      *queue = _midiQueue.get();
 
   AVAudioSourceNode *sourceNode = [[AVAudioSourceNode alloc]
       initWithFormat:format
@@ -54,6 +69,17 @@
                                const AudioTimeStamp *_Nonnull timestamp,
                                AVAudioFrameCount frameCount,
                                AudioBufferList *_Nonnull outputData) {
+           // --- Process queued MIDI exactly at the start of the audio frame
+           // logic ---
+           std::vector<Sonatrix::Core::MIDI::MIDIEvent> events;
+           Sonatrix::Core::MIDI::MIDIEvent ev;
+           while (queue->Pop(ev)) {
+             events.push_back(ev);
+           }
+           if (!events.empty()) {
+             manager->ProcessMIDI(events, manager->GetTestArticulation());
+           }
+
            // Zero out buffers
            float *channels[8];
            UInt32 numChannels = MIN(outputData->mNumberBuffers, 8);
@@ -73,16 +99,16 @@
   [_engine connect:sourceNode to:_engine.mainMixerNode format:format];
 }
 
-// C-style callback for CoreMIDI
+// C-style callback for CoreMIDI (Runs on a High Priority Hardware Thread)
 static void MIDIInputCallback(const MIDIPacketList *pktlist,
                               void *readProcRefCon, void *srcConnRefCon) {
   StandaloneAudioEngine *engine =
       (__bridge StandaloneAudioEngine *)readProcRefCon;
-  Sonatrix::Core::Audio::VoiceManager *manager = [engine getVoiceManager];
-  if (!manager)
+  Sonatrix::Core::Concurrency::SPSCQueue<Sonatrix::Core::MIDI::MIDIEvent>
+      *queue = [engine getMidiQueue];
+  if (!queue)
     return;
 
-  std::vector<Sonatrix::Core::MIDI::MIDIEvent> events;
   const MIDIPacket *packet = &pktlist->packet[0];
 
   for (int i = 0; i < pktlist->numPackets; ++i) {
@@ -97,14 +123,11 @@ static void MIDIInputCallback(const MIDIPacketList *pktlist,
         ev.type = (status == 0x90)
                       ? Sonatrix::Core::MIDI::MIDIEventType::NoteOn
                       : Sonatrix::Core::MIDI::MIDIEventType::NoteOff;
-        events.push_back(ev);
+
+        queue->Push(ev);
       }
     }
     packet = MIDIPacketNext(packet);
-  }
-
-  if (!events.empty()) {
-    manager->ProcessMIDI(events, manager->GetTestArticulation());
   }
 }
 
