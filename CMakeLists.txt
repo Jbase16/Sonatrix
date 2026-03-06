@@ -29,6 +29,8 @@ add_subdirectory(src/core)
 # ------------------------------------------------------------------------------
 add_executable(SonatrixStandalone MACOSX_BUNDLE
     src/standalone/SonatrixApp.swift
+    src/standalone/StandaloneAudioEngine.h
+    src/standalone/StandaloneAudioEngine.mm
     src/ui/ArrangementView.swift
     src/ui/PatternBrowser.swift
     src/ui/DeltaGraphEditor.swift
@@ -45,6 +47,7 @@ target_link_libraries(SonatrixStandalone PRIVATE
 
 set_target_properties(SonatrixStandalone PROPERTIES
     MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/resources/standalone/Info.plist
+    XCODE_ATTRIBUTE_SWIFT_OBJC_BRIDGING_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/src/standalone/Sonatrix-Bridging-Header.h"
 )
 
 # ------------------------------------------------------------------------------

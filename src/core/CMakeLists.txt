@@ -27,6 +27,9 @@ add_library(SonatrixCore STATIC
     audio/AudioVoice.cpp
     audio/VoiceManager.h
     audio/VoiceManager.cpp
+    audio/AudioFileReader.h
+    audio/AudioFileReader.cpp
+    concurrency/SPSCQueue.h
 )
 target_include_directories(SonatrixCore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_features(SonatrixCore PUBLIC cxx_std_20)

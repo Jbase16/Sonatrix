@@ -1,9 +1,9 @@
 #pragma once
 
+#include "../midi/MIDIEvent.h"
 #include "AudioVoice.h"
 #include <array>
 #include <vector>
-#include "../midi/MIDIEvent.h"
 
 namespace Sonatrix {
 namespace Core {
@@ -11,31 +11,40 @@ namespace Audio {
 
 // -----------------------------------------------------------------------------
 // VoiceManager (Polyphony & Note Stealing)
-// 
-// Allocates a fixed pool of lock-free voices. 
+//
+// Allocates a fixed pool of lock-free voices.
 // Routes incoming MIDI NoteOn/Off events to free voices.
 // Exectues priority-based note stealing if max polyphony is reached.
 // -----------------------------------------------------------------------------
 
 class VoiceManager {
 public:
-    VoiceManager() = default;
-    ~VoiceManager() = default;
-    
-    // Process an incoming MIDI buffer (prepared by Phase 3 Engines)
-    // Note: This must be called from the real-time audio thread
-    void ProcessMIDI(const std::vector<MIDI::MIDIEvent>& events, InstrumentArticulation& articulation);
-    
-    // Renders all active voices into the given output buffer
-    void RenderAudio(float* outputBuffer, uint32_t numFrames, uint32_t numChannels);
+  VoiceManager() = default;
+  ~VoiceManager() = default;
+
+  // Process an incoming MIDI buffer (prepared by Phase 3 Engines)
+  // Note: This must be called from the real-time audio thread
+  void ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
+                   InstrumentArticulation &articulation);
+
+  // Renders all active voices into the given output buffer
+  void RenderAudio(float *outputBuffer, uint32_t numFrames,
+                   uint32_t numChannels);
+
+  // Phase 6 Offline Math Tone Generator loader
+  void InitializeTestTones();
+  InstrumentArticulation &GetTestArticulation() { return testArticulation_; }
 
 private:
-   // Max polyphony constraint (e.g., 64 stereo voices)
-   static constexpr size_t MAX_VOICES = 64; 
-   std::array<AudioVoice, MAX_VOICES> voices_;
-   
-   // Finds the best voice to use (either truly Free, or by stealing the lowest priority active voice)
-   AudioVoice* GetBestAvailableVoice();
+  // Max polyphony constraint (e.g., 64 stereo voices)
+  static constexpr size_t MAX_VOICES = 64;
+  std::array<AudioVoice, MAX_VOICES> voices_;
+
+  InstrumentArticulation testArticulation_;
+
+  // Finds the best voice to use (either truly Free, or by stealing the lowest
+  // priority active voice)
+  AudioVoice *GetBestAvailableVoice();
 };
 
 } // namespace Audio
