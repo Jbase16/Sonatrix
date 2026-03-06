@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../midi/IMIRCompiler.h"
-#include "../ml/DynamicGrooveVector.h"
+#include "../../midi/IMIRCompiler.h"
+#include "../../ml/DynamicGrooveVector.h"
 #include <memory>
 
 namespace Sonatrix {

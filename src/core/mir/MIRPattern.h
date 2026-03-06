@@ -14,8 +14,9 @@ namespace Core {
 // -----------------------------------------------------------------------------
 
 enum class ArticulationType : uint8_t {
-    // Shared
+    // Shared / Keyboard
     GenericNote, // Piano, Bass
+    PianoChord,
     
     // Guitar Specific
     GuitarDownstroke,
