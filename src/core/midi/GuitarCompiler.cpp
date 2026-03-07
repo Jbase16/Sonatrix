@@ -11,8 +11,8 @@ std::unique_ptr<IMIRCompiler> CreateGuitarEngine() {
 }
 
 MIDIStream GuitarCompiler::CompileClip(
-    const EditorClip &clip,
-    const std::vector<ChordTrackEvent> &chordTimeline) const {
+    const EditorClip &clip, const std::vector<ChordTrackEvent> &chordTimeline,
+    Sonatrix::Core::ML::DynamicGrooveVector *grooveVectorContext) const {
   MIDIStream stream;
 
   // 1. Solve the global voice leading path for the entire chord timeline
@@ -30,6 +30,15 @@ MIDIStream GuitarCompiler::CompileClip(
 
   for (const auto &mir : clip.basePattern->events) {
     MusicalTime eventAbsoluteTime = clip.timelineStart + mir.offsetMap;
+
+    // Phase-Lock to the Drum Groove Vector
+    MusicalTime lockedTime = eventAbsoluteTime;
+    if (grooveVectorContext) {
+      if (auto groove =
+              grooveVectorContext->GetOffsetForSubbeat(eventAbsoluteTime)) {
+        lockedTime = lockedTime + MusicalTime(groove->deviationTicks);
+      }
+    }
 
     int currentChordIndex = -1;
     // Find the active chord for this specific time
@@ -60,8 +69,7 @@ MIDIStream GuitarCompiler::CompileClip(
     }
 
     if (!isMuted) {
-      EmitStrum(stream, eventAbsoluteTime, mir.type, mir.velocityBase,
-                activeVoicing);
+      EmitStrum(stream, lockedTime, mir.type, mir.velocityBase, activeVoicing);
     }
   }
 

@@ -17,10 +17,10 @@ public:
   GuitarCompiler() = default;
   ~GuitarCompiler() override = default;
 
-  // Implements IMIRCompiler
-  MIDIStream
-  CompileClip(const EditorClip &clip,
-              const std::vector<ChordTrackEvent> &chordTimeline) const override;
+  MIDIStream CompileClip(const EditorClip &clip,
+                         const std::vector<ChordTrackEvent> &chordTimeline,
+                         Sonatrix::Core::ML::DynamicGrooveVector
+                             *grooveVectorContext = nullptr) const override;
 
 private:
   // We removed the old EvaluateVoiceLeadingCost function as the Viterbi Graph

@@ -29,7 +29,8 @@
 
   // Initialize the C++ Core Engine
   _voiceManager = std::make_unique<Sonatrix::Core::Audio::VoiceManager>();
-  _voiceManager->InitializeTestTones();
+  _voiceManager->LoadInstrumentKit(
+      "/Users/jason/Developer/Sonatrix/assets/samples/bass_mock");
 
   // Setup Audio Busses (Stereo Output)
   AVAudioFormat *defaultFormat =
@@ -104,7 +105,7 @@
       event = event->head.next;
     }
 
-    manager->ProcessMIDI(events, manager->GetTestArticulation());
+    manager->ProcessMIDI(events, manager->GetKitArticulation());
 
     // Initialize output buffers to zero
     float *channels[8];

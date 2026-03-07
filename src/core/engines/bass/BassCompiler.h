@@ -1,41 +1,33 @@
 #pragma once
 
 #include "../../midi/IMIRCompiler.h"
-#include "../../ml/DynamicGrooveVector.h"
-#include <memory>
 
 namespace Sonatrix {
 namespace Core {
-namespace Engines {
+namespace MIDI {
 
 // -----------------------------------------------------------------------------
-// Bass Engine 
-// Responsible for generating bass guitar MIDI from MIR patterns.
-// Critically, it reads the Dynamic Groove Vector populated by the Drums
-// to phase-lock its timing.
+// Bass Engine
+// Translates MIR rhythmic templates into harmonic basslines based on the
+// ChordTrack. Crucially, it queries the DynamicGrooveVector to phase-lock its
+// generated notes squarely into the Drummer's microscopic pocket.
 // -----------------------------------------------------------------------------
 
-class BassCompiler : public MIDI::IMIRCompiler {
+class BassCompiler : public IMIRCompiler {
 public:
-    // Takes a const reference to the global vector to READ timing deviations
-    explicit BassCompiler(const ML::DynamicGrooveVector& globalGrooveVector);
-    ~BassCompiler() override = default;
-    
-    // Implements IMIRCompiler
-    MIDI::MIDIStream CompileClip(
-        const EditorClip& clip, 
-        const std::vector<ChordTrackEvent>& chordTimeline
-    ) const override;
-    
-private:
-    const ML::DynamicGrooveVector& grooveVector_;
-    
-    // Simplistic heuristic to find the active chord root
-    uint8_t GetBassPitchForTime(MusicalTime time, const std::vector<ChordTrackEvent>& chordTimeline) const;
+  BassCompiler() = default;
+  ~BassCompiler() override = default;
+
+  // Implements IMIRCompiler
+  MIDIStream CompileClip(const EditorClip &clip,
+                         const std::vector<ChordTrackEvent> &chordTimeline,
+                         Sonatrix::Core::ML::DynamicGrooveVector
+                             *grooveVectorContext = nullptr) const override;
 };
 
-std::unique_ptr<MIDI::IMIRCompiler> CreateBassEngine(const ML::DynamicGrooveVector& vector);
+// Provides instantiation without exposing the class externally
+std::unique_ptr<IMIRCompiler> CreateBassEngine();
 
-} // namespace Engines
+} // namespace MIDI
 } // namespace Core
 } // namespace Sonatrix

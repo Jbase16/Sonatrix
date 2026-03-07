@@ -1,42 +1,33 @@
 #pragma once
 
 #include "../../midi/IMIRCompiler.h"
-#include "../../ml/DynamicGrooveVector.h"
-#include <memory>
 
 namespace Sonatrix {
 namespace Core {
-namespace Engines {
+namespace MIDI {
 
 // -----------------------------------------------------------------------------
-// Drum Engine 
-// Translates MIR drum hits into MIDI.
-// Critically, it acts as the master timing source, populating the global
-// DynamicGrooveVector so other engines can phase-lock to its feel.
+// Drum Engine
+// Compiles abstract beats into General MIDI standard mappings.
+// Critically, it records its stochastic (or ML-derived) micro-timings
+// into the global DynamicGrooveVector for other engines to follow.
 // -----------------------------------------------------------------------------
 
-class DrumCompiler : public MIDI::IMIRCompiler {
+class DrumCompiler : public IMIRCompiler {
 public:
-    // Takes a reference to the global vector it must populate
-    explicit DrumCompiler(ML::DynamicGrooveVector& globalGrooveVector);
-    ~DrumCompiler() override = default;
-    
-    // Implements IMIRCompiler
-    MIDI::MIDIStream CompileClip(
-        const EditorClip& clip, 
-        const std::vector<ChordTrackEvent>& chordTimeline
-    ) const override;
-    
-private:
-    ML::DynamicGrooveVector& grooveVector_;
-    
-    // Mock algorithm representing PhD-level Latent Groove Extraction
-    // In production, this would query a CoreML inference session.
-    int64_t ExtractHumanDeviation(MusicalTime absoluteTime, uint8_t baseVelocity) const;
+  DrumCompiler() = default;
+  ~DrumCompiler() override = default;
+
+  // Implements IMIRCompiler
+  MIDIStream CompileClip(const EditorClip &clip,
+                         const std::vector<ChordTrackEvent> &chordTimeline,
+                         Sonatrix::Core::ML::DynamicGrooveVector
+                             *grooveVectorContext = nullptr) const override;
 };
 
-std::unique_ptr<MIDI::IMIRCompiler> CreateDrumEngine(ML::DynamicGrooveVector& vector);
+// Provides instantiation without exposing the class externally
+std::unique_ptr<IMIRCompiler> CreateDrumEngine();
 
-} // namespace Engines
+} // namespace MIDI
 } // namespace Core
 } // namespace Sonatrix

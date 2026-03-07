@@ -62,23 +62,39 @@ AudioVoice *VoiceManager::GetBestAvailableVoice() {
   return worstVoice;
 }
 
-void VoiceManager::InitializeTestTones() {
-  testArticulation_.name = "Math Synthesis Fallback";
+void VoiceManager::LoadInstrumentKit(const std::string &assetsAbsolutePath) {
+  activeArticulation_.name = "Bass_Sawtooth_Mock";
+  activeArticulation_.zones.clear();
 
-  // Create a generic tone for all keys mapped roughly optimally
-  SampleZone masterZone;
-  masterZone.rootKey = 60; // Middle C
-  masterZone.lowVelocity = 0;
-  masterZone.highVelocity = 127;
-  masterZone.sampleRate = 44100;
-  masterZone.numChannels = 2;
+  // Load C1 (MIDI 36)
+  SampleZone zoneC1;
+  zoneC1.filePath = assetsAbsolutePath + "/C1.wav";
+  zoneC1.rootKey = 36;
+  zoneC1.lowVelocity = 0;
+  zoneC1.highVelocity = 127;
+  zoneC1.isLoaded = AudioFileReader::LoadFile(zoneC1.filePath, zoneC1.audioData,
+                                              zoneC1.sampleRate);
+  activeArticulation_.zones.push_back(zoneC1);
 
-  // Generate a 120-second middle C (261.63 Hz) pure sine wave
-  AudioFileReader::GenerateTestTone(261.63f, 120.0f, masterZone.audioData,
-                                    44100);
-  masterZone.isLoaded = true;
+  // Load C2 (MIDI 48)
+  SampleZone zoneC2;
+  zoneC2.filePath = assetsAbsolutePath + "/C2.wav";
+  zoneC2.rootKey = 48;
+  zoneC2.lowVelocity = 0;
+  zoneC2.highVelocity = 127;
+  zoneC2.isLoaded = AudioFileReader::LoadFile(zoneC2.filePath, zoneC2.audioData,
+                                              zoneC2.sampleRate);
+  activeArticulation_.zones.push_back(zoneC2);
 
-  testArticulation_.zones.push_back(masterZone);
+  // Load C3 (MIDI 60)
+  SampleZone zoneC3;
+  zoneC3.filePath = assetsAbsolutePath + "/C3.wav";
+  zoneC3.rootKey = 60;
+  zoneC3.lowVelocity = 0;
+  zoneC3.highVelocity = 127;
+  zoneC3.isLoaded = AudioFileReader::LoadFile(zoneC3.filePath, zoneC3.audioData,
+                                              zoneC3.sampleRate);
+  activeArticulation_.zones.push_back(zoneC3);
 }
 
 void VoiceManager::RenderAudio(float **outputChannels, uint32_t numFrames,

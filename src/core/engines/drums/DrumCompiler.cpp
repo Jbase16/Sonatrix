@@ -1,73 +1,86 @@
 #include "DrumCompiler.h"
+#include <iostream>
+#include <random>
 
 namespace Sonatrix {
 namespace Core {
-namespace Engines {
+namespace MIDI {
 
-std::unique_ptr<MIDI::IMIRCompiler> CreateDrumEngine(ML::DynamicGrooveVector& vector) {
-    return std::make_unique<DrumCompiler>(vector);
+std::unique_ptr<IMIRCompiler> CreateDrumEngine() {
+  return std::make_unique<DrumCompiler>();
 }
 
-DrumCompiler::DrumCompiler(ML::DynamicGrooveVector& globalGrooveVector)
-    : grooveVector_(globalGrooveVector) {}
+MIDIStream DrumCompiler::CompileClip(
+    const EditorClip &clip,
+    const std::vector<ChordTrackEvent> & /*chordTimeline*/,
+    Sonatrix::Core::ML::DynamicGrooveVector *grooveVectorContext) const {
+  MIDIStream stream;
 
-MIDI::MIDIStream DrumCompiler::CompileClip(
-    const EditorClip& clip, 
-    const std::vector<ChordTrackEvent>& // Chords don't affect drums
-) const {
-    MIDI::MIDIStream stream;
-    
-    for (const auto& mir : clip.basePattern->events) {
-        if (mir.type != ArticulationType::DrumHit) continue;
-        
-        MusicalTime eventAbsoluteGridTime = clip.timelineStart + mir.offsetMap;
-        
-        // 1. Check DeltaGraph (User overrides like Mute)
-        bool isMuted = false;
-        for (const auto& delta : clip.overrides) {
-            if (delta.startOffset == mir.offsetMap && delta.op == DeltaOperation::MuteStroke) {
-                isMuted = true;
-                break;
-            }
-        }
-        
-        if (isMuted) continue;
-        
-        // 2. Latent Groove Extraction
-        // Extract the human feel (the deviation from the rigid absolute grid)
-        int64_t deviationTicks = ExtractHumanDeviation(eventAbsoluteGridTime, mir.velocityBase);
-        
-        // 3. Populate the Master Groove Vector for other instruments
-        ML::GrooveOffset offset{
-            .anchorTime = eventAbsoluteGridTime,
-            .deviationTicks = deviationTicks,
-            .velocityMultiplier = 1.0 // Simple mock
-        };
-        grooveVector_.EmplaceOffset(offset);
-        
-        // 4. Generate the actual Semantic MIDI (Output to audio engine)
-        // apply the deviation to the literal MIDI output stream
-        MusicalTime actualPerformanceTime = eventAbsoluteGridTime + MusicalTime(deviationTicks);
-        
-        uint8_t kitPieceNote = static_cast<uint8_t>(mir.actionParameter); 
-        
-        stream.events.push_back({actualPerformanceTime, MIDI::MIDIEventType::NoteOn, 9, kitPieceNote, mir.velocityBase});
-        
-        // NoteOff quickly for drums
-        MusicalTime offTime = actualPerformanceTime + MusicalTime(40);
-        stream.events.push_back({offTime, MIDI::MIDIEventType::NoteOff, 9, kitPieceNote, 0});
+  // Setup pseudo-random generator to mock ML-based humanization
+  // A sophisticated implementation would query the CoreML Neural Latent space
+  // here.
+  std::mt19937 rng(42); // Deterministic seed for consistent rendering
+  std::normal_distribution<double> timingDist(0.0, 15.0);  // 15 ticks std dev
+  std::normal_distribution<double> velocityDist(1.0, 0.1); // +/- 10% velocity
+
+  for (const auto &mir : clip.basePattern->events) {
+    MusicalTime eventAbsoluteTime = clip.timelineStart + mir.offsetMap;
+
+    // This simulates applying a Delta Override
+    bool isMuted = false;
+    for (const auto &delta : clip.overrides) {
+      if (delta.startOffset == mir.offsetMap &&
+          delta.op == DeltaOperation::MuteStroke) {
+        isMuted = true;
+        break;
+      }
     }
-    
-    stream.SortByTime();
-    return stream;
+
+    if (!isMuted) {
+      // Generate Neural/Human timing deviation
+      int64_t deviation = static_cast<int64_t>(timingDist(rng));
+      double velMult = std::max(0.5, std::min(1.5, velocityDist(rng)));
+
+      // Record this offset to the global Matrix so Bass/Guitar can phase-lock
+      // to it
+      if (grooveVectorContext) {
+        Sonatrix::Core::ML::GrooveOffset offset;
+        offset.anchorTime = eventAbsoluteTime;
+        offset.deviationTicks = deviation;
+        offset.velocityMultiplier = velMult;
+        grooveVectorContext->EmplaceOffset(offset);
+      }
+
+      // Map abstract drum types to General MIDI
+      uint8_t gmPitch = 36; // Default Kick (actionParameter 1)
+      if (mir.type == ArticulationType::DrumHit) {
+        if (mir.actionParameter == 2)
+          gmPitch = 38; // Snare
+        else if (mir.actionParameter == 3)
+          gmPitch = 42; // HiHat Closed
+        else if (mir.actionParameter == 4)
+          gmPitch = 46; // HiHat Open
+      }
+
+      // Apply physical deviation to the generated note
+      MusicalTime humanizedTime = eventAbsoluteTime + MusicalTime(deviation);
+      uint8_t finalVel =
+          static_cast<uint8_t>(std::min(127.0, mir.velocityBase * velMult));
+
+      stream.events.push_back({humanizedTime, MIDIEventType::NoteOn, 9, gmPitch,
+                               finalVel}); // Ch 10 (idx 9)
+
+      // Drums are typically one-shots, but we emit a dummy NoteOff
+      MusicalTime offTime =
+          humanizedTime + MusicalTime(480); // 1/8th note approx
+      stream.events.push_back({offTime, MIDIEventType::NoteOff, 9, gmPitch, 0});
+    }
+  }
+
+  stream.SortByTime();
+  return stream;
 }
 
-int64_t DrumCompiler::ExtractHumanDeviation(MusicalTime /*absoluteTime*/, uint8_t /*baseVelocity*/) const {
-    // PhD Component: Neural inference of Latent Groove
-    // Mock: Returns a constant "drag" of 5 ticks for demonstration.
-    return 5; 
-}
-
-} // namespace Engines
+} // namespace MIDI
 } // namespace Core
 } // namespace Sonatrix

@@ -42,7 +42,8 @@
   self = [super init];
   if (self) {
     _voiceManager = std::make_unique<Sonatrix::Core::Audio::VoiceManager>();
-    _voiceManager->InitializeTestTones();
+    _voiceManager->LoadInstrumentKit(
+        "/Users/jason/Developer/Sonatrix/assets/samples/bass_mock");
     _midiQueue = std::make_unique<Sonatrix::Core::Concurrency::SPSCQueue<
         Sonatrix::Core::MIDI::MIDIEvent>>(1024);
 
@@ -77,7 +78,7 @@
              events.push_back(ev);
            }
            if (!events.empty()) {
-             manager->ProcessMIDI(events, manager->GetTestArticulation());
+             manager->ProcessMIDI(events, manager->GetKitArticulation());
            }
 
            // Zero out buffers

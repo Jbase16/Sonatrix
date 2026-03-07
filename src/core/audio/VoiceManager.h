@@ -31,16 +31,17 @@ public:
   void RenderAudio(float **outputChannels, uint32_t numFrames,
                    uint32_t numChannels);
 
-  // Phase 6 Offline Math Tone Generator loader
-  void InitializeTestTones();
-  InstrumentArticulation &GetTestArticulation() { return testArticulation_; }
+  // Phase 10: Multi-Sampler Kit Loader
+  // Loads physical .wav files from the given absolute directory path
+  void LoadInstrumentKit(const std::string &assetsAbsolutePath);
+  InstrumentArticulation &GetKitArticulation() { return activeArticulation_; }
 
 private:
   // Max polyphony constraint (e.g., 64 stereo voices)
   static constexpr size_t MAX_VOICES = 64;
   std::array<AudioVoice, MAX_VOICES> voices_;
 
-  InstrumentArticulation testArticulation_;
+  InstrumentArticulation activeArticulation_;
 
   // Finds the best voice to use (either truly Free, or by stealing the lowest
   // priority active voice)
