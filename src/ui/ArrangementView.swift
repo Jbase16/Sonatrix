@@ -1,5 +1,6 @@
 import CoreAudioKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 // -----------------------------------------------------------------------------
 // Sonatrix Arrangement View
@@ -102,6 +103,28 @@ struct TransportRibbon: View {
                         .font(.title)
                         .foregroundColor(viewModel.isPlaying ? .green : .white)
                 }.buttonStyle(PlainButtonStyle())
+
+                Image(systemName: "square.and.arrow.down.fill")
+                    .foregroundColor(.white)
+                    .padding(8)
+                    .background(Color.blue.opacity(0.8))
+                    .cornerRadius(6)
+                    .contextMenu {
+                        Text("Drag this icon to export MIDI")
+                    }
+                    .onDrag {
+                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+                            "SonatrixArrangement.mid")
+                        do {
+                            try viewModel.exportMIDI(to: tempURL)
+                            return NSItemProvider(
+                                item: tempURL as NSSecureCoding,
+                                typeIdentifier: UTType.midi.identifier)
+                        } catch {
+                            print("Failed to export MIDI for drag: \(error)")
+                            return NSItemProvider()
+                        }
+                    }
             #endif
 
             Spacer()

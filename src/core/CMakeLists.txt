@@ -9,6 +9,8 @@ add_library(SonatrixCore STATIC
     midi/IMIRCompiler.h
     midi/GuitarCompiler.h
     midi/GuitarCompiler.cpp
+    midi/MIDIExporter.h
+    midi/MIDIExporter.cpp
     ml/DynamicGrooveVector.h
     ml/DynamicGrooveVector.cpp
     ml/NeuralTimbreReshaper.h
@@ -31,6 +33,8 @@ add_library(SonatrixCore STATIC
     audio/AudioFileReader.cpp
     audio/AudioMixer.h
     audio/AudioMixer.cpp
+    audio/AudioExporter.h
+    audio/AudioExporter.cpp
     concurrency/SPSCQueue.h
 )
 target_include_directories(SonatrixCore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

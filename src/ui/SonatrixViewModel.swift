@@ -21,8 +21,8 @@ public class SonatrixViewModel: ObservableObject {
     // -----------------------------------------------------------------------------
     // Shared Data Models
     // -----------------------------------------------------------------------------
-    public struct ChordItem: Identifiable, Equatable {
-        public let id = UUID()
+    public struct ChordItem: Identifiable, Equatable, Codable {
+        public var id = UUID()
         public var rootName: String
         public var qualityName: String
         // For C++ interop
@@ -39,8 +39,66 @@ public class SonatrixViewModel: ObservableObject {
     // Indexes match the C++ MixerBus enum
     @Published public var busVolumes: [Float] = [0.8, 0.8, 0.8, 0.8, 0.8]
 
+    // Serialization Model
+    public struct ProjectState: Codable {
+        public let chords: [ChordItem]
+        public let busVolumes: [Float]
+    }
+
     public init() {
         self.engineFacade = SonatrixEngineFacade()
+    }
+
+    // MARK: - Project File API
+
+    public func saveProject(to url: URL) throws {
+        let state = ProjectState(chords: arrangementChords, busVolumes: busVolumes)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        let data = try encoder.encode(state)
+        try data.write(to: url)
+    }
+
+    public func loadProject(from url: URL) throws {
+        let data = try Data(contentsOf: url)
+        let decoder = JSONDecoder()
+        let state = try decoder.decode(ProjectState.self, from: data)
+
+        DispatchQueue.main.async {
+            self.arrangementChords = state.chords
+            for (index, volume) in state.busVolumes.enumerated() {
+                if index < self.busVolumes.count {
+                    self.setVolume(bus: index, volume: volume)
+                }
+            }
+            self.compileArrangement()
+        }
+    }
+
+    // MARK: - Export API
+
+    public func bounceAudio(to url: URL) throws {
+        let nsVolumes = busVolumes.map { NSNumber(value: $0) }
+
+        guard let resourcePath = Bundle.main.resourcePath else {
+            throw NSError(domain: "Sonatrix.AssetsNotFound", code: 1, userInfo: nil)
+        }
+        let assetsPath = resourcePath + "/Assets"
+
+        let success = engineFacade.bounceAudio(
+            toPath: url.path,
+            assetsPath: assetsPath,
+            volumes: nsVolumes)
+        if !success {
+            throw NSError(domain: "Sonatrix.BounceFailed", code: 2, userInfo: nil)
+        }
+    }
+
+    public func exportMIDI(to url: URL) throws {
+        let success = engineFacade.exportMIDI(toPath: url.path)
+        if !success {
+            throw NSError(domain: "Sonatrix.MIDIExportFailed", code: 3, userInfo: nil)
+        }
     }
 
     // MARK: - Transport API

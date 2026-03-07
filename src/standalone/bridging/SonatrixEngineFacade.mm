@@ -7,9 +7,11 @@
 #import "../../standalone/StandaloneAudioEngine.h"
 
 #include "../../core/arrangement/ChordTrack.h"
+#include "../../core/audio/AudioExporter.h"
 #include "../../core/engines/bass/BassCompiler.h"
 #include "../../core/engines/drums/DrumCompiler.h"
 #include "../../core/midi/GuitarCompiler.h"
+#include "../../core/midi/MIDIExporter.h" // Added for MIDI export
 #include "../../core/mir/DeltaGraph.h"
 #include "../../core/ml/DynamicGrooveVector.h"
 
@@ -155,6 +157,119 @@
 
 - (void)setVolume:(float)volume forBus:(uint8_t)busIndex {
   [_audioEngine setVolume:volume forBus:busIndex];
+}
+
+- (BOOL)bounceAudioToPath:(NSString *)path
+               assetsPath:(NSString *)assetsPath
+                  volumes:(NSArray<NSNumber *> *)volumes {
+
+  // 1. Create a mocked MIR sequence to test the compilers
+  auto mockPattern = std::make_shared<Sonatrix::Core::MIRPattern>();
+  mockPattern->totalLength =
+      Sonatrix::Core::MusicalTime(1920); // 1 bar at 480 PPQ
+
+  Sonatrix::Core::MIREvent ev;
+  ev.offsetMap = Sonatrix::Core::MusicalTime(0);
+  ev.lengthBeats = 0.5;
+  ev.type = Sonatrix::Core::ArticulationType::GenericNote;
+  mockPattern->events.push_back(ev);
+
+  ev.offsetMap = Sonatrix::Core::MusicalTime(480);
+  mockPattern->events.push_back(ev);
+
+  ev.offsetMap = Sonatrix::Core::MusicalTime(960);
+  mockPattern->events.push_back(ev);
+
+  ev.offsetMap = Sonatrix::Core::MusicalTime(1440);
+  mockPattern->events.push_back(ev);
+
+  Sonatrix::Core::EditorClip clip(mockPattern);
+  clip.timelineStart = Sonatrix::Core::MusicalTime(0);
+
+  // 2. Clear old groove vector
+  _grooveVector = std::make_shared<Sonatrix::Core::ML::DynamicGrooveVector>();
+
+  // 3. Compile engines
+  Sonatrix::Core::MIDI::DrumCompiler drumEngine;
+  Sonatrix::Core::MIDI::MIDIStream drumStream =
+      drumEngine.CompileClip(clip, _chordTrack, _grooveVector.get());
+
+  Sonatrix::Core::MIDI::BassCompiler bassEngine;
+  Sonatrix::Core::MIDI::MIDIStream bassStream =
+      bassEngine.CompileClip(clip, _chordTrack, _grooveVector.get());
+
+  // Merge streams
+  Sonatrix::Core::MIDI::MIDIStream masterStream;
+  masterStream.events.insert(masterStream.events.end(),
+                             drumStream.events.begin(),
+                             drumStream.events.end());
+  masterStream.events.insert(masterStream.events.end(),
+                             bassStream.events.begin(),
+                             bassStream.events.end());
+  masterStream.SortByTime();
+
+  // 4. Extract Volumes
+  std::vector<float> cVols;
+  for (NSNumber *vol in volumes) {
+    cVols.push_back([vol floatValue]);
+  }
+
+  std::string cppOutputPath = [path UTF8String];
+  std::string cppAssetsPath = [assetsPath UTF8String];
+
+  return Sonatrix::Core::Audio::AudioExporter::BounceOffline(
+      cppOutputPath, masterStream.events, cppAssetsPath, cVols);
+}
+
+- (BOOL)exportMIDIToPath:(NSString *)path {
+  // 1. Create a mocked MIR sequence to test the compilers
+  auto mockPattern = std::make_shared<Sonatrix::Core::MIRPattern>();
+  mockPattern->totalLength =
+      Sonatrix::Core::MusicalTime(1920); // 1 bar at 480 PPQ
+
+  Sonatrix::Core::MIREvent ev;
+  ev.offsetMap = Sonatrix::Core::MusicalTime(0);
+  ev.lengthBeats = 0.5;
+  ev.type = Sonatrix::Core::ArticulationType::GenericNote;
+  mockPattern->events.push_back(ev);
+
+  ev.offsetMap = Sonatrix::Core::MusicalTime(480);
+  mockPattern->events.push_back(ev);
+
+  ev.offsetMap = Sonatrix::Core::MusicalTime(960);
+  mockPattern->events.push_back(ev);
+
+  ev.offsetMap = Sonatrix::Core::MusicalTime(1440);
+  mockPattern->events.push_back(ev);
+
+  Sonatrix::Core::EditorClip clip(mockPattern);
+  clip.timelineStart = Sonatrix::Core::MusicalTime(0);
+
+  // 2. Clear old groove vector
+  _grooveVector = std::make_shared<Sonatrix::Core::ML::DynamicGrooveVector>();
+
+  // 3. Compile engines
+  Sonatrix::Core::MIDI::DrumCompiler drumEngine;
+  Sonatrix::Core::MIDI::MIDIStream drumStream =
+      drumEngine.CompileClip(clip, _chordTrack, _grooveVector.get());
+
+  Sonatrix::Core::MIDI::BassCompiler bassEngine;
+  Sonatrix::Core::MIDI::MIDIStream bassStream =
+      bassEngine.CompileClip(clip, _chordTrack, _grooveVector.get());
+
+  // Merge streams
+  Sonatrix::Core::MIDI::MIDIStream masterStream;
+  masterStream.events.insert(masterStream.events.end(),
+                             drumStream.events.begin(),
+                             drumStream.events.end());
+  masterStream.events.insert(masterStream.events.end(),
+                             bassStream.events.begin(),
+                             bassStream.events.end());
+  masterStream.SortByTime();
+
+  std::string cppOutputPath = [path UTF8String];
+  return Sonatrix::Core::MIDI::MIDIExporter::ExportToSMF(cppOutputPath,
+                                                         masterStream.events);
 }
 
 @end

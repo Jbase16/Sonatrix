@@ -30,6 +30,14 @@ NS_ASSUME_NONNULL_BEGIN
 // Audio Mixer Controls
 - (void)setVolume:(float)volume forBus:(uint8_t)busIndex;
 
+// Offline Export
+- (BOOL)bounceAudioToPath:(NSString *)path
+               assetsPath:(NSString *)assetsPath
+                  volumes:(NSArray<NSNumber *> *)volumes;
+
+// MIDI Export
+- (BOOL)exportMIDIToPath:(NSString *)path;
+
 @end
 
 NS_ASSUME_NONNULL_END
