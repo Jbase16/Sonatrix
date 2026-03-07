@@ -153,4 +153,8 @@
   });
 }
 
+- (void)setVolume:(float)volume forBus:(uint8_t)busIndex {
+  [_audioEngine setVolume:volume forBus:busIndex];
+}
+
 @end

@@ -1,0 +1,138 @@
+Command line invocation:
+    /Applications/Xcode-beta.app/Contents/Developer/usr/bin/xcodebuild -project Sonatrix.xcodeproj build -configuration Debug -parallelizeTargets -hideShellScriptEnvironment -target ALL_BUILD
+
+ComputePackagePrebuildTargetDependencyGraph
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (5 targets)
+    Target 'ALL_BUILD' in project 'Sonatrix'
+        ➜ Explicit dependency on target 'ZERO_CHECK' in project 'Sonatrix'
+        ➜ Explicit dependency on target 'SonatrixStandalone' in project 'Sonatrix'
+        ➜ Explicit dependency on target 'SonatrixAUv3' in project 'Sonatrix'
+        ➜ Explicit dependency on target 'SonatrixCore' in project 'Sonatrix'
+    Target 'SonatrixAUv3' in project 'Sonatrix'
+        ➜ Explicit dependency on target 'ZERO_CHECK' in project 'Sonatrix'
+        ➜ Explicit dependency on target 'SonatrixCore' in project 'Sonatrix'
+    Target 'SonatrixStandalone' in project 'Sonatrix'
+        ➜ Explicit dependency on target 'ZERO_CHECK' in project 'Sonatrix'
+        ➜ Explicit dependency on target 'SonatrixCore' in project 'Sonatrix'
+    Target 'SonatrixCore' in project 'Sonatrix'
+        ➜ Explicit dependency on target 'ZERO_CHECK' in project 'Sonatrix'
+    Target 'ZERO_CHECK' in project 'Sonatrix' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk -x c++ -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk -x objective-c++ -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/libtool -V
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+Build description signature: 9517cd27f523ad47e53a23bbb95d3aaa
+Build description path: /Users/jason/Developer/Sonatrix/build/build/XCBuildData/9517cd27f523ad47e53a23bbb95d3aaa.xcbuilddata
+ClangStatCache /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk /var/folders/gg/2rv51rgx3259vbndk_zcffyh0000gn/C/com.apple.DeveloperTools/26.2-17C5038g/Xcode/SDKStatCaches.noindex/macosx26.2-25C5048a-3885c01c3e6b6a337905948deab2002e28ca432d5676da3146507086b13d17f8.sdkstatcache
+    cd /Users/jason/Developer/Sonatrix/build/Sonatrix.xcodeproj
+    /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk -o /var/folders/gg/2rv51rgx3259vbndk_zcffyh0000gn/C/com.apple.DeveloperTools/26.2-17C5038g/Xcode/SDKStatCaches.noindex/macosx26.2-25C5048a-3885c01c3e6b6a337905948deab2002e28ca432d5676da3146507086b13d17f8.sdkstatcache
+
+note: Run script build phase 'Generate CMakeFiles/ZERO_CHECK' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'ZERO_CHECK' from project 'Sonatrix')
+PhaseScriptExecution Generate\ CMakeFiles/ZERO_CHECK /Users/jason/Developer/Sonatrix/build/build/Sonatrix.build/Debug/ZERO_CHECK.build/Script-3E24C245A94724F87DA299F5.sh (in target 'ZERO_CHECK' from project 'Sonatrix')
+    cd /Users/jason/Developer/Sonatrix
+    /bin/sh -c /Users/jason/Developer/Sonatrix/build/build/Sonatrix.build/Debug/ZERO_CHECK.build/Script-3E24C245A94724F87DA299F5.sh
+/opt/homebrew/bin/cmake -S/Users/jason/Developer/Sonatrix -B/Users/jason/Developer/Sonatrix/build
+-- Configuring done (0.1s)
+-- Generating done (0.0s)
+-- Build files have been written to: /Users/jason/Developer/Sonatrix/build
+
+WriteAuxiliaryFile /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3.SwiftFileList (in target 'SonatrixAUv3' from project 'Sonatrix')
+    cd /Users/jason/Developer/Sonatrix
+    write-file /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3.SwiftFileList
+
+WriteAuxiliaryFile /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3.SwiftConstValuesFileList (in target 'SonatrixAUv3' from project 'Sonatrix')
+    cd /Users/jason/Developer/Sonatrix
+    write-file /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3.SwiftConstValuesFileList
+
+WriteAuxiliaryFile /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3.LinkFileList (in target 'SonatrixAUv3' from project 'Sonatrix')
+    cd /Users/jason/Developer/Sonatrix
+    write-file /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3.LinkFileList
+
+WriteAuxiliaryFile /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3-OutputFileMap.json (in target 'SonatrixAUv3' from project 'Sonatrix')
+    cd /Users/jason/Developer/Sonatrix
+    write-file /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3-OutputFileMap.json
+
+ProcessInfoPlistFile /Users/jason/Developer/Sonatrix/build/Debug/SonatrixStandalone.app/Contents/Info.plist /Users/jason/Developer/Sonatrix/build/CMakeFiles/SonatrixStandalone.dir/Info.plist (in target 'SonatrixStandalone' from project 'Sonatrix')
+    cd /Users/jason/Developer/Sonatrix
+    builtin-infoPlistUtility /Users/jason/Developer/Sonatrix/build/CMakeFiles/SonatrixStandalone.dir/Info.plist -producttype com.apple.product-type.application -genpkginfo /Users/jason/Developer/Sonatrix/build/Debug/SonatrixStandalone.app/Contents/PkgInfo -expandbuildsettings -platform macosx -o /Users/jason/Developer/Sonatrix/build/Debug/SonatrixStandalone.app/Contents/Info.plist
+/Users/jason/Developer/Sonatrix/build/Sonatrix.xcodeproj: warning: User-supplied CFBundleIdentifier value 'com.jason.Sonatrix' in the Info.plist must be the same as the PRODUCT_BUNDLE_IDENTIFIER build setting value ''. (in target 'SonatrixStandalone' from project 'Sonatrix')
+warning: LSMinimumSystemVersion of '12.0' is less than the value of MACOSX_DEPLOYMENT_TARGET '26.2' - setting to '26.2'. (in target 'SonatrixStandalone' from project 'Sonatrix')
+
+SwiftDriver SonatrixStandalone normal arm64 com.apple.xcode.tools.swift.compiler (in target 'SonatrixStandalone' from project 'Sonatrix')
+    cd /Users/jason/Developer/Sonatrix
+    builtin-SwiftDriver -- /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name SonatrixStandalone -O -enforce-exclusivity\=checked @/Users/jason/Developer/Sonatrix/build/build/SonatrixStandalone.build/Debug/Objects-normal/arm64/SonatrixStandalone.SwiftFileList -Onone -DSTANDALONE -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk -target arm64-apple-macos26.2 -g -Xfrontend -serialize-debugging-options -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 4 -I /Users/jason/Developer/Sonatrix/build/Debug -I /Users/jason/Developer/Sonatrix/src/core -F /Users/jason/Developer/Sonatrix/build/Debug -F /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk/System/Library/Frameworks -c -j14 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /var/folders/gg/2rv51rgx3259vbndk_zcffyh0000gn/C/com.apple.DeveloperTools/26.2-17C5038g/Xcode/SDKStatCaches.noindex/macosx26.2-25C5048a-3885c01c3e6b6a337905948deab2002e28ca432d5676da3146507086b13d17f8.sdkstatcache -output-file-map /Users/jason/Developer/Sonatrix/build/build/SonatrixStandalone.build/Debug/Objects-normal/arm64/SonatrixStandalone-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/jason/Developer/Sonatrix/build/build/SonatrixStandalone.build/Debug/Objects-normal/arm64/SonatrixStandalone.swiftmodule -validate-clang-modules-once -clang-build-session-file /var/folders/gg/2rv51rgx3259vbndk_zcffyh0000gn/C/org.llvm.clang/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/jason/Developer/Sonatrix/build/build/SonatrixStandalone.build/Debug/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/jason/Developer/Sonatrix/build/build/SonatrixStandalone.build/Debug/Objects-normal/arm64/SonatrixStandalone_const_extract_protocols.json -Xcc -I/Users/jason/Developer/Sonatrix/build/Debug/include -Xcc -I/Users/jason/Developer/Sonatrix/src/core -Xcc -I/Users/jason/Developer/Sonatrix/build/build/SonatrixStandalone.build/Debug/DerivedSources-normal/arm64 -Xcc -I/Users/jason/Developer/Sonatrix/build/build/SonatrixStandalone.build/Debug/DerivedSources/arm64 -Xcc -I/Users/jason/Developer/Sonatrix/build/build/SonatrixStandalone.build/Debug/DerivedSources -Xcc -DCMAKE_INTDIR\=\"Debug\" -emit-objc-header -emit-objc-header-path /Users/jason/Developer/Sonatrix/build/build/SonatrixStandalone.build/Debug/Objects-normal/arm64/SonatrixStandalone-Swift.h -import-objc-header /Users/jason/Developer/Sonatrix/src/standalone/Sonatrix-Bridging-Header.h -pch-output-dir /Users/jason/Developer/Sonatrix/build/build/SharedPrecompiledHeaders -working-directory /Users/jason/Developer/Sonatrix -experimental-emit-module-separately -disable-cmo
+
+SwiftDriver SonatrixAUv3 normal arm64 com.apple.xcode.tools.swift.compiler (in target 'SonatrixAUv3' from project 'Sonatrix')
+    cd /Users/jason/Developer/Sonatrix
+    builtin-SwiftDriver -- /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name SonatrixAUv3 -O -enforce-exclusivity\=checked @/Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3.SwiftFileList -Onone -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk -target arm64-apple-macos26.2 -g -Xfrontend -serialize-debugging-options -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 4 -I /Users/jason/Developer/Sonatrix/build/Debug -I /Users/jason/Developer/Sonatrix/src/core -F /Users/jason/Developer/Sonatrix/build/Debug -F /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk/System/Library/Frameworks -c -j14 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /var/folders/gg/2rv51rgx3259vbndk_zcffyh0000gn/C/com.apple.DeveloperTools/26.2-17C5038g/Xcode/SDKStatCaches.noindex/macosx26.2-25C5048a-3885c01c3e6b6a337905948deab2002e28ca432d5676da3146507086b13d17f8.sdkstatcache -output-file-map /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3.swiftmodule -validate-clang-modules-once -clang-build-session-file /var/folders/gg/2rv51rgx3259vbndk_zcffyh0000gn/C/org.llvm.clang/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3_const_extract_protocols.json -Xcc -I/Users/jason/Developer/Sonatrix/build/Debug/include -Xcc -I/Users/jason/Developer/Sonatrix/src/core -Xcc -I/Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/DerivedSources-normal/arm64 -Xcc -I/Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/DerivedSources/arm64 -Xcc -I/Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/DerivedSources -Xcc -DCMAKE_INTDIR\=\"Debug\" -Xcc -DSonatrixAUv3_EXPORTS -emit-objc-header -emit-objc-header-path /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3-Swift.h -working-directory /Users/jason/Developer/Sonatrix -experimental-emit-module-separately -disable-cmo
+
+ProcessInfoPlistFile /Users/jason/Developer/Sonatrix/build/Debug/SonatrixAUv3.appex/Contents/Info.plist /Users/jason/Developer/Sonatrix/build/CMakeFiles/SonatrixAUv3.dir/Info.plist (in target 'SonatrixAUv3' from project 'Sonatrix')
+    cd /Users/jason/Developer/Sonatrix
+    builtin-infoPlistUtility /Users/jason/Developer/Sonatrix/build/CMakeFiles/SonatrixAUv3.dir/Info.plist -producttype com.apple.product-type.bundle -expandbuildsettings -platform macosx -o /Users/jason/Developer/Sonatrix/build/Debug/SonatrixAUv3.appex/Contents/Info.plist
+/Users/jason/Developer/Sonatrix/build/Sonatrix.xcodeproj: warning: User-supplied CFBundleIdentifier value 'com.jason.Sonatrix.AUv3' in the Info.plist must be the same as the PRODUCT_BUNDLE_IDENTIFIER build setting value ''. (in target 'SonatrixAUv3' from project 'Sonatrix')
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ SonatrixAUv3 (in target 'SonatrixAUv3' from project 'Sonatrix')
+
+EmitSwiftModule normal arm64 (in target 'SonatrixAUv3' from project 'Sonatrix')
+    cd /Users/jason/Developer/Sonatrix
+    
+/Users/jason/Developer/Sonatrix/src/ui/SonatrixViewModel.swift:15:31: error: cannot find type 'SonatrixEngineFacade' in scope
+    private var engineFacade: SonatrixEngineFacade
+                              ^~~~~~~~~~~~~~~~~~~~
+
+Failed frontend command:
+/Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift-frontend -frontend -emit-module -experimental-skip-non-inlinable-function-bodies-without-types /Users/jason/Developer/Sonatrix/src/ui/ArrangementView.swift /Users/jason/Developer/Sonatrix/src/ui/DeltaGraphEditor.swift /Users/jason/Developer/Sonatrix/src/ui/MixerView.swift /Users/jason/Developer/Sonatrix/src/ui/PatternBrowser.swift /Users/jason/Developer/Sonatrix/src/ui/SonatrixViewModel.swift -target arm64-apple-macos26.2 -Xllvm -aarch64-use-tbi -enable-objc-interop -stack-check -sdk /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk -I /Users/jason/Developer/Sonatrix/build/Debug -I /Users/jason/Developer/Sonatrix/src/core -F /Users/jason/Developer/Sonatrix/build/Debug -F /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk/System/Library/Frameworks -no-color-diagnostics -Xcc -fno-color-diagnostics -g -debug-info-format\=dwarf -dwarf-version\=5 -swift-version 4 -enforce-exclusivity\=checked -Onone -serialize-debugging-options -const-gather-protocols-file /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3_const_extract_protocols.json -enable-experimental-feature DebugDescriptionMacro -enable-bare-slash-regex -empty-abi-descriptor -validate-clang-modules-once -clang-build-session-file /var/folders/gg/2rv51rgx3259vbndk_zcffyh0000gn/C/org.llvm.clang/ModuleCache.noindex/Session.modulevalidation -Xcc -working-directory -Xcc /Users/jason/Developer/Sonatrix -enable-anonymous-context-mangled-names -file-compilation-dir /Users/jason/Developer/Sonatrix -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -Xcc -ivfsstatcache -Xcc /var/folders/gg/2rv51rgx3259vbndk_zcffyh0000gn/C/com.apple.DeveloperTools/26.2-17C5038g/Xcode/SDKStatCaches.noindex/macosx26.2-25C5048a-3885c01c3e6b6a337905948deab2002e28ca432d5676da3146507086b13d17f8.sdkstatcache -Xcc -I/Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/swift-overrides.hmap -Xcc -I/Users/jason/Developer/Sonatrix/build/Debug/include -Xcc -I/Users/jason/Developer/Sonatrix/src/core -Xcc -I/Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/DerivedSources-normal/arm64 -Xcc -I/Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/DerivedSources/arm64 -Xcc -I/Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/DerivedSources -Xcc -DCMAKE_INTDIR\=\"Debug\" -Xcc -DSonatrixAUv3_EXPORTS -no-auto-bridging-header-chaining -module-name SonatrixAUv3 -frontend-parseable-output -disable-clang-spi -target-sdk-version 26.2 -target-sdk-name macosx26.2 -external-plugin-path /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins\#/Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/bin/swift-plugin-server -external-plugin-path /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/local/lib/swift/host/plugins\#/Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/bin/swift-plugin-server -in-process-plugin-server-path /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/libSwiftInProcPluginServer.dylib -plugin-path /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins -plugin-path /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/local/lib/swift/host/plugins -emit-module-doc-path /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3.swiftdoc -emit-module-source-info-path /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3.swiftsourceinfo -emit-objc-header-path /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3-Swift.h -serialize-diagnostics-path /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3-primary-emit-module.dia -emit-dependencies-path /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3-primary-emit-module.d -o /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3.swiftmodule -emit-abi-descriptor-path /Users/jason/Developer/Sonatrix/build/build/SonatrixAUv3.build/Debug/Objects-normal/arm64/SonatrixAUv3.abi.json
+SwiftCompile normal arm64 Compiling\ SonatrixViewModel.swift /Users/jason/Developer/Sonatrix/src/ui/SonatrixViewModel.swift (in target 'SonatrixAUv3' from project 'Sonatrix')
+SwiftCompile normal arm64 /Users/jason/Developer/Sonatrix/src/ui/SonatrixViewModel.swift (in target 'SonatrixAUv3' from project 'Sonatrix')
+    cd /Users/jason/Developer/Sonatrix
+    
+
+SwiftCompile normal arm64 Compiling\ ArrangementView.swift /Users/jason/Developer/Sonatrix/src/ui/ArrangementView.swift (in target 'SonatrixAUv3' from project 'Sonatrix')
+SwiftCompile normal arm64 /Users/jason/Developer/Sonatrix/src/ui/ArrangementView.swift (in target 'SonatrixAUv3' from project 'Sonatrix')
+    cd /Users/jason/Developer/Sonatrix
+    
+
+SwiftCompile normal arm64 Compiling\ MixerView.swift /Users/jason/Developer/Sonatrix/src/ui/MixerView.swift (in target 'SonatrixAUv3' from project 'Sonatrix')
+
+SwiftCompile normal arm64 /Users/jason/Developer/Sonatrix/src/ui/MixerView.swift (in target 'SonatrixAUv3' from project 'Sonatrix')
+    cd /Users/jason/Developer/Sonatrix
+    
+
+SwiftGeneratePch normal arm64 Compiling\ bridging\ header (in target 'SonatrixStandalone' from project 'Sonatrix')
+
+PrecompileSwiftBridgingHeader normal arm64 (in target 'SonatrixStandalone' from project 'Sonatrix')
+    cd /Users/jason/Developer/Sonatrix
+    
+
+note: Run script build phase 'Generate CMakeFiles/ALL_BUILD' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'ALL_BUILD' from project 'Sonatrix')
+** BUILD FAILED **
+
+
+The following build commands failed:
+	EmitSwiftModule normal arm64 (in target 'SonatrixAUv3' from project 'Sonatrix')
+	SwiftEmitModule normal arm64 Emitting\ module\ for\ SonatrixAUv3 (in target 'SonatrixAUv3' from project 'Sonatrix')
+(2 failures)

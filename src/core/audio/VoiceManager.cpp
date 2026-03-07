@@ -99,10 +99,36 @@ void VoiceManager::LoadInstrumentKit(const std::string &assetsAbsolutePath) {
 
 void VoiceManager::RenderAudio(float **outputChannels, uint32_t numFrames,
                                uint32_t numChannels) {
-  // Process every voice and accumulate into the final output buffer
+                               
+  // 1. Clear the master output buffers first, as the Mixer accumulates rather than overwrites
+  AudioMixer::ClearBuffers(outputChannels, numFrames, numChannels);
+  
+  // 2. We need a temporary buffer to render the voices into before hitting the mixer.
+  // We use thread_local to avoid allocation on the realtime audio thread.
+  // In a full implementation, each instrument engine (Drums, Bass, etc) would 
+  // manage its own VoiceManager / voices and render to its specific bus.
+  // For Phase 12, since this monolithic VoiceManager holds the "Bass_Sawtooth_Mock" kit,
+  // we will render all its voices into a single temporary stereo buffer and route it
+  // to MixerBus::Bass.
+  static thread_local std::vector<float> tempL;
+  static thread_local std::vector<float> tempR;
+  
+  if (tempL.size() < numFrames) tempL.resize(numFrames);
+  if (tempR.size() < numFrames) tempR.resize(numFrames);
+  
+  std::memset(tempL.data(), 0, numFrames * sizeof(float));
+  std::memset(tempR.data(), 0, numFrames * sizeof(float));
+
+  float* tempChannels[2] = { tempL.data(), tempR.data() };
+  
+  // 3. Process every voice and accumulate into the temporary bus buffer
   for (auto &v : voices_) {
-    v.RenderNextBlock(outputChannels, numFrames, numChannels);
+    v.RenderNextBlock(tempChannels, numFrames, 2); 
   }
+  
+  // 4. Send the accumulated Bass bus through the Mixer to apply Gain/Pan and 
+  // sum into the final master outputChannels.
+  mixer_.MixBusToOutput(MixerBus::Bass, tempChannels, outputChannels, numFrames, numChannels);
 }
 
 } // namespace Audio

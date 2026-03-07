@@ -2,6 +2,7 @@
 
 #include "../midi/MIDIEvent.h"
 #include "AudioVoice.h"
+#include "AudioMixer.h"
 #include <array>
 #include <vector>
 
@@ -36,6 +37,8 @@ public:
   void LoadInstrumentKit(const std::string &assetsAbsolutePath);
   InstrumentArticulation &GetKitArticulation() { return activeArticulation_; }
 
+  AudioMixer& GetMixer() { return mixer_; }
+
 private:
   // Max polyphony constraint (e.g., 64 stereo voices)
   static constexpr size_t MAX_VOICES = 64;
@@ -46,6 +49,8 @@ private:
   // Finds the best voice to use (either truly Free, or by stealing the lowest
   // priority active voice)
   AudioVoice *GetBestAvailableVoice();
+  
+  AudioMixer mixer_;
 };
 
 } // namespace Audio

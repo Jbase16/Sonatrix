@@ -57,6 +57,12 @@
   _midiQueue->Push(ev);
 }
 
+- (void)setVolume:(float)volume forBus:(uint8_t)busIndex {
+  if (_voiceManager) {
+    _voiceManager->GetMixer().SetBusVolume(static_cast<Sonatrix::Core::Audio::MixerBus>(busIndex), volume);
+  }
+}
+
 - (instancetype)init {
   self = [super init];
   if (self) {

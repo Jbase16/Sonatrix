@@ -20,6 +20,9 @@ NS_ASSUME_NONNULL_BEGIN
                       data1:(uint8_t)data1
                       data2:(uint8_t)data2;
 
+// Audio Mixer
+- (void)setVolume:(float)volume forBus:(uint8_t)busIndex;
+
 @end
 
 NS_ASSUME_NONNULL_END

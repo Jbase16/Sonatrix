@@ -35,6 +35,7 @@ add_executable(SonatrixStandalone MACOSX_BUNDLE
     src/standalone/bridging/SonatrixEngineFacade.mm
     src/ui/SonatrixViewModel.swift
     src/ui/ArrangementView.swift
+    src/ui/MixerView.swift
     src/ui/PatternBrowser.swift
     src/ui/DeltaGraphEditor.swift
 )
@@ -61,6 +62,7 @@ add_library(SonatrixAUv3 MODULE
     src/plugin/SonatrixAudioUnit.mm
     src/plugin/SonatrixAudioUnit.h
     src/ui/ArrangementView.swift
+    src/ui/MixerView.swift
     src/ui/PatternBrowser.swift
     src/ui/DeltaGraphEditor.swift
 )

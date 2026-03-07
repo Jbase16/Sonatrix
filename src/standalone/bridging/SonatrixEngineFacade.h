@@ -27,6 +27,9 @@ NS_ASSUME_NONNULL_BEGIN
 // Request the C++ backend to compile the current arrangement and schedule it
 - (void)compileAndSchedule;
 
+// Audio Mixer Controls
+- (void)setVolume:(float)volume forBus:(uint8_t)busIndex;
+
 @end
 
 NS_ASSUME_NONNULL_END
