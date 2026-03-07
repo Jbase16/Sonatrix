@@ -4,3 +4,4 @@
 //
 
 #import "StandaloneAudioEngine.h"
+#import "bridging/SonatrixEngineFacade.h"

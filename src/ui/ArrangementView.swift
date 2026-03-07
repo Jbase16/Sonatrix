@@ -1,41 +1,51 @@
-import SwiftUI
 import CoreAudioKit
+import SwiftUI
 
 // -----------------------------------------------------------------------------
 // Sonatrix Arrangement View
-// 
-// The main SwiftUI view for the AUv3 AudioExtension. Hosted within a generic 
+//
+// The main SwiftUI view for the AUv3 AudioExtension. Hosted within a generic
 // AUViewController wrapper to expose it to Logic Pro.
 // -----------------------------------------------------------------------------
 
 public struct ArrangementView: View {
-    
-    // Binding to the objective-C++ AUv3 parameter tree wrapper
-    // @ObservedObject var audioUnitWrapper: AUv3Wrapper
-    
-    public init() {}
-    
+    #if STANDALONE
+        @ObservedObject var viewModel: SonatrixViewModel
+
+        public init(viewModel: SonatrixViewModel) {
+            self.viewModel = viewModel
+        }
+    #else
+        public init() {}
+    #endif
+
     public var body: some View {
         VStack(spacing: 0) {
             // 1. Top Ribbon: Global Controls
-            TransportRibbon()
-                .frame(height: 60)
-                .background(Color.black)
-            
+            #if STANDALONE
+                TransportRibbon(viewModel: viewModel)
+                    .frame(height: 60)
+                    .background(Color.black)
+            #else
+                TransportRibbon()
+                    .frame(height: 60)
+                    .background(Color.black)
+            #endif
+
             // 2. Chord Track Ruler
             ChordTrackRuler()
                 .frame(height: 80)
                 .background(Color(white: 0.15))
-            
+
             // 3. Main Split View: Browser vs arrangement
             HStack(spacing: 0) {
-                
+
                 // Left: Pattern Browser
                 PatternBrowserView()
                     .frame(width: 300)
                     .background(Color(white: 0.1))
                     .border(Color.gray, width: 1)
-                
+
                 // Right: Multi-Lane Arrangement Timeline
                 ScrollView(.vertical) {
                     VStack(spacing: 2) {
@@ -57,12 +67,39 @@ public struct ArrangementView: View {
 // MARK: - Subcomponents
 
 struct TransportRibbon: View {
+    #if STANDALONE
+        @ObservedObject var viewModel: SonatrixViewModel
+    #endif
+
     var body: some View {
         HStack {
             Text("SONATRIX").font(.headline).fontWeight(.black).foregroundColor(.white).padding()
             Spacer()
+
+            #if STANDALONE
+                Button(action: {
+                    viewModel.togglePlayback()
+                }) {
+                    Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.title)
+                        .foregroundColor(viewModel.isPlaying ? .green : .white)
+                }.buttonStyle(PlainButtonStyle())
+
+                Button(action: {
+                    viewModel.triggerCompilerTest()
+                }) {
+                    Text(viewModel.isCompiling ? "Compiling..." : "Compile Chord Graph")
+                        .font(.caption)
+                        .padding(8)
+                        .background(Color.blue.opacity(0.6))
+                        .cornerRadius(4)
+                }.buttonStyle(PlainButtonStyle())
+            #endif
+
+            Spacer()
             // Placeholder: Sync, Tempo override, Master Volume
-            Text("SYNC: HOST").font(.caption).padding().background(Color.green.opacity(0.3)).cornerRadius(4)
+            Text("SYNC: HOST").font(.caption).padding().background(Color.green.opacity(0.3))
+                .cornerRadius(4)
         }
         .padding(.horizontal)
     }
@@ -88,7 +125,7 @@ struct ChordTrackRuler: View {
 struct ChordBlock: View {
     let chord: String
     let width: CGFloat
-    
+
     var body: some View {
         Text(chord)
             .font(.caption2)
@@ -102,7 +139,7 @@ struct ChordBlock: View {
 struct InstrumentLane: View {
     let name: String
     let color: Color
-    
+
     var body: some View {
         HStack {
             // Header
@@ -111,11 +148,11 @@ struct InstrumentLane: View {
             }
             .frame(width: 80, height: 80)
             .background(Color(white: 0.2))
-            
+
             // Track Area
             ZStack(alignment: .leading) {
                 Rectangle().fill(Color(white: 0.1)).frame(height: 80)
-                
+
                 // Mock Pattern Clip with Delta Graph Overlay Indicator
                 HStack {
                     Text("Pattern Clip")

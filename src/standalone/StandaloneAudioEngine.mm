@@ -38,6 +38,25 @@
   return _midiQueue.get();
 }
 
+- (void)pushMIDIEventStatus:(uint8_t)status
+                      data1:(uint8_t)data1
+                      data2:(uint8_t)data2 {
+  if (!_midiQueue)
+    return;
+  Sonatrix::Core::MIDI::MIDIEvent ev;
+  ev.data1 = data1;
+  ev.data2 = data2;
+  if ((status & 0xF0) == 0x90 && data2 > 0) {
+    ev.type = Sonatrix::Core::MIDI::MIDIEventType::NoteOn;
+  } else if ((status & 0xF0) == 0x80 ||
+             ((status & 0xF0) == 0x90 && data2 == 0)) {
+    ev.type = Sonatrix::Core::MIDI::MIDIEventType::NoteOff;
+  } else {
+    ev.type = Sonatrix::Core::MIDI::MIDIEventType::ControlChange;
+  }
+  _midiQueue->Push(ev);
+}
+
 - (instancetype)init {
   self = [super init];
   if (self) {

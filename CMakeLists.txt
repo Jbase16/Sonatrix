@@ -31,6 +31,9 @@ add_executable(SonatrixStandalone MACOSX_BUNDLE
     src/standalone/SonatrixApp.swift
     src/standalone/StandaloneAudioEngine.h
     src/standalone/StandaloneAudioEngine.mm
+    src/standalone/bridging/SonatrixEngineFacade.h
+    src/standalone/bridging/SonatrixEngineFacade.mm
+    src/ui/SonatrixViewModel.swift
     src/ui/ArrangementView.swift
     src/ui/PatternBrowser.swift
     src/ui/DeltaGraphEditor.swift
@@ -49,6 +52,7 @@ set_target_properties(SonatrixStandalone PROPERTIES
     MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/resources/standalone/Info.plist
     XCODE_ATTRIBUTE_SWIFT_OBJC_BRIDGING_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/src/standalone/Sonatrix-Bridging-Header.h"
 )
+target_compile_options(SonatrixStandalone PRIVATE "$<$<COMPILE_LANGUAGE:Swift>:-DSTANDALONE>")
 
 # ------------------------------------------------------------------------------
 # 3. AudioUnit v3 (AUv3) Plugin Target
