@@ -13,9 +13,15 @@ bool AudioFileReader::LoadFile(const std::string &absolutePath,
   if (absolutePath.empty())
     return false;
 
+  CFStringRef pathStr = CFStringCreateWithCString(
+      kCFAllocatorDefault, absolutePath.c_str(), kCFStringEncodingUTF8);
+  if (!pathStr)
+    return false;
+
   CFURLRef fileURL = CFURLCreateWithFileSystemPath(
-      kCFAllocatorDefault, (CFStringRef)absolutePath.c_str(),
-      kCFURLPOSIXPathStyle, false);
+      kCFAllocatorDefault, pathStr, kCFURLPOSIXPathStyle, false);
+      
+  CFRelease(pathStr);
   if (!fileURL)
     return false;
 
