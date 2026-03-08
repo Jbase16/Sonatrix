@@ -1,19 +1,29 @@
 #include <Accelerate/Accelerate.h>
 #include <AudioToolbox/AudioToolbox.h>
+
+#include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstdint>
 #include <iostream>
+#include <string>
 #include <vector>
 
-// Simple WAV reader logic
+// -----------------------------------------------------
+// WAV I/O with Enforced CoreAudio SRC
+// -----------------------------------------------------
 bool LoadWav(const std::string &path, std::vector<float> &outData,
-             double &outSampleRate) {
+             double targetSampleRate) {
   CFStringRef str = CFStringCreateWithCString(kCFAllocatorDefault, path.c_str(),
                                               kCFStringEncodingUTF8);
+  if (!str) return false;
+
   CFURLRef url = CFURLCreateWithFileSystemPath(kCFAllocatorDefault, str,
                                                kCFURLPOSIXPathStyle, false);
   CFRelease(str);
+  if (!url) return false;
 
-  ExtAudioFileRef audioFile;
+  ExtAudioFileRef audioFile = nullptr;
   if (ExtAudioFileOpenURL(url, &audioFile) != noErr) {
     CFRelease(url);
     return false;
@@ -21,60 +31,74 @@ bool LoadWav(const std::string &path, std::vector<float> &outData,
   CFRelease(url);
 
   AudioStreamBasicDescription clientFormat = {};
-  clientFormat.mSampleRate = 44100.0;
+  clientFormat.mSampleRate = targetSampleRate;
   clientFormat.mFormatID = kAudioFormatLinearPCM;
   clientFormat.mFormatFlags =
       kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked;
-  clientFormat.mBytesPerPacket = 4;
+  clientFormat.mBytesPerPacket = sizeof(float);
   clientFormat.mFramesPerPacket = 1;
-  clientFormat.mBytesPerFrame = 4;
+  clientFormat.mBytesPerFrame = sizeof(float);
   clientFormat.mChannelsPerFrame = 1;
   clientFormat.mBitsPerChannel = 32;
 
-  ExtAudioFileSetProperty(audioFile, kExtAudioFileProperty_ClientDataFormat,
-                          sizeof(clientFormat), &clientFormat);
+  if (ExtAudioFileSetProperty(audioFile, kExtAudioFileProperty_ClientDataFormat,
+                              sizeof(clientFormat), &clientFormat) != noErr) {
+    ExtAudioFileDispose(audioFile);
+    return false;
+  }
 
   SInt64 totalFrames = 0;
   UInt32 size = sizeof(totalFrames);
-  ExtAudioFileGetProperty(audioFile, kExtAudioFileProperty_FileLengthFrames,
-                          &size, &totalFrames);
+  if (ExtAudioFileGetProperty(audioFile, kExtAudioFileProperty_FileLengthFrames,
+                              &size, &totalFrames) != noErr ||
+      totalFrames <= 0) {
+    ExtAudioFileDispose(audioFile);
+    return false;
+  }
 
-  outData.resize(totalFrames);
+  outData.resize(static_cast<size_t>(totalFrames));
+
   AudioBufferList bufferList = {};
   bufferList.mNumberBuffers = 1;
   bufferList.mBuffers[0].mNumberChannels = 1;
-  bufferList.mBuffers[0].mDataByteSize = totalFrames * sizeof(float);
+  bufferList.mBuffers[0].mDataByteSize =
+      static_cast<UInt32>(outData.size() * sizeof(float));
   bufferList.mBuffers[0].mData = outData.data();
 
-  UInt32 ioFrames = totalFrames;
-  ExtAudioFileRead(audioFile, &ioFrames, &bufferList);
+  UInt32 ioFrames = static_cast<UInt32>(totalFrames);
+  if (ExtAudioFileRead(audioFile, &ioFrames, &bufferList) != noErr) {
+    ExtAudioFileDispose(audioFile);
+    return false;
+  }
+
   ExtAudioFileDispose(audioFile);
-  outSampleRate = 44100.0;
   return true;
 }
 
-// Simple WAV writer logic
 bool SaveWav(const std::string &path, const std::vector<float> &data,
              double sampleRate) {
   CFStringRef str = CFStringCreateWithCString(kCFAllocatorDefault, path.c_str(),
                                               kCFStringEncodingUTF8);
+  if (!str) return false;
+
   CFURLRef url = CFURLCreateWithFileSystemPath(kCFAllocatorDefault, str,
                                                kCFURLPOSIXPathStyle, false);
   CFRelease(str);
+  if (!url) return false;
 
-  AudioStreamBasicDescription format = {};
-  format.mSampleRate = sampleRate;
-  format.mFormatID = kAudioFormatLinearPCM;
-  format.mFormatFlags =
+  AudioStreamBasicDescription fileFormat = {};
+  fileFormat.mSampleRate = sampleRate;
+  fileFormat.mFormatID = kAudioFormatLinearPCM;
+  fileFormat.mFormatFlags =
       kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
-  format.mBytesPerPacket = 2;
-  format.mFramesPerPacket = 1;
-  format.mBytesPerFrame = 2;
-  format.mChannelsPerFrame = 1;
-  format.mBitsPerChannel = 16;
+  fileFormat.mBytesPerPacket = 2;
+  fileFormat.mFramesPerPacket = 1;
+  fileFormat.mBytesPerFrame = 2;
+  fileFormat.mChannelsPerFrame = 1;
+  fileFormat.mBitsPerChannel = 16;
 
-  ExtAudioFileRef audioFile;
-  if (ExtAudioFileCreateWithURL(url, kAudioFileWAVEType, &format, nullptr,
+  ExtAudioFileRef audioFile = nullptr;
+  if (ExtAudioFileCreateWithURL(url, kAudioFileWAVEType, &fileFormat, nullptr,
                                 kAudioFileFlags_EraseFile,
                                 &audioFile) != noErr) {
     CFRelease(url);
@@ -87,343 +111,427 @@ bool SaveWav(const std::string &path, const std::vector<float> &data,
   clientFormat.mFormatID = kAudioFormatLinearPCM;
   clientFormat.mFormatFlags =
       kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked;
-  clientFormat.mBytesPerPacket = 4;
+  clientFormat.mBytesPerPacket = sizeof(float);
   clientFormat.mFramesPerPacket = 1;
-  clientFormat.mBytesPerFrame = 4;
+  clientFormat.mBytesPerFrame = sizeof(float);
   clientFormat.mChannelsPerFrame = 1;
   clientFormat.mBitsPerChannel = 32;
 
-  ExtAudioFileSetProperty(audioFile, kExtAudioFileProperty_ClientDataFormat,
-                          sizeof(clientFormat), &clientFormat);
+  if (ExtAudioFileSetProperty(audioFile, kExtAudioFileProperty_ClientDataFormat,
+                              sizeof(clientFormat), &clientFormat) != noErr) {
+    ExtAudioFileDispose(audioFile);
+    return false;
+  }
 
   AudioBufferList bufferList = {};
   bufferList.mNumberBuffers = 1;
   bufferList.mBuffers[0].mNumberChannels = 1;
-  bufferList.mBuffers[0].mDataByteSize = data.size() * sizeof(float);
-  bufferList.mBuffers[0].mData = (void *)data.data();
+  bufferList.mBuffers[0].mDataByteSize =
+      static_cast<UInt32>(data.size() * sizeof(float));
+  bufferList.mBuffers[0].mData = const_cast<float *>(data.data());
 
-  ExtAudioFileWrite(audioFile, data.size(), &bufferList);
+  UInt32 frameCount = static_cast<UInt32>(data.size());
+  bool ok = ExtAudioFileWrite(audioFile, frameCount, &bufferList) == noErr;
   ExtAudioFileDispose(audioFile);
-  return true;
+  return ok;
 }
 
 // -----------------------------------------------------
-// Phase 14: Direct Multi-Sampler Pitch Shifting
+// Math Helpers
 // -----------------------------------------------------
-// Since we have an anchor sample for every single string, the required pitch
-// shift is extremely small (max ~4 semitones). Therefore, standard linear
-// interpolation sounds flawless and avoids all Granular/PSOLA phase
-// cancellation artifacts.
-std::vector<float> GenerateSampledNote(const std::vector<float> &srcAudio,
-                                       double targetFreq, double sampleRate,
-                                       double baseFreq) {
-  // Determine the pitch ratio
-  double ratio = targetFreq / baseFreq;
+static inline double Clamp(double x, double lo, double hi) {
+  return std::max(lo, std::min(x, hi));
+}
 
-  // We adjust the length of the output buffer based on the pitch shift
-  // (Pitching up makes the sample shorter, pitching down makes it longer)
-  size_t newLen = static_cast<size_t>(srcAudio.size() / ratio);
-  std::vector<float> out(newLen, 0.0f);
+static inline float ClampFloat(float x, float lo, float hi) {
+  return std::max(lo, std::min(x, hi));
+}
 
-  // Standard Linear Interpolation Playback
-  for (size_t i = 0; i < newLen; ++i) {
-    double readPos = i * ratio;
-    size_t idx = static_cast<size_t>(readPos);
-    double frac = readPos - idx;
+static inline double Hash01(uint32_t x) {
+  x ^= x >> 17; x *= 0xed5ad4bbU; x ^= x >> 11;
+  x *= 0xac4c1b51U; x ^= x >> 15; x *= 0x31848babU; x ^= x >> 14;
+  return static_cast<double>(x) / static_cast<double>(UINT32_MAX);
+}
 
-    float val1 = (idx < srcAudio.size()) ? srcAudio[idx] : 0.0f;
-    float val2 = (idx + 1 < srcAudio.size()) ? srcAudio[idx + 1] : 0.0f;
+static inline double HashSigned(uint32_t x) { return (Hash01(x) * 2.0) - 1.0; }
 
-    out[i] = val1 + (val2 - val1) * static_cast<float>(frac);
-  }
+// -----------------------------------------------------
+// Real-Time Synthesizer Architecture
+// -----------------------------------------------------
+class GuitarSynthesizer {
+public:
+  struct NoteEvent {
+    size_t startSample = 0;
+    int stringIndex = 0;
+    double targetFreq = 0.0;
+    float velocity = 1.0f;
+    double durationSec = 1.0;
+    bool isDownStrum = true;
+    bool isNewChord = false;
+    int activeStrings = 1;
+    uint32_t strumId = 0;
+  };
 
-  // Apply a quick fade out to prevent clicks at the end of the sample if it was
-  // cut short
-  size_t fadeSamples = std::min(static_cast<size_t>(1000), newLen);
-  for (size_t i = 0; i < fadeSamples; ++i) {
-    float env = static_cast<float>(fadeSamples - i) / fadeSamples;
-    out[newLen - fadeSamples + i] *= env;
-  }
+  struct StringVoice {
+    const std::vector<float> *anchor = nullptr;
+    double freq = 0.0;
+    double pitchRatio = 1.0;
 
-  // Hard mute after 1.5 seconds to prevent extremely down-pitched bass notes
-  // from ringing forever and muddying up subsequent fast arpeggio picking.
-  size_t maxLen = static_cast<size_t>(1.5 * sampleRate);
-  if (out.size() > maxLen) {
-    size_t hardFade = std::min(static_cast<size_t>(2000), maxLen);
-    for (size_t i = maxLen - hardFade; i < maxLen; ++i) {
-      float env = static_cast<float>(maxLen - i) / hardFade;
-      out[i] *= env;
+    double readHead = 0.0;
+    size_t framesRendered = 0;
+    size_t maxFrames = 0;
+
+    float gain = 1.0f;
+    size_t attackSamples = 0;
+
+    bool releasing = false;
+    size_t releaseSamples = 1;
+    size_t releasePos = 0;
+    float releaseStartAmp = 1.0f;
+
+    float lastAmp = 0.0f;
+    bool active = false;
+
+    void Start(const std::vector<float> *inAnchor, double inFreq,
+               double inRatio, double startHead, size_t inMaxFrames,
+               float inGain, size_t inAttackSamples) {
+      anchor = inAnchor;
+      freq = inFreq;
+      pitchRatio = inRatio;
+      readHead = startHead;
+      maxFrames = inMaxFrames;
+      framesRendered = 0;
+      gain = inGain;
+      attackSamples = inAttackSamples;
+      releasing = false;
+      releaseSamples = 1;
+      releasePos = 0;
+      releaseStartAmp = 1.0f;
+      lastAmp = 0.0f;
+      active = (anchor != nullptr && !anchor->empty() && maxFrames > 0);
     }
-    out.resize(maxLen);
-  }
-  return out;
-}
 
+    void StartRelease(size_t inReleaseSamples) {
+      if (!active) return;
+      if (!releasing) {
+        releasing = true;
+        releaseSamples = std::max<size_t>(1, inReleaseSamples);
+        releasePos = 0;
+        releaseStartAmp = (lastAmp > 0.0f) ? lastAmp : 1.0f;
+      }
+    }
+
+    bool IsAudiblyActive() const {
+      return active && framesRendered < maxFrames;
+    }
+
+    float RenderOne() {
+      if (!active || framesRendered >= maxFrames) {
+        active = false;
+        lastAmp = 0.0f;
+        return 0.0f;
+      }
+
+      size_t idx = static_cast<size_t>(readHead);
+      if (idx >= anchor->size()) {
+        active = false;
+        lastAmp = 0.0f;
+        return 0.0f;
+      }
+
+      float amp = 1.0f;
+      if (attackSamples > 0 && framesRendered < attackSamples) {
+        amp *= static_cast<float>(framesRendered) / static_cast<float>(attackSamples);
+      }
+
+      if (releasing) {
+        float rel = 1.0f - (static_cast<float>(releasePos) / static_cast<float>(releaseSamples));
+        amp *= std::max(0.0f, rel) * releaseStartAmp;
+      }
+
+      lastAmp = amp;
+
+      float v1 = (*anchor)[idx];
+      float v2 = (idx + 1 < anchor->size()) ? (*anchor)[idx + 1] : 0.0f;
+      float frac = static_cast<float>(readHead - idx);
+      float sample = (v1 + (v2 - v1) * frac) * gain * amp;
+
+      readHead += pitchRatio;
+      ++framesRendered;
+
+      if (releasing && ++releasePos >= releaseSamples) active = false;
+      return sample;
+    }
+  };
+
+  GuitarSynthesizer(double sr, size_t totalSamples)
+      : sampleRate_(sr), totalSamples_(totalSamples) {
+    baseFreqs_ = {82.41, 110.00, 146.83, 196.00, 246.94, 329.63};
+  }
+
+  bool LoadAnchors(const std::array<std::string, 6> &paths) {
+    for (int i = 0; i < 6; ++i) {
+      if (!LoadWav(paths[i], anchors_[i], sampleRate_)) {
+        std::cerr << "Failed to load anchor: " << paths[i] << std::endl;
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void ScheduleStrum(double startTimeSec, bool isDownStrum, float velocity,
+                     double durationSec, bool isNewChord, double f1, double f2,
+                     double f3, double f4, double f5, double f6) {
+    const double freqs[6] = {f1, f2, f3, f4, f5, f6};
+
+    int firstActive = -1, lastActive = -1, activeStrings = 0;
+    for (int i = 0; i < 6; ++i) {
+      if (freqs[i] > 0.0) {
+        if (firstActive < 0) firstActive = i;
+        lastActive = i;
+        ++activeStrings;
+      }
+    }
+
+    if (activeStrings == 0) return;
+
+    const uint32_t strumId = nextStrumId_++;
+    double baseDelayMs = isDownStrum ? 12.0 : 9.0;
+    baseDelayMs += HashSigned(strumId * 101u + 7u) * 1.2;
+    baseDelayMs = Clamp(baseDelayMs, 7.5, 15.0);
+
+    double curve = 0.92 + (HashSigned(strumId * 191u + 3u) * 0.025);
+    curve = Clamp(curve, 0.88, 0.97);
+
+    const size_t baseStart = static_cast<size_t>(std::max(0.0, startTimeSec) * sampleRate_);
+
+    for (int strIndex = 0; strIndex < 6; ++strIndex) {
+      if (freqs[strIndex] <= 0.0) continue;
+
+      size_t eventStart = baseStart;
+
+      if (activeStrings > 1) {
+        const int origin = isDownStrum ? firstActive : lastActive;
+        int relIdx = isDownStrum ? (strIndex - origin) : (origin - strIndex);
+        relIdx = std::max(0, relIdx);
+
+        double offsetMs = 0.0;
+        for (int k = 0; k < relIdx; ++k) offsetMs += baseDelayMs * std::pow(curve, static_cast<double>(k));
+        
+        if (relIdx > 0) offsetMs += HashSigned(strumId * 313u + static_cast<uint32_t>(strIndex) * 17u) * 0.9;
+        
+        eventStart += static_cast<size_t>((std::max(0.0, offsetMs) / 1000.0) * sampleRate_);
+      }
+
+      NoteEvent ev;
+      ev.startSample = eventStart;
+      ev.stringIndex = strIndex;
+      ev.targetFreq = freqs[strIndex];
+      ev.velocity = velocity;
+      ev.durationSec = durationSec;
+      ev.isDownStrum = isDownStrum;
+      ev.isNewChord = isNewChord;
+      ev.activeStrings = activeStrings;
+      ev.strumId = strumId;
+      events_.push_back(std::move(ev));
+    }
+  }
+
+  std::vector<float> Render() {
+    std::sort(events_.begin(), events_.end(),
+              [](const NoteEvent &a, const NoteEvent &b) {
+                if (a.startSample != b.startSample) return a.startSample < b.startSample;
+                return a.stringIndex < b.stringIndex;
+              });
+
+    std::vector<float> out(totalSamples_, 0.0f);
+    size_t eventIndex = 0;
+
+    for (size_t n = 0; n < totalSamples_; ++n) {
+      while (eventIndex < events_.size() && events_[eventIndex].startSample == n) {
+        TriggerEvent(events_[eventIndex]);
+        ++eventIndex;
+      }
+
+      float mix = 0.0f;
+      for (int s = 0; s < 6; ++s) {
+        for (auto &voice : stringVoices_[s]) mix += voice.RenderOne();
+      }
+      out[n] = ClampFloat(mix, -1.0f, 1.0f);
+    }
+    return out;
+  }
+
+private:
+  static constexpr size_t VOICES_PER_STRING = 3;
+
+  void TriggerEvent(const NoteEvent &ev) {
+    if (ev.stringIndex < 0 || ev.stringIndex >= 6 || ev.targetFreq <= 0.0) return;
+
+    auto &voices = stringVoices_[ev.stringIndex];
+    bool alreadyRinging = false;
+    bool sameNoteRinging = false;
+
+    for (const auto &v : voices) {
+      if (v.IsAudiblyActive()) {
+        alreadyRinging = true;
+        if (std::abs(v.freq - ev.targetFreq) <= 0.1) sameNoteRinging = true;
+      }
+    }
+
+    const bool softRetrigger = (!ev.isNewChord && alreadyRinging && sameNoteRinging);
+    const size_t quickRelease = softRetrigger ? MsToSamples(10.0) : MsToSamples(16.0);
+
+    // Choke existing active voices on this string
+    for (auto &v : voices) {
+      if (v.IsAudiblyActive()) v.StartRelease(quickRelease);
+    }
+
+    const double pitchRatio = ev.targetFreq / baseFreqs_[ev.stringIndex];
+    if (pitchRatio <= 0.0) return;
+
+    double readHeadStart = 0.0;
+    float retriggerGain = 1.0f;
+    size_t attackSamples = MsToSamples(4.0);
+
+    if (softRetrigger) {
+      readHeadStart = static_cast<double>(MsToSamples(12.0)) * pitchRatio;
+      retriggerGain = 0.40f;
+      attackSamples = MsToSamples(1.5);
+    }
+
+    const size_t requestedFrames = static_cast<size_t>(ev.durationSec * sampleRate_);
+    if (requestedFrames == 0) return;
+
+    float stringVelocity = ev.velocity * retriggerGain;
+    if (ev.isDownStrum) {
+      stringVelocity *= (1.0f - static_cast<float>(ev.stringIndex) * 0.04f);
+    } else {
+      const float upPos = static_cast<float>(ev.stringIndex) / 5.0f;
+      stringVelocity *= (0.30f + 0.70f * upPos);
+    }
+
+    const float densityScale = ClampFloat(
+        0.95f * std::sqrt(4.0f / static_cast<float>(std::max(1, ev.activeStrings))), 0.72f, 1.12f);
+    const float finalGain = 0.16f * stringVelocity * densityScale;
+
+    // Acquire a free voice slot without allocating
+    StringVoice *targetVoice = nullptr;
+    for (auto &v : voices) {
+      if (!v.IsAudiblyActive() && !v.releasing) {
+        targetVoice = &v;
+        break;
+      }
+    }
+    if (!targetVoice) targetVoice = &voices[0]; // Voice steal fallback
+
+    targetVoice->Start(&anchors_[ev.stringIndex], ev.targetFreq, pitchRatio,
+                       readHeadStart, requestedFrames, finalGain, attackSamples);
+  }
+
+  size_t MsToSamples(double ms) const {
+    return static_cast<size_t>((ms / 1000.0) * sampleRate_);
+  }
+
+  double sampleRate_ = 44100.0;
+  size_t totalSamples_ = 0;
+  std::array<std::vector<float>, 6> anchors_;
+  std::array<double, 6> baseFreqs_{};
+  std::vector<NoteEvent> events_;
+  std::array<std::array<StringVoice, VOICES_PER_STRING>, 6> stringVoices_{};
+  uint32_t nextStrumId_ = 1;
+};
+
+// -----------------------------------------------------
+// Main
+// -----------------------------------------------------
 int main() {
-  double sampleRate = 44100.0;
+  const double sampleRate = 44100.0;
+  const double totalDurationSec = 26.0;
+  const size_t totalSamples = static_cast<size_t>(totalDurationSec * sampleRate);
+
+  GuitarSynthesizer synth(sampleRate, totalSamples);
 
   std::cout << "Loading 6 FSS Acoustic Guitar Anchors..." << std::endl;
-  std::vector<std::vector<float>> anchors(6);
-  if (!LoadWav("Assets/Exciters/FS_Guitars/E2.wav", anchors[0], sampleRate) ||
-      !LoadWav("Assets/Exciters/FS_Guitars/A2.wav", anchors[1], sampleRate) ||
-      !LoadWav("Assets/Exciters/FS_Guitars/D3.wav", anchors[2], sampleRate) ||
-      !LoadWav("Assets/Exciters/FS_Guitars/G3.wav", anchors[3], sampleRate) ||
-      !LoadWav("Assets/Exciters/FS_Guitars/B3.wav", anchors[4], sampleRate) ||
-      !LoadWav("Assets/Exciters/FS_Guitars/E4.wav", anchors[5], sampleRate)) {
-    std::cerr << "Failed to load multi-sample anchors!" << std::endl;
+  if (!synth.LoadAnchors({
+          "Assets/Exciters/FS_Guitars/E2.wav",
+          "Assets/Exciters/FS_Guitars/A2.wav",
+          "Assets/Exciters/FS_Guitars/D3.wav",
+          "Assets/Exciters/FS_Guitars/G3.wav",
+          "Assets/Exciters/FS_Guitars/B3.wav",
+          "Assets/Exciters/FS_Guitars/E4.wav",
+      })) {
+    std::cerr << "Failed to load one or more anchors." << std::endl;
     return 1;
   }
 
-  // Base frequencies of the open strings we sampled
-  std::vector<double> baseFreqs = {82.41,  110.00, 146.83,
-                                   196.00, 246.94, 329.63};
-
-  std::cout << "Synthesizing G-D-Em-C progression..." << std::endl;
-
-  // Per-string state tracking for the voice manager
-  std::vector<size_t> stringWritePos(6, 0);
-  std::vector<size_t> stringEndPos(6, 0);
-  std::vector<double> stringCurrentFreq(6, 0.0);
-
-  // -----------------------------------------------------------------------
-  // addStrum: the core DSP stroke function.
-  //
-  // Incorporates all 5 fixes from the peer-review:
-  //  1. Relative strum origin  — delay is relative to first active string, not
-  //  abs index
-  //  2. Humanized sweep        — base delay 12ms, nonlinear, with subtle
-  //  per-string jitter
-  //  3. Sustain skip           — on isNewChord, a shared-freq string is NOT
-  //  retriggered
-  //  4. Soft retrigger         — same-chord restrum skips the transient, plays
-  //  at 0.4x gain
-  //  5. Attack ramp            — 4ms linear ramp-in prevents click stacking on
-  //  close strums
-  // -----------------------------------------------------------------------
-  auto addStrum = [&](std::vector<float> &dest, double startTimeSec,
-                      bool isDownStrum, float velocity, double durationSec,
-                      bool isNewChord, double f1, double f2, double f3,
-                      double f4, double f5, double f6) {
-    const double freqs[6] = {f1, f2, f3, f4, f5, f6};
-
-    // Find the first (and last) active string for relative delay calculation
-    int firstActive = -1, lastActive = -1;
-    for (int i = 0; i < 6; ++i) {
-      if (freqs[i] > 0) {
-        if (firstActive < 0)
-          firstActive = i;
-        lastActive = i;
-      }
-    }
-    if (firstActive < 0)
-      return;
-
-    int activeStrings = 0;
-    for (int i = 0; i < 6; ++i)
-      if (freqs[i] > 0)
-        ++activeStrings;
-
-    // Pre-generate all string samples
-    std::vector<float> samples[6];
-    for (int i = 0; i < 6; ++i) {
-      if (freqs[i] > 0)
-        samples[i] =
-            GenerateSampledNote(anchors[i], freqs[i], sampleRate, baseFreqs[i]);
-    }
-
-    // Fix 2: humanized base delay (12ms down, 9ms up)
-    double baseDelayMs = isDownStrum ? 12.0 : 9.0;
-
-    for (int strIndex = 0; strIndex < 6; ++strIndex) {
-      double targetFreq = freqs[strIndex];
-      const std::vector<float> &stringAudio = samples[strIndex];
-
-      if (stringAudio.empty() || targetFreq <= 0.0)
-        continue;
-
-      size_t startOffset = static_cast<size_t>(startTimeSec * sampleRate);
-
-      // Fix 1: Relative strum origin
-      size_t strOffset;
-      if (activeStrings == 1) {
-        // Arpeggio single-string: no sweep delay, lock to grid
-        strOffset = startOffset;
-      } else {
-        int origin = isDownStrum ? firstActive : lastActive;
-        int relIdx = isDownStrum ? (strIndex - origin) : (origin - strIndex);
-        if (relIdx < 0)
-          relIdx = 0;
-
-        // Nonlinear acceleration: each subsequent string is slightly faster
-        // (~8%)
-        double effectiveDelayMs = 0.0;
-        for (int k = 0; k < relIdx; ++k)
-          effectiveDelayMs += baseDelayMs * std::pow(0.92, k);
-
-        // Subtle jitter: alternating ±0.8ms to avoid robotic pattern
-        effectiveDelayMs += (strIndex % 2 == 0) ? -0.8 : 0.8;
-
-        strOffset = startOffset + static_cast<size_t>(
-                                      (effectiveDelayMs / 1000.0) * sampleRate);
-      }
-
-      size_t currentEnd = stringEndPos[strIndex];
-      bool alreadyRinging = strOffset < currentEnd;
-      bool sameNote = std::abs(stringCurrentFreq[strIndex] - targetFreq) < 0.1;
-
-      // Fix 3: True harmonic sustain skip on chord transitions
-      // If the string is ringing the same note and we just changed chords, skip
-      // it entirely.
-      if (isNewChord && alreadyRinging && sameNote && activeStrings > 2) {
-        stringCurrentFreq[strIndex] = targetFreq;
-        continue;
-      }
-
-      // Fix 4: Soft retrigger on repeated same-chord strums
-      // Skip the transient (~12ms into sample) and play at 40% gain
-      bool softRetrigger = !isNewChord && alreadyRinging && sameNote;
-      size_t transientSkip =
-          softRetrigger ? static_cast<size_t>(0.012 * sampleRate) : 0;
-      float retriggerGain = softRetrigger ? 0.4f : 1.0f;
-
-      if (transientSkip >= stringAudio.size())
-        continue;
-
-      // Velocity shaping
-      float stringVelocity = velocity * retriggerGain;
-      if (isDownStrum) {
-        stringVelocity *= (1.0f - (strIndex * 0.04f));
-      } else {
-        // Upstrokes favor treble; bass strings are naturally softer
-        float upPos = static_cast<float>(5 - strIndex) / 5.0f;
-        stringVelocity *= (0.3f + 0.7f * upPos);
-      }
-
-      size_t available = stringAudio.size() - transientSkip;
-      size_t maxWriteLen =
-          std::min(available, static_cast<size_t>(durationSec * sampleRate));
-      if (maxWriteLen == 0)
-        continue;
-
-      // Fix 5: Attack ramp (4ms) + tail release
-      size_t attackLen =
-          std::min(static_cast<size_t>(0.004 * sampleRate), maxWriteLen / 8);
-      size_t fadeLen =
-          std::min(static_cast<size_t>(0.08 * sampleRate), maxWriteLen / 4);
-
-      for (size_t i = 0; i < maxWriteLen; ++i) {
-        if (strOffset + i >= dest.size())
-          break;
-
-        float env = 1.0f;
-        if (i < attackLen)
-          env *= static_cast<float>(i) /
-                 static_cast<float>(std::max<size_t>(1, attackLen));
-        if (i >= maxWriteLen - fadeLen)
-          env *= static_cast<float>(maxWriteLen - i) /
-                 static_cast<float>(std::max<size_t>(1, fadeLen));
-
-        dest[strOffset + i] +=
-            stringAudio[transientSkip + i] * 0.15f * stringVelocity * env;
-      }
-
-      stringWritePos[strIndex] = strOffset;
-      stringEndPos[strIndex] = strOffset + maxWriteLen;
-      stringCurrentFreq[strIndex] = targetFreq;
-    }
+  auto playStrum = [&](double barStartSec, bool isNewChord, double f1,
+                       double f2, double f3, double f4, double f5, double f6) {
+    const double ring = 2.0;
+    synth.ScheduleStrum(barStartSec + 0.00, true, 1.00f, ring, isNewChord, f1, f2, f3, f4, f5, f6);
+    synth.ScheduleStrum(barStartSec + 0.50, true, 0.85f, ring, false, f1, f2, f3, f4, f5, f6);
+    synth.ScheduleStrum(barStartSec + 0.75, false, 0.70f, ring, false, f1, f2, f3, f4, f5, f6);
+    synth.ScheduleStrum(barStartSec + 1.25, false, 0.75f, ring, false, f1, f2, f3, f4, f5, f6);
+    synth.ScheduleStrum(barStartSec + 1.50, true, 0.80f, ring, false, f1, f2, f3, f4, f5, f6);
+    synth.ScheduleStrum(barStartSec + 1.75, false, 0.65f, ring, false, f1, f2, f3, f4, f5, f6);
   };
 
-  // 25 seconds total playback buffer
-  size_t totalPlayTimeSamples = static_cast<size_t>(25.0 * sampleRate);
-  std::vector<float> sequence(totalPlayTimeSamples, 0.0f);
+  auto playArpeggio = [&](double barStartSec, bool isNewChord, double f1,
+                          double f2, double f3, double f4, double f5, double f6) {
+    const double step = 0.25;
+    const double ring = 1.0;
 
-  // -----------------------------------------------------------------------
-  // Strum pattern at 100 BPM: bar = 2.4s
-  // -----------------------------------------------------------------------
-  auto playStrum = [&](double barStartSec, double f1, double f2, double f3,
-                       double f4, double f5, double f6) {
-    double ring = 2.4;
-    addStrum(sequence, barStartSec + 0.00, true, 1.0f, ring, true, f1, f2, f3,
-             f4, f5, f6);
-    addStrum(sequence, barStartSec + 0.60, true, 0.8f, ring, false, f1, f2, f3,
-             f4, f5, f6);
-    addStrum(sequence, barStartSec + 0.90, false, 0.6f, ring, false, f1, f2, f3,
-             f4, f5, f6);
-    addStrum(sequence, barStartSec + 1.50, false, 0.7f, ring, false, f1, f2, f3,
-             f4, f5, f6);
-    addStrum(sequence, barStartSec + 1.80, true, 0.9f, ring, false, f1, f2, f3,
-             f4, f5, f6);
-    addStrum(sequence, barStartSec + 2.10, false, 0.6f, ring, false, f1, f2, f3,
-             f4, f5, f6);
+    double primaryBass = 0.0, altBass = 0.0;
+    if (f1 > 0.0) { primaryBass = f1; altBass = (f3 > 0.0) ? f3 : f4; } 
+    else if (f2 > 0.0) { primaryBass = f2; altBass = (f4 > 0.0) ? f4 : f3; } 
+    else if (f3 > 0.0) { primaryBass = f3; altBass = (f4 > 0.0) ? f4 : 0.0; }
+
+    auto strike = [&](double t, double fr1, double fr2, double fr3,
+                      double fr4, double fr5, double fr6, float vel, bool nc) {
+      synth.ScheduleStrum(barStartSec + t, true, vel, ring, nc, fr1, fr2, fr3, fr4, fr5, fr6);
+    };
+
+    // Humanized Fingerstyle Velocities
+    strike(0 * step, (primaryBass == f1) ? f1 : 0, (primaryBass == f2) ? f2 : 0, (primaryBass == f3) ? f3 : 0, 0, 0, f6, 0.90f, isNewChord);
+    strike(1 * step, 0, 0, 0, f4, 0, 0, 0.55f, false);
+    strike(2 * step, 0, 0, (altBass == f3) ? f3 : 0, (altBass == f4) ? f4 : 0, 0, 0, 0.75f, false);
+    strike(3 * step, 0, 0, 0, 0, f5, 0, 0.60f, false);
+    strike(4 * step, (primaryBass == f1) ? f1 : 0, (primaryBass == f2) ? f2 : 0, (primaryBass == f3) ? f3 : 0, 0, 0, 0, 0.85f, false);
+    strike(5 * step, 0, 0, 0, f4, 0, 0, 0.55f, false);
+    strike(6 * step, 0, 0, (altBass == f3) ? f3 : 0, (altBass == f4) ? f4 : 0, 0, 0, 0.75f, false);
+    strike(7 * step, 0, 0, 0, 0, 0, f6, 0.65f, false);
   };
 
-  // -----------------------------------------------------------------------
-  // Travis picking arpeggio: Bass -> Treble -> Mid in 0.30s steps (100 BPM
-  // 1/8th)
-  // -----------------------------------------------------------------------
-  auto playArpeggio = [&](double barStartSec, double f1, double f2, double f3,
-                          double f4, double f5, double f6) {
-    double step = 0.30;
-    double ring = 1.2;
-    // Bass, High-E, G, B, D, High-E, B, G
-    if (f1 > 0)
-      addStrum(sequence, barStartSec + (0 * step), true, 1.0f, ring, true, f1,
-               0, 0, 0, 0, 0);
-    else
-      addStrum(sequence, barStartSec + (0 * step), true, 1.0f, ring, true, 0,
-               f2, 0, 0, 0, 0);
-    if (f6 > 0)
-      addStrum(sequence, barStartSec + (1 * step), false, 0.7f, ring, true, 0,
-               0, 0, 0, 0, f6);
-    if (f4 > 0)
-      addStrum(sequence, barStartSec + (2 * step), true, 0.8f, ring, true, 0, 0,
-               0, f4, 0, 0);
-    if (f5 > 0)
-      addStrum(sequence, barStartSec + (3 * step), false, 0.6f, ring, true, 0,
-               0, 0, 0, f5, 0);
-    if (f3 > 0)
-      addStrum(sequence, barStartSec + (4 * step), true, 0.9f, ring, true, 0, 0,
-               f3, 0, 0, 0);
-    if (f6 > 0)
-      addStrum(sequence, barStartSec + (5 * step), false, 0.7f, ring, true, 0,
-               0, 0, 0, 0, f6);
-    if (f5 > 0)
-      addStrum(sequence, barStartSec + (6 * step), false, 0.6f, ring, true, 0,
-               0, 0, 0, f5, 0);
-    if (f4 > 0)
-      addStrum(sequence, barStartSec + (7 * step), false, 0.5f, ring, true, 0,
-               0, 0, f4, 0, 0);
-  };
+  const double ca1 = 0.0, ca2 = 130.81, ca3 = 164.81, ca4 = 196.00, ca5 = 293.66, ca6 = 392.00; // Cadd9
+  const double g1 = 98.00, g2 = 123.47, g3 = 146.83, g4 = 196.00, g5 = 293.66, g6 = 392.00;     // G
+  const double as1 = 0.0, as2 = 110.00, as3 = 164.81, as4 = 220.00, as5 = 246.94, as6 = 329.63; // Asus2
+  const double ds1 = 0.0, ds2 = 0.0, ds3 = 146.83, ds4 = 220.00, ds5 = 293.66, ds6 = 392.00;    // Dsus4
 
-  // -----------------------------------------------------------------------
-  // Chord definitions — standard tuning, tablature-accurate
-  // -----------------------------------------------------------------------
-  // G Major: 320033 -> G2, B2, D3, G3, D4, G4
-  double g1 = 98.00, g2 = 123.47, g3 = 146.83, g4 = 196.00, g5 = 293.66,
-         g6 = 392.00;
-  // D Major: xx0232 -> D3, A3, D4, F#4
-  double d1 = 0, d2 = 0, d3 = 146.83, d4 = 220.00, d5 = 293.66, d6 = 369.99;
-  // E Minor: 022000 -> E2, B2, E3, G3, B3, E4
-  double em1 = 82.41, em2 = 123.47, em3 = 164.81, em4 = 196.00, em5 = 246.94,
-         em6 = 329.63;
-  // C Major: x32010 -> C3, E3, G3, C4, E4
-  double cm1 = 0, cm2 = 130.81, cm3 = 164.81, cm4 = 196.00, cm5 = 261.63,
-         cm6 = 329.63;
+  std::cout << "Strumming: Cadd9 - G - Asus2 - Dsus4 (120 BPM)" << std::endl;
+  playStrum(0.0, true, ca1, ca2, ca3, ca4, ca5, ca6);
+  playStrum(2.0, true, g1, g2, g3, g4, g5, g6);
+  playStrum(4.0, true, as1, as2, as3, as4, as5, as6);
+  playStrum(6.0, true, ds1, ds2, ds3, ds4, ds5, ds6);
+  playStrum(8.0, true, ca1, ca2, ca3, ca4, ca5, ca6);
+  playStrum(10.0, true, g1, g2, g3, g4, g5, g6);
+  playStrum(12.0, true, as1, as2, as3, as4, as5, as6);
+  playStrum(14.0, true, ds1, ds2, ds3, ds4, ds5, ds6);
 
-  std::cout << "Strumming: G - D - Em - C" << std::endl;
-  playStrum(0.0, g1, g2, g3, g4, g5, g6);
-  playStrum(2.4, d1, d2, d3, d4, d5, d6);
-  playStrum(4.8, em1, em2, em3, em4, em5, em6);
-  playStrum(7.2, cm1, cm2, cm3, cm4, cm5, cm6);
+  std::cout << "Arpeggios: Cadd9 - G - Asus2 - Dsus4" << std::endl;
+  playArpeggio(16.0, true, ca1, ca2, ca3, ca4, ca5, ca6);
+  playArpeggio(18.0, true, g1, g2, g3, g4, g5, g6);
+  playArpeggio(20.0, true, as1, as2, as3, as4, as5, as6);
+  playArpeggio(22.0, true, ds1, ds2, ds3, ds4, ds5, ds6);
 
-  std::cout << "Arpeggios: G - D - Em - C" << std::endl;
-  playArpeggio(9.6, g1, g2, g3, g4, g5, g6);
-  playArpeggio(12.0, d1, d2, d3, d4, d5, d6);
-  playArpeggio(14.4, em1, em2, em3, em4, em5, em6);
-  playArpeggio(16.8, cm1, cm2, cm3, cm4, cm5, cm6);
+  std::cout << "Rendering chronologically..." << std::endl;
+  std::vector<float> sequence = synth.Render();
 
   std::cout << "Saving test_pecr_output.wav..." << std::endl;
-  SaveWav("test_pecr_output.wav", sequence, sampleRate);
+  if (!SaveWav("test_pecr_output.wav", sequence, sampleRate)) {
+    std::cerr << "Failed to save output WAV." << std::endl;
+    return 1;
+  }
+
   std::cout << "Done." << std::endl;
   return 0;
 }
