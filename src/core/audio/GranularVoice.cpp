@@ -62,7 +62,7 @@ void GranularVoice::Start(const SampleZone *zone, uint8_t targetPitch,
   masterTimePos_ = 0.0;
   directReadPos_ = 0.0;
   granularMacroPos_ = 0.0;
-  timeAdvanceRate_ = std::max(1.0, std::sqrt(pitchRatio_));
+  timeAdvanceRate_ = 1.0;
 
   envelopeLevel_ = currentVelocity_;
   releasePos_ = 0.0;
@@ -72,20 +72,16 @@ void GranularVoice::Start(const SampleZone *zone, uint8_t targetPitch,
   transitionSamples_ = 0.018 * zone->sampleRate;
   sustainSeeded_ = false;
 
-  // True PSOLA Mapping
-  double rootFreq = 440.0 * std::pow(2.0, (zone->rootKey - 69) / 12.0);
-  double targetFreq = 440.0 * std::pow(2.0, (targetPitch - 69) / 12.0);
+  // 1. Fixed, lush grain sizes for the sustain tail
+  nominalGrainDurationSamples_ = 0.045 * zone->sampleRate; // 45ms grains
+  hopSizeSamples_ = 0.015 * zone->sampleRate; // 15ms hop (exactly 3x overlap)
 
-  rootPeriodSamples_ = zone->sampleRate / rootFreq;
-  targetPeriodSamples_ = zone->sampleRate / targetFreq;
+  // 2. Pitch shift the grains directly by altering their read speed
+  grainReadSpeed_ = pitchRatio_;
 
-  // Grain size must accommodate down-shifting to prevent gap dropouts
-  nominalGrainDurationSamples_ =
-      2.0 * std::max(rootPeriodSamples_, targetPeriodSamples_);
-
-  // Hop size is exactly 1 period of the TARGET pitch
-  hopSizeSamples_ = targetPeriodSamples_;
-  grainReadSpeed_ = 1.0;
+  // 3. Keep the macro position advancing at 1.0 to preserve the natural decay
+  // length
+  timeAdvanceRate_ = 1.0;
   samplesUntilNextGrain_ = 0.0;
 
   ResetGrains();
@@ -149,15 +145,10 @@ void GranularVoice::SpawnGrain(size_t maxSourceFrames) {
   if (!slot)
     return;
 
-  // PSOLA Phase Lock & Epoch Centering:
-  double offset = granularMacroPos_ - attackBypassSamples_;
-  double periods = std::round(offset / rootPeriodSamples_);
-
-  // The exact mathematical peak of the pitch pulse
-  double epochPos = attackBypassSamples_ + periods * rootPeriodSamples_;
-
-  // Center the Hann window peak over the pulse epoch
-  double sourceStart = epochPos - (nominalGrainDurationSamples_ * 0.5);
+  // Simply extract from the current tracking position.
+  // Because our grains are large (45ms) and overlap densely (3x),
+  // this creates a phase-smooth ensemble effect rather than comb filtering.
+  double sourceStart = granularMacroPos_;
 
   slot->active = true;
   slot->internalReadPos = sourceStart;
@@ -256,11 +247,13 @@ void GranularVoice::RenderNextBlock(float **outputChannels, uint32_t numFrames,
     float norm = 0.0f;
     StereoSample granular = RenderGranularSample(maxSourceFrames, norm);
 
-    // Normalization is now mathematically stable due to dynamic window sizing
-    if (norm > 1e-6f) {
-      granular.left /= norm;
-      granular.right /= norm;
-    }
+    // Because our 45ms grains hop every 15ms, we have exactly 3 overlapping
+    // Hann windows at all times. Mathematically, three evenly spaced Hann
+    // windows sum to exactly 1.5. We just apply a static reduction to prevent
+    // clipping.
+    const float staticOverlapGain = 1.0f / 1.5f;
+    granular.left *= staticOverlapGain;
+    granular.right *= staticOverlapGain;
 
     float directWeight = 0.0f;
     float granularWeight = 0.0f;
