@@ -1,8 +1,8 @@
 #pragma once
 
 #include "../midi/MIDIEvent.h"
-#include "AudioVoice.h"
 #include "AudioMixer.h"
+#include "GranularVoice.h"
 #include <array>
 #include <vector>
 
@@ -37,19 +37,19 @@ public:
   void LoadInstrumentKit(const std::string &assetsAbsolutePath);
   InstrumentArticulation &GetKitArticulation() { return activeArticulation_; }
 
-  AudioMixer& GetMixer() { return mixer_; }
+  AudioMixer &GetMixer() { return mixer_; }
 
 private:
   // Max polyphony constraint (e.g., 64 stereo voices)
   static constexpr size_t MAX_VOICES = 64;
-  std::array<AudioVoice, MAX_VOICES> voices_;
+  std::array<GranularVoice, MAX_VOICES> voices_;
 
   InstrumentArticulation activeArticulation_;
 
   // Finds the best voice to use (either truly Free, or by stealing the lowest
   // priority active voice)
-  AudioVoice *GetBestAvailableVoice();
-  
+  GranularVoice *GetBestAvailableVoice();
+
   AudioMixer mixer_;
 };
 

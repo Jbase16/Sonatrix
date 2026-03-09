@@ -132,7 +132,8 @@ bool SaveWav(const std::string &path, const std::vector<float> &data,
 
   ExtAudioFileRef audioFile = nullptr;
   if (ExtAudioFileCreateWithURL(url, kAudioFileWAVEType, &fileFormat, nullptr,
-                                kAudioFileFlags_EraseFile, &audioFile) != noErr) {
+                                kAudioFileFlags_EraseFile, &audioFile) !=
+      noErr) {
     CFRelease(url);
     return false;
   }
@@ -199,7 +200,7 @@ static inline double HashSigned(uint32_t x) {
 // -----------------------------------------------------
 class GuitarSynthesizer {
 public:
-  enum class Articulation { Strum, Pluck };
+  enum class Articulation { Strum, Pluck, PinchBass, PinchTreble };
 
   struct NoteEvent {
     size_t startSample = 0;
@@ -277,7 +278,7 @@ public:
         return false;
 
       if (framesRendered < attackSamples + 8)
-        return true; // brand-new note, treat as active even before lastOutputAbs builds
+        return true;
 
       if (!releasing)
         return true;
@@ -319,7 +320,8 @@ public:
 
       const float v1 = (*anchor)[idx];
       const float v2 = (idx + 1 < anchor->size()) ? (*anchor)[idx + 1] : 0.0f;
-      const float frac = static_cast<float>(readHead - static_cast<double>(idx));
+      const float frac =
+          static_cast<float>(readHead - static_cast<double>(idx));
       const float sample = (v1 + (v2 - v1) * frac) * gain * amp;
 
       readHead += pitchRatio;
@@ -448,11 +450,53 @@ public:
       ev.targetFreq = freqs[strIndex];
       ev.velocity = velocity;
       ev.durationSec = durationSec;
-      ev.isDownStrum = false; // irrelevant for pluck path
+      ev.isDownStrum = false;
       ev.isNewChord = isNewChord;
       ev.activeStrings = activeStrings;
       ev.gestureId = gestureId;
       ev.articulation = Articulation::Pluck;
+      events_.push_back(ev);
+    }
+  }
+
+  void SchedulePinch(double startTimeSec,
+                     int bassStringIndex, double bassFreq, float bassVelocity,
+                     int trebleStringIndex, double trebleFreq, float trebleVelocity,
+                     double durationSec, bool isNewChord,
+                     double trebleDelayMs = 4.0) {
+    const uint32_t gestureId = nextGestureId_++;
+    const size_t baseSample =
+        static_cast<size_t>(std::max(0.0, startTimeSec) * sampleRate_);
+    const size_t trebleDelaySamples =
+        static_cast<size_t>((std::max(0.0, trebleDelayMs) / 1000.0) * sampleRate_);
+
+    if (bassStringIndex >= 0 && bassStringIndex < 6 && bassFreq > 0.0) {
+      NoteEvent ev;
+      ev.startSample = baseSample;
+      ev.stringIndex = bassStringIndex;
+      ev.targetFreq = bassFreq;
+      ev.velocity = bassVelocity;
+      ev.durationSec = durationSec;
+      ev.isDownStrum = false;
+      ev.isNewChord = isNewChord;
+      ev.activeStrings = 2;
+      ev.gestureId = gestureId;
+      ev.articulation = Articulation::PinchBass;
+      events_.push_back(ev);
+    }
+
+    if (trebleStringIndex >= 0 && trebleStringIndex < 6 && trebleFreq > 0.0) {
+      NoteEvent ev;
+      ev.startSample = baseSample + trebleDelaySamples;
+      ev.stringIndex = trebleStringIndex;
+      ev.targetFreq = trebleFreq;
+      ev.velocity = trebleVelocity;
+      ev.durationSec = durationSec;
+      ev.isDownStrum = false;
+      ev.isNewChord = isNewChord;
+      ev.activeStrings = 2;
+      ev.gestureId = gestureId;
+      ev.articulation = Articulation::PinchTreble;
       events_.push_back(ev);
     }
   }
@@ -512,7 +556,8 @@ private:
     return std::min(requestedFrames, maxFromSource);
   }
 
-  bool AnyMeaningfullyAudible(const std::array<StringVoice, VOICES_PER_STRING>& voices) const {
+  bool AnyMeaningfullyAudible(
+      const std::array<StringVoice, VOICES_PER_STRING>& voices) const {
     for (const auto& v : voices) {
       if (v.IsMeaningfullyAudible())
         return true;
@@ -530,21 +575,21 @@ private:
     return false;
   }
 
-  StringVoice* SelectVoiceSlot(std::array<StringVoice, VOICES_PER_STRING>& voices) {
-    // 1) Prefer completely inactive slots
+  StringVoice* SelectVoiceSlot(
+      std::array<StringVoice, VOICES_PER_STRING>& voices) {
     for (auto& v : voices) {
       if (!v.IsAllocatedActive()) {
         return &v;
       }
     }
 
-    // 2) Prefer releasing + quietest
     StringVoice* best = nullptr;
     float bestScore = std::numeric_limits<float>::max();
 
     for (auto& v : voices) {
       if (v.releasing) {
-        const float score = v.lastOutputAbs + 0.000001f * static_cast<float>(v.ageSamples);
+        const float score =
+            v.lastOutputAbs + 0.000001f * static_cast<float>(v.ageSamples);
         if (score < bestScore) {
           bestScore = score;
           best = &v;
@@ -554,11 +599,13 @@ private:
     if (best)
       return best;
 
-    // 3) Otherwise quietest active voice
     best = &voices[0];
-    bestScore = voices[0].lastOutputAbs;
+    bestScore =
+        voices[0].lastOutputAbs + 0.000001f * static_cast<float>(voices[0].ageSamples);
+
     for (auto& v : voices) {
-      const float score = v.lastOutputAbs + 0.000001f * static_cast<float>(v.ageSamples);
+      const float score =
+          v.lastOutputAbs + 0.000001f * static_cast<float>(v.ageSamples);
       if (score < bestScore) {
         bestScore = score;
         best = &v;
@@ -618,16 +665,31 @@ private:
 
     float stringVelocity = ev.velocity * retriggerGain;
 
-    if (ev.articulation == Articulation::Strum) {
-      if (ev.isDownStrum) {
-        stringVelocity *= (1.0f - static_cast<float>(ev.stringIndex) * 0.04f);
-      } else {
-        const float upPos = static_cast<float>(ev.stringIndex) / 5.0f;
-        stringVelocity *= (0.55f + 0.45f * upPos);
+    switch (ev.articulation) {
+      case Articulation::Strum: {
+        if (ev.isDownStrum) {
+          stringVelocity *= (1.0f - static_cast<float>(ev.stringIndex) * 0.04f);
+        } else {
+          const float upPos = static_cast<float>(ev.stringIndex) / 5.0f;
+          stringVelocity *= (0.55f + 0.45f * upPos);
+        }
+        break;
       }
-    } else {
-      const float pos = static_cast<float>(ev.stringIndex) / 5.0f;
-      stringVelocity *= (0.85f + 0.15f * pos);
+      case Articulation::Pluck: {
+        const float pos = static_cast<float>(ev.stringIndex) / 5.0f;
+        stringVelocity *= (0.85f + 0.15f * pos);
+        break;
+      }
+      case Articulation::PinchBass: {
+        stringVelocity *= 0.82f;
+        attackSamples = MsToSamples(3.0);
+        break;
+      }
+      case Articulation::PinchTreble: {
+        stringVelocity *= 1.12f;
+        attackSamples = MsToSamples(2.0);
+        break;
+      }
     }
 
     float densityScale = 1.0f;
@@ -703,18 +765,20 @@ int main() {
     const double step = 0.25;
     const double ring = 0.70;
 
+    int primaryBassString = -1;
     double primaryBass = 0.0;
+    int altBassString = -1;
     double altBass = 0.0;
 
     if (f1 > 0.0) {
-      primaryBass = f1;
-      altBass = (f2 > 0.0) ? f2 : ((f3 > 0.0) ? f3 : 0.0);
+      primaryBassString = 0; primaryBass = f1;
+      if (f2 > 0.0) { altBassString = 1; altBass = f2; }
+      else if (f3 > 0.0) { altBassString = 2; altBass = f3; }
     } else if (f2 > 0.0) {
-      primaryBass = f2;
-      altBass = (f3 > 0.0) ? f3 : 0.0;
+      primaryBassString = 1; primaryBass = f2;
+      if (f3 > 0.0) { altBassString = 2; altBass = f3; }
     } else if (f3 > 0.0) {
-      primaryBass = f3;
-      altBass = 0.0;
+      primaryBassString = 2; primaryBass = f3;
     }
 
     auto pluck = [&](double t, double fr1, double fr2, double fr3,
@@ -724,45 +788,79 @@ int main() {
                           fr5, fr6);
     };
 
-    pluck(0 * step,
-          (primaryBass == f1) ? f1 : 0.0,
-          (primaryBass == f2) ? f2 : 0.0,
-          (primaryBass == f3) ? f3 : 0.0,
-          0.0, 0.0, f6, 0.90f, isNewChord);
+    auto pinch = [&](double t,
+                     int bassString, double bassFreq, float bassVel,
+                     int trebleString, double trebleFreq, float trebleVel,
+                     bool nc) {
+      synth.SchedulePinch(barStartSec + t, bassString, bassFreq, bassVel,
+                          trebleString, trebleFreq, trebleVel, ring, nc, 4.0);
+    };
+
+    // Special-case sparse Dsus4-type voicings: xx0233
+    // Avoid adjacent duplicate notes by using an explicit pattern.
+    if (f1 == 0.0 && f2 == 0.0 && f3 > 0.0 && f4 > 0.0 && f5 > 0.0 &&
+        f6 > 0.0) {
+      // 1: D bass + high G pinch
+      pinch(0 * step, 2, f3, 0.78f, 5, f6, 1.00f, isNewChord);
+
+      // 2: G
+      pluck(1 * step, 0.0, 0.0, 0.0, f4, 0.0, 0.0, 0.55f, false);
+
+      // 3: B
+      pluck(2 * step, 0.0, 0.0, 0.0, 0.0, f5, 0.0, 0.58f, false);
+
+      // 4: D bass
+      pluck(3 * step, 0.0, 0.0, f3, 0.0, 0.0, 0.0, 0.72f, false);
+
+      // 5: G
+      pluck(4 * step, 0.0, 0.0, 0.0, f4, 0.0, 0.0, 0.55f, false);
+
+      // 6: B
+      pluck(5 * step, 0.0, 0.0, 0.0, 0.0, f5, 0.0, 0.60f, false);
+
+      // 7: D bass
+      pluck(6 * step, 0.0, 0.0, f3, 0.0, 0.0, 0.0, 0.70f, false);
+
+      // 8: G
+      pluck(7 * step, 0.0, 0.0, 0.0, f4, 0.0, 0.0, 0.56f, false);
+      return;
+    }
+
+    // Generic pattern for fuller voicings
+    pinch(0 * step, primaryBassString, primaryBass, 0.78f,
+          5, f6, 1.00f, isNewChord);
 
     pluck(1 * step, 0.0, 0.0, 0.0, f4, 0.0, 0.0, 0.55f, false);
 
     if (altBass > 0.0) {
-      pluck(2 * step,
-            (altBass == f1) ? f1 : 0.0,
-            (altBass == f2) ? f2 : 0.0,
-            (altBass == f3) ? f3 : 0.0,
-            0.0, 0.0, 0.0, 0.75f, false);
+      double fr1 = (altBassString == 0) ? altBass : 0.0;
+      double fr2 = (altBassString == 1) ? altBass : 0.0;
+      double fr3 = (altBassString == 2) ? altBass : 0.0;
+      pluck(2 * step, fr1, fr2, fr3, 0.0, 0.0, 0.0, 0.75f, false);
     } else {
-      pluck(2 * step, 0.0, 0.0, 0.0, 0.0, f5, 0.0, 0.62f, false);
+      pluck(2 * step, 0.0, 0.0, 0.0, 0.0, f5, 0.0, 0.58f, false);
     }
 
     pluck(3 * step, 0.0, 0.0, 0.0, 0.0, f5, 0.0, 0.60f, false);
 
-    pluck(4 * step,
-          (primaryBass == f1) ? f1 : 0.0,
-          (primaryBass == f2) ? f2 : 0.0,
-          (primaryBass == f3) ? f3 : 0.0,
-          0.0, 0.0, 0.0, 0.85f, false);
+    {
+      double fr1 = (primaryBassString == 0) ? primaryBass : 0.0;
+      double fr2 = (primaryBassString == 1) ? primaryBass : 0.0;
+      double fr3 = (primaryBassString == 2) ? primaryBass : 0.0;
+      pluck(4 * step, fr1, fr2, fr3, 0.0, 0.0, 0.0, 0.85f, false);
+    }
 
     pluck(5 * step, 0.0, 0.0, 0.0, f4, 0.0, 0.0, 0.55f, false);
 
     if (altBass > 0.0) {
-      pluck(6 * step,
-            (altBass == f1) ? f1 : 0.0,
-            (altBass == f2) ? f2 : 0.0,
-            (altBass == f3) ? f3 : 0.0,
-            0.0, 0.0, 0.0, 0.75f, false);
+      double fr1 = (altBassString == 0) ? altBass : 0.0;
+      double fr2 = (altBassString == 1) ? altBass : 0.0;
+      double fr3 = (altBassString == 2) ? altBass : 0.0;
+      pluck(6 * step, fr1, fr2, fr3, 0.0, 0.0, 0.0, 0.75f, false);
     } else {
-      pluck(6 * step, 0.0, 0.0, 0.0, 0.0, f5, 0.0, 0.62f, false);
+      pluck(6 * step, 0.0, 0.0, f3, 0.0, 0.0, 0.0, 0.68f, false);
     }
 
-    // End on B string to clear space for next phrase's pinch
     pluck(7 * step, 0.0, 0.0, 0.0, 0.0, f5, 0.0, 0.60f, false);
   };
 
