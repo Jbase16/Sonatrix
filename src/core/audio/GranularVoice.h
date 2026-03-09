@@ -41,6 +41,7 @@ private:
     bool active = false;
   };
 
+  // With a strict 4x overlap, 8 grain slots provides plenty of safety headroom.
   static constexpr size_t MAX_GRAINS = 8;
 
   // Core note state
@@ -55,12 +56,6 @@ private:
   double granularMacroPos_{0.0};
   double timeAdvanceRate_{1.0};
   double pitchRatio_{1.0};
-
-  // PSOLA / Granular Model
-  double grainReadSpeed_{1.0};
-
-  // Fast, lock-free PRNG state for the DSP thread
-  uint32_t prngState_{881726454};
 
   // Envelope / release
   float envelopeLevel_{0.0f};
@@ -78,12 +73,18 @@ private:
   double samplesUntilNextGrain_{0.0};
   double hopSizeSamples_{0.0};
   double nominalGrainDurationSamples_{0.0};
+  double grainReadSpeed_{1.0};
+
+  // Fast, lock-free PRNG state for the DSP thread position jitter
+  uint32_t prngState_{881726454};
 
   void ResetGrains();
   bool HasActiveGrains() const;
   void SpawnGrain(size_t maxSourceFrames);
   StereoSample ReadInterpolated(double readPos) const;
-  StereoSample RenderGranularSample(size_t maxSourceFrames);
+  
+  // Cleaned up signature: we no longer need to pass out a window sum
+  StereoSample RenderGranularSample(size_t maxSourceFrames); 
 };
 
 } // namespace Audio

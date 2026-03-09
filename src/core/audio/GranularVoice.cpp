@@ -76,20 +76,19 @@ void GranularVoice::Start(const SampleZone *zone, uint8_t targetPitch,
   releasePos_ = 0.0;
   releaseStartAmp_ = envelopeLevel_;
 
+  // Hybrid strategy: Preserve physical attack, crossfade to lush granular sustain
   attackBypassSamples_ = 0.045 * zone->sampleRate;
   transitionSamples_ = 0.018 * zone->sampleRate;
   sustainSeeded_ = false;
 
-  // 1. Fixed, lush grain sizes for the sustain tail
-  nominalGrainDurationSamples_ = 0.045 * zone->sampleRate; // 45ms grains
-  hopSizeSamples_ = 0.015 * zone->sampleRate; // 15ms hop (exactly 3x overlap)
-
-  // 2. Pitch shift the grains directly by altering their read speed
+  // 1. LUSH & MATHEMATICALLY RIGID Grain Configuration
+  // 60ms captures low-frequency cycles smoothly. 
+  nominalGrainDurationSamples_ = 0.060 * zone->sampleRate; 
+  
+  // 15ms hop guarantees exactly 4 overlapping windows at all times.
+  hopSizeSamples_ = 0.015 * zone->sampleRate; 
+  
   grainReadSpeed_ = pitchRatio_;
-
-  // 3. Keep the macro position advancing at 1.0 to preserve the natural decay
-  // length
-  timeAdvanceRate_ = 1.0;
   samplesUntilNextGrain_ = 0.0;
 
   ResetGrains();
@@ -116,12 +115,10 @@ GranularVoice::ReadInterpolated(double readPos) const {
   const size_t channels = activeZone_->numChannels;
   const size_t maxFrames = data.size() / channels;
 
-  // Mathematical Zero-Padding for centered epochs that start before audio index
-  // 0
   if (readPos < 0.0 || readPos >= static_cast<double>(maxFrames - 1))
     return out;
 
-  size_t idx = static_cast<size_t>(readPos);
+  const size_t idx = static_cast<size_t>(readPos);
   const float frac = static_cast<float>(readPos - static_cast<double>(idx));
 
   const float l1 = data[idx * channels];
@@ -153,16 +150,19 @@ void GranularVoice::SpawnGrain(size_t maxSourceFrames) {
   if (!slot)
     return;
 
-  // Position Jitter: +/- 0.5ms decorrelation (very small, to break
-  // deterministic phasing without destroying realism)
+  // STRICT JITTER RULE: Only jitter the position, never the duration.
+  // +/- 2ms is enough to break phase-lock (comb filtering) without destroying transients.
   float posJitterSamples =
-      FastRandomFloat(prngState_) * 0.0005f * activeZone_->sampleRate;
-  double sourceStart = std::max(0.0, granularMacroPos_ + posJitterSamples);
+      FastRandomFloat(prngState_) * 0.002f * activeZone_->sampleRate;
+  const double sourceStart = Clamp(granularMacroPos_ + posJitterSamples, 0.0,
+                                   static_cast<double>(maxSourceFrames - 2));
 
   slot->active = true;
   slot->internalReadPos = sourceStart;
   slot->ageSamples = 0.0;
-  slot->durationSamples = std::max(8.0, nominalGrainDurationSamples_);
+  
+  // Duration is locked strictly to 60ms to guarantee constant overlap math.
+  slot->durationSamples = nominalGrainDurationSamples_;
 }
 
 GranularVoice::StereoSample
@@ -188,7 +188,8 @@ GranularVoice::RenderGranularSample(size_t maxSourceFrames) {
     g.internalReadPos += grainReadSpeed_;
     g.ageSamples += 1.0;
 
-    if (g.ageSamples >= g.durationSamples) {
+    if (g.ageSamples >= g.durationSamples ||
+        g.internalReadPos >= static_cast<double>(maxSourceFrames - 1)) {
       g.active = false;
     }
   }
@@ -202,8 +203,9 @@ void GranularVoice::RenderNextBlock(float **outputChannels, uint32_t numFrames,
       numChannels == 0)
     return;
 
-  const auto &data = activeZone_->audioData;
-  const size_t maxSourceFrames = data.size() / activeZone_->numChannels;
+  const size_t maxSourceFrames =
+      activeZone_->audioData.size() / activeZone_->numChannels;
+
   if (maxSourceFrames < 2) {
     state_ = State::Free;
     return;
@@ -213,6 +215,7 @@ void GranularVoice::RenderNextBlock(float **outputChannels, uint32_t numFrames,
     if (state_ == State::Free)
       return;
 
+    // Release envelope
     if (state_ == State::Releasing) {
       const float rel =
           1.0f - static_cast<float>(releasePos_ / releaseSamples_);
@@ -235,6 +238,7 @@ void GranularVoice::RenderNextBlock(float **outputChannels, uint32_t numFrames,
       granularMacroPos_ = directReadPos_;
     }
 
+    // Direct attack path
     StereoSample direct{};
     if (masterTimePos_ <= crossEnd &&
         directReadPos_ < static_cast<double>(maxSourceFrames - 1)) {
@@ -242,34 +246,37 @@ void GranularVoice::RenderNextBlock(float **outputChannels, uint32_t numFrames,
       directReadPos_ += pitchRatio_;
     }
 
+    // Sustain grain scheduler
     if (sustainSeeded_ &&
         granularMacroPos_ < static_cast<double>(maxSourceFrames - 1)) {
       while (samplesUntilNextGrain_ <= 0.0) {
         SpawnGrain(maxSourceFrames);
-
-        // Fixed hop to maintain exact 3x overlap stability
+        
+        // NO HOP JITTER ALLOWED. We enforce mathematical alignment.
         samplesUntilNextGrain_ += hopSizeSamples_;
       }
       samplesUntilNextGrain_ -= 1.0;
     }
 
-    // Call the cleaned up render function
     StereoSample granular = RenderGranularSample(maxSourceFrames);
 
-    // Because our 45ms grains hop every 15ms, we have exactly 3 overlapping
-    // Hann windows at all times. Mathematically, three evenly spaced Hann
-    // windows sum to exactly 1.5. We just apply a static reduction to prevent
-    // clipping.
-    const float staticOverlapGain = 1.0f / 1.5f;
-    granular.left *= staticOverlapGain;
-    granular.right *= staticOverlapGain;
+    // STATIC COMPENSATION. 
+    // A constant overlap factor of K Hann windows mathematically sums to exactly K/2.
+    // We have a 60ms duration and 15ms hop, which is K = 4 overlapping windows.
+    // Therefore, they sum perfectly to 2.0. We multiply by 0.5 to normalize.
+    const float kConstantOverlapGain = 0.5f;
+    granular.left *= kConstantOverlapGain;
+    granular.right *= kConstantOverlapGain;
 
+    // Equal-power crossfade
     float directWeight = 0.0f;
     float granularWeight = 0.0f;
 
     if (masterTimePos_ < crossStart) {
       directWeight = 1.0f;
+      granularWeight = 0.0f;
     } else if (masterTimePos_ > crossEnd) {
+      directWeight = 0.0f;
       granularWeight = 1.0f;
     } else {
       const double t = (masterTimePos_ - crossStart) /
@@ -291,6 +298,7 @@ void GranularVoice::RenderNextBlock(float **outputChannels, uint32_t numFrames,
     if (numChannels >= 2)
       outputChannels[1][f] += outR;
 
+    // Macro sustain timeline remains natural-speed
     if (masterTimePos_ < static_cast<double>(maxSourceFrames - 1)) {
       masterTimePos_ += 1.0;
     }
