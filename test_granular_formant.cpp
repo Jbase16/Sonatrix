@@ -1,3 +1,4 @@
+#include "src/core/audio/AssetManager.h"
 #include "src/core/audio/GranularVoice.h"
 #include <AudioToolbox/AudioToolbox.h>
 #include <CoreFoundation/CoreFoundation.h>
@@ -154,32 +155,42 @@ bool SaveWav(const std::string &path, const std::vector<float> &data,
 int main() {
   const double sampleRate = 44100.0;
 
-  // 1. Load Anchor
-  std::cout << "Loading D3.wav (Acoustic Anchor)..." << std::endl;
-  std::vector<float> anchorData;
-  if (!LoadWav("Assets/Exciters/FS_Guitars/D3.wav", anchorData, sampleRate)) {
-    std::cerr << "Failed to load D3.wav" << std::endl;
+  // 1. Initialize AssetManager and load all 6 anchors
+  std::cout << "Loading 6 Open-String Acoustic Anchors..." << std::endl;
+  auto &assets = AssetManager::GetInstance();
+  if (!assets.LoadAcousticGuitarAnchors("Assets/Exciters/FS_Guitars")) {
+    std::cerr << "Failed to load acoustic anchors." << std::endl;
     return 1;
   }
 
-  // 2. Wrap in SampleZone
-  SampleZone zone;
-  zone.audioData = std::move(anchorData); // we will move it
-  zone.sampleRate = sampleRate;
-  zone.numChannels = 1;
-  zone.rootKey = 50; // D3 is 50
-  zone.isLoaded = true;
+  const auto &articulation = assets.GetAcousticGuitarArticulation();
 
-  // 3. Setup Granular Voice
+  // 2. Setup Target Pitch
+  uint8_t targetPitch = 67; // G4
+  std::cout << "\nTarget Pitch: " << (int)targetPitch << " (G4)" << std::endl;
+
+  // 3. Intelligent Anchor Routing (Find closest string)
+  const SampleZone *bestZone = articulation.FindZone(targetPitch, 100);
+  if (!bestZone) {
+    std::cerr << "FindZone returned nullptr!" << std::endl;
+    return 1;
+  }
+
+  std::cout << "Selected Anchor: " << bestZone->filePath
+            << " (Root: " << (int)bestZone->rootKey << ")" << std::endl;
+
+  // Calculate specific Pitch Ratio relative to the intelligently selected
+  // anchor
+  double semitoneShift =
+      static_cast<double>(targetPitch) - static_cast<double>(bestZone->rootKey);
+  double pitchRatio = std::pow(2.0, semitoneShift / 12.0);
+
+  std::cout << "Required Pitch Shift: " << semitoneShift << " semitones."
+            << std::endl;
+  std::cout << "Required PSOLA Ratio: " << pitchRatio << "\n" << std::endl;
+
   GranularVoice voice;
-
-  // Shift UP to G4 (67). (67 - 50) = +17 semitones.
-  // pitchRatio = 2^(17/12) ≈ 2.669
-  double pitchRatio = std::pow(2.0, 17.0 / 12.0);
-
-  std::cout << "Triggering GranularVoice at G4 (pitchRatio: " << pitchRatio
-            << ")" << std::endl;
-  voice.Start(&zone, 67, pitchRatio, 1.0f);
+  voice.Start(bestZone, targetPitch, pitchRatio, 1.0f);
 
   // 4. Render 4 Seconds of output
   const size_t renderFrames = static_cast<size_t>(4.0 * sampleRate);
