@@ -45,13 +45,6 @@ bool GranularVoice::HasActiveGrains() const {
   return false;
 }
 
-// Tiny deterministic PRNG so grains are decorrelated without pulling in
-// <random>.
-double GranularVoice::NextRand01() {
-  grainCounter_ = grainCounter_ * 1664525u + 1013904223u;
-  return static_cast<double>(grainCounter_) / static_cast<double>(UINT32_MAX);
-}
-
 void GranularVoice::Start(const SampleZone *zone, uint8_t targetPitch,
                           double pitchRatio, float velocity) {
   if (!zone || zone->audioData.empty() || zone->numChannels == 0 ||
@@ -69,39 +62,30 @@ void GranularVoice::Start(const SampleZone *zone, uint8_t targetPitch,
   masterTimePos_ = 0.0;
   directReadPos_ = 0.0;
   granularMacroPos_ = 0.0;
-  // Speed up the macro envelope subtly for higher pitches so decay feels
-  // natural
   timeAdvanceRate_ = std::max(1.0, std::sqrt(pitchRatio_));
-  granularMacroPos_ = 0.0;
 
   envelopeLevel_ = currentVelocity_;
   releasePos_ = 0.0;
   releaseStartAmp_ = envelopeLevel_;
 
-  // For plucked / struck guitar-like sources:
-  // keep the first ~45 ms as direct resampled playback,
-  // then crossfade ~18 ms into granular sustain.
   attackBypassSamples_ = 0.045 * zone->sampleRate;
   transitionSamples_ = 0.018 * zone->sampleRate;
   sustainSeeded_ = false;
 
-  // PSOLA Mapping
+  // True PSOLA Mapping
   double rootFreq = 440.0 * std::pow(2.0, (zone->rootKey - 69) / 12.0);
   double targetFreq = 440.0 * std::pow(2.0, (targetPitch - 69) / 12.0);
 
   rootPeriodSamples_ = zone->sampleRate / rootFreq;
   targetPeriodSamples_ = zone->sampleRate / targetFreq;
 
-  // Grain size is perfectly 2 periods of the original sound for clean crossfade
-  nominalGrainDurationSamples_ = rootPeriodSamples_ * 2.0;
+  // Grain size must accommodate down-shifting to prevent gap dropouts
+  nominalGrainDurationSamples_ =
+      2.0 * std::max(rootPeriodSamples_, targetPeriodSamples_);
 
   // Hop size is exactly 1 period of the TARGET pitch
   hopSizeSamples_ = targetPeriodSamples_;
-
-  // To preserve formants (body resonance), we read the source at 1.0x inside
-  // the grain
   grainReadSpeed_ = 1.0;
-
   samplesUntilNextGrain_ = 0.0;
 
   ResetGrains();
@@ -128,27 +112,21 @@ GranularVoice::ReadInterpolated(double readPos) const {
   const size_t channels = activeZone_->numChannels;
   const size_t maxFrames = data.size() / channels;
 
-  if (maxFrames == 0)
+  // Mathematical Zero-Padding for centered epochs that start before audio index
+  // 0
+  if (readPos < 0.0 || readPos >= static_cast<double>(maxFrames - 1))
     return out;
 
-  if (readPos < 0.0)
-    readPos = 0.0;
-
   size_t idx = static_cast<size_t>(readPos);
-  if (idx >= maxFrames) {
-    idx = maxFrames - 1;
-  }
-
-  const size_t nextIdx = std::min(idx + 1, maxFrames - 1);
   const float frac = static_cast<float>(readPos - static_cast<double>(idx));
 
   const float l1 = data[idx * channels];
-  const float l2 = data[nextIdx * channels];
+  const float l2 = data[(idx + 1) * channels];
   out.left = l1 + (l2 - l1) * frac;
 
   if (channels > 1) {
     const float r1 = data[idx * channels + 1];
-    const float r2 = data[nextIdx * channels + 1];
+    const float r2 = data[(idx + 1) * channels + 1];
     out.right = r1 + (r2 - r1) * frac;
   } else {
     out.right = out.left;
@@ -161,7 +139,6 @@ void GranularVoice::SpawnGrain(size_t maxSourceFrames) {
   if (!activeZone_ || maxSourceFrames < 2)
     return;
 
-  // Find a free grain slot
   Grain *slot = nullptr;
   for (auto &g : grains_) {
     if (!g.active) {
@@ -172,17 +149,15 @@ void GranularVoice::SpawnGrain(size_t maxSourceFrames) {
   if (!slot)
     return;
 
-  // PSOLA Phase Lock:
-  // We snap the source starting position to the nearest original pitch epoch
-  // relative to the attack bypass. This guarantees that all grains start at the
-  // exact same relative phase, completely eliminating granular comb-filtering /
-  // reverb.
+  // PSOLA Phase Lock & Epoch Centering:
   double offset = granularMacroPos_ - attackBypassSamples_;
   double periods = std::round(offset / rootPeriodSamples_);
-  double sourceStart = attackBypassSamples_ + periods * rootPeriodSamples_;
 
-  sourceStart = Clamp(sourceStart, attackBypassSamples_,
-                      static_cast<double>(maxSourceFrames - 2));
+  // The exact mathematical peak of the pitch pulse
+  double epochPos = attackBypassSamples_ + periods * rootPeriodSamples_;
+
+  // Center the Hann window peak over the pulse epoch
+  double sourceStart = epochPos - (nominalGrainDurationSamples_ * 0.5);
 
   slot->active = true;
   slot->internalReadPos = sourceStart;
@@ -212,12 +187,10 @@ GranularVoice::RenderGranularSample(size_t maxSourceFrames, float &outNorm) {
     mix.right += s.right * w;
     outNorm += w;
 
-    // Read at exactly 1.0x to preserve acoustic formants and phase
     g.internalReadPos += grainReadSpeed_;
     g.ageSamples += 1.0;
 
-    if (g.ageSamples >= g.durationSamples ||
-        g.internalReadPos >= static_cast<double>(maxSourceFrames - 1)) {
+    if (g.ageSamples >= g.durationSamples) {
       g.active = false;
     }
   }
@@ -242,7 +215,6 @@ void GranularVoice::RenderNextBlock(float **outputChannels, uint32_t numFrames,
     if (state_ == State::Free)
       return;
 
-    // Envelope / release
     if (state_ == State::Releasing) {
       const float rel =
           1.0f - static_cast<float>(releasePos_ / releaseSamples_);
@@ -255,22 +227,16 @@ void GranularVoice::RenderNextBlock(float **outputChannels, uint32_t numFrames,
       releasePos_ += 1.0;
     }
 
-    // Figure out transition region:
-    // attack direct-only -> attack/sustain crossfade -> sustain granular-only
     const double crossStart =
         std::max(0.0, attackBypassSamples_ - 0.5 * transitionSamples_);
     const double crossEnd = attackBypassSamples_ + 0.5 * transitionSamples_;
 
-    // Start seeding grains slightly before the crossfade so the sustain engine
-    // is already alive when the direct attack fades out.
     if (!sustainSeeded_ && masterTimePos_ >= crossStart) {
       sustainSeeded_ = true;
       samplesUntilNextGrain_ = 0.0;
-      granularMacroPos_ = directReadPos_; // Sync granular engine to the exact
-                                          // position the attack reached!
+      granularMacroPos_ = directReadPos_;
     }
 
-    // Direct attack path (pitched via direct resampling, not granularized)
     StereoSample direct{};
     if (masterTimePos_ <= crossEnd &&
         directReadPos_ < static_cast<double>(maxSourceFrames - 1)) {
@@ -278,7 +244,6 @@ void GranularVoice::RenderNextBlock(float **outputChannels, uint32_t numFrames,
       directReadPos_ += pitchRatio_;
     }
 
-    // Grain scheduler for sustain path
     if (sustainSeeded_ &&
         granularMacroPos_ < static_cast<double>(maxSourceFrames - 1)) {
       while (samplesUntilNextGrain_ <= 0.0) {
@@ -288,28 +253,25 @@ void GranularVoice::RenderNextBlock(float **outputChannels, uint32_t numFrames,
       samplesUntilNextGrain_ -= 1.0;
     }
 
-    // Render granular sustain path
     float norm = 0.0f;
     StereoSample granular = RenderGranularSample(maxSourceFrames, norm);
+
+    // Normalization is now mathematically stable due to dynamic window sizing
     if (norm > 1e-6f) {
       granular.left /= norm;
       granular.right /= norm;
     }
 
-    // Crossfade direct -> granular
     float directWeight = 0.0f;
     float granularWeight = 0.0f;
 
     if (masterTimePos_ < crossStart) {
       directWeight = 1.0f;
-      granularWeight = 0.0f;
     } else if (masterTimePos_ > crossEnd) {
-      directWeight = 0.0f;
       granularWeight = 1.0f;
     } else {
       const double t = (masterTimePos_ - crossStart) /
                        std::max(1.0, (crossEnd - crossStart));
-      // Equal-power style crossfade
       const double a = Clamp(t, 0.0, 1.0);
       directWeight = static_cast<float>(std::cos(a * (M_PI * 0.5)));
       granularWeight = static_cast<float>(std::sin(a * (M_PI * 0.5)));
@@ -327,19 +289,15 @@ void GranularVoice::RenderNextBlock(float **outputChannels, uint32_t numFrames,
     if (numChannels >= 2)
       outputChannels[1][f] += outR;
 
-    // Sustain timeline always advances at 1.0x
     if (masterTimePos_ < static_cast<double>(maxSourceFrames - 1)) {
       masterTimePos_ += 1.0;
     }
 
-    // Macro timeline advances independently
     if (sustainSeeded_ &&
         granularMacroPos_ < static_cast<double>(maxSourceFrames - 1)) {
       granularMacroPos_ += timeAdvanceRate_;
     }
 
-    // Once the source timeline is exhausted, stop spawning and let active
-    // grains drain.
     const bool sourceDone =
         masterTimePos_ >= static_cast<double>(maxSourceFrames - 1);
     const bool directDone =

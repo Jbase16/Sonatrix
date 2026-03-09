@@ -14,16 +14,11 @@ public:
   GranularVoice() = default;
   ~GranularVoice() = default;
 
-  // Called when a MIDI NoteOn is received.
-  // pitchRatio dictates the pitch shift (e.g. 2.0 = octave up).
-  // targetPitch is used for voice management / stealing.
   void Start(const SampleZone *zone, uint8_t targetPitch, double pitchRatio,
              float velocity);
 
-  // Triggers the release phase of the envelope.
   void Stop();
 
-  // Renders hybrid direct-attack + granular-sustain output.
   void RenderNextBlock(float **outputChannels, uint32_t numFrames,
                        uint32_t numChannels);
 
@@ -40,9 +35,9 @@ private:
   };
 
   struct Grain {
-    double internalReadPos = 0.0; // current playback head for this grain
-    double durationSamples = 0.0; // grain lifespan
-    double ageSamples = 0.0;      // how old the grain is
+    double internalReadPos = 0.0;
+    double durationSamples = 0.0;
+    double ageSamples = 0.0;
     bool active = false;
   };
 
@@ -55,25 +50,26 @@ private:
   float currentVelocity_{0.0f};
 
   // Time model
-  double masterTimePos_{0.0};    // sustain timeline, advances strictly at 1.0x
-  double directReadPos_{0.0};    // attack playback head, advances at pitchRatio
-  double granularMacroPos_{0.0}; // macro playback head for grains
-  double timeAdvanceRate_{1.0};  // how fast the granular macro head advances
-  double pitchRatio_{1.0};       // overall pitch shift ratio
+  double masterTimePos_{0.0};
+  double directReadPos_{0.0};
+  double granularMacroPos_{0.0};
+  double timeAdvanceRate_{1.0};
+  double pitchRatio_{1.0};
 
   // PSOLA Model
   double rootPeriodSamples_{1.0};
   double targetPeriodSamples_{1.0};
   double grainReadSpeed_{1.0};
+
   // Envelope / release
   float envelopeLevel_{0.0f};
   double releasePos_{0.0};
-  double releaseSamples_{44100.0 * 0.05}; // 50 ms
+  double releaseSamples_{44100.0 * 0.05};
   float releaseStartAmp_{1.0f};
 
   // Hybrid attack -> sustain crossfade
-  double attackBypassSamples_{0.0}; // direct-only region
-  double transitionSamples_{0.0};   // crossfade region
+  double attackBypassSamples_{0.0};
+  double transitionSamples_{0.0};
   bool sustainSeeded_{false};
 
   // Granular scheduler
@@ -81,15 +77,12 @@ private:
   double samplesUntilNextGrain_{0.0};
   double hopSizeSamples_{0.0};
   double nominalGrainDurationSamples_{0.0};
-  uint32_t grainCounter_{0};
 
-  // Helpers
   void ResetGrains();
   bool HasActiveGrains() const;
   void SpawnGrain(size_t maxSourceFrames);
   StereoSample ReadInterpolated(double readPos) const;
   StereoSample RenderGranularSample(size_t maxSourceFrames, float &outNorm);
-  double NextRand01();
 };
 
 } // namespace Audio
