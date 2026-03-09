@@ -26,6 +26,14 @@ inline float Hann(double age, double duration) {
   return static_cast<float>(0.5 * (1.0 - std::cos(phase)));
 }
 
+// Lock-free Xorshift32 returning a float between -1.0 and 1.0
+inline float FastRandomFloat(uint32_t &state) {
+  state ^= state << 13;
+  state ^= state >> 17;
+  state ^= state << 5;
+  return 2.0f * (static_cast<float>(state) / 4294967295.0f) - 1.0f;
+}
+
 } // namespace
 
 void GranularVoice::ResetGrains() {
@@ -145,10 +153,11 @@ void GranularVoice::SpawnGrain(size_t maxSourceFrames) {
   if (!slot)
     return;
 
-  // Simply extract from the current tracking position.
-  // Because our grains are large (45ms) and overlap densely (3x),
-  // this creates a phase-smooth ensemble effect rather than comb filtering.
-  double sourceStart = granularMacroPos_;
+  // Position Jitter: +/- 0.5ms decorrelation (very small, to break
+  // deterministic phasing without destroying realism)
+  float posJitterSamples =
+      FastRandomFloat(prngState_) * 0.0005f * activeZone_->sampleRate;
+  double sourceStart = std::max(0.0, granularMacroPos_ + posJitterSamples);
 
   slot->active = true;
   slot->internalReadPos = sourceStart;
@@ -157,9 +166,8 @@ void GranularVoice::SpawnGrain(size_t maxSourceFrames) {
 }
 
 GranularVoice::StereoSample
-GranularVoice::RenderGranularSample(size_t maxSourceFrames, float &outNorm) {
+GranularVoice::RenderGranularSample(size_t maxSourceFrames) {
   StereoSample mix{};
-  outNorm = 0.0f;
 
   for (auto &g : grains_) {
     if (!g.active)
@@ -176,7 +184,6 @@ GranularVoice::RenderGranularSample(size_t maxSourceFrames, float &outNorm) {
 
     mix.left += s.left * w;
     mix.right += s.right * w;
-    outNorm += w;
 
     g.internalReadPos += grainReadSpeed_;
     g.ageSamples += 1.0;
@@ -239,13 +246,15 @@ void GranularVoice::RenderNextBlock(float **outputChannels, uint32_t numFrames,
         granularMacroPos_ < static_cast<double>(maxSourceFrames - 1)) {
       while (samplesUntilNextGrain_ <= 0.0) {
         SpawnGrain(maxSourceFrames);
+
+        // Fixed hop to maintain exact 3x overlap stability
         samplesUntilNextGrain_ += hopSizeSamples_;
       }
       samplesUntilNextGrain_ -= 1.0;
     }
 
-    float norm = 0.0f;
-    StereoSample granular = RenderGranularSample(maxSourceFrames, norm);
+    // Call the cleaned up render function
+    StereoSample granular = RenderGranularSample(maxSourceFrames);
 
     // Because our 45ms grains hop every 15ms, we have exactly 3 overlapping
     // Hann windows at all times. Mathematically, three evenly spaced Hann
