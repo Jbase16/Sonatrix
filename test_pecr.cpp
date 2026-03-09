@@ -6,14 +6,17 @@
 #include <cmath>
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 
 // -----------------------------------------------------
-// WAV I/O with Enforced CoreAudio SRC
+// WAV I/O with proper SRC-aware chunked reading
 // -----------------------------------------------------
 bool LoadWav(const std::string &path, std::vector<float> &outData,
              double targetSampleRate) {
+  outData.clear();
+
   CFStringRef str = CFStringCreateWithCString(kCFAllocatorDefault, path.c_str(),
                                               kCFStringEncodingUTF8);
   if (!str)
@@ -32,6 +35,14 @@ bool LoadWav(const std::string &path, std::vector<float> &outData,
   }
   CFRelease(url);
 
+  AudioStreamBasicDescription sourceFormat = {};
+  UInt32 srcSize = sizeof(sourceFormat);
+  if (ExtAudioFileGetProperty(audioFile, kExtAudioFileProperty_FileDataFormat,
+                              &srcSize, &sourceFormat) != noErr) {
+    ExtAudioFileDispose(audioFile);
+    return false;
+  }
+
   AudioStreamBasicDescription clientFormat = {};
   clientFormat.mSampleRate = targetSampleRate;
   clientFormat.mFormatID = kAudioFormatLinearPCM;
@@ -49,11 +60,6 @@ bool LoadWav(const std::string &path, std::vector<float> &outData,
     return false;
   }
 
-  AudioStreamBasicDescription sourceFormat = {};
-  UInt32 srcSize = sizeof(sourceFormat);
-  ExtAudioFileGetProperty(audioFile, kExtAudioFileProperty_FileDataFormat,
-                          &srcSize, &sourceFormat);
-
   SInt64 sourceFrames = 0;
   UInt32 frameSize = sizeof(sourceFrames);
   if (ExtAudioFileGetProperty(audioFile, kExtAudioFileProperty_FileLengthFrames,
@@ -63,28 +69,41 @@ bool LoadWav(const std::string &path, std::vector<float> &outData,
     return false;
   }
 
-  const double srcRate = (sourceFormat.mSampleRate > 0.0)
-                             ? sourceFormat.mSampleRate
-                             : targetSampleRate;
-  const size_t targetFrames = static_cast<size_t>(
-      std::ceil(sourceFrames * (targetSampleRate / srcRate)));
-  outData.resize(targetFrames);
+  const double srcRate =
+      (sourceFormat.mSampleRate > 0.0) ? sourceFormat.mSampleRate
+                                       : targetSampleRate;
+  const size_t estimatedTargetFrames = static_cast<size_t>(
+      std::ceil(static_cast<double>(sourceFrames) * (targetSampleRate / srcRate)));
 
-  AudioBufferList bufferList = {};
-  bufferList.mNumberBuffers = 1;
-  bufferList.mBuffers[0].mNumberChannels = 1;
-  bufferList.mBuffers[0].mDataByteSize =
-      static_cast<UInt32>(outData.size() * sizeof(float));
-  bufferList.mBuffers[0].mData = outData.data();
+  outData.reserve(estimatedTargetFrames + 1024);
 
-  UInt32 ioFrames = static_cast<UInt32>(targetFrames);
-  if (ExtAudioFileRead(audioFile, &ioFrames, &bufferList) != noErr) {
-    ExtAudioFileDispose(audioFile);
-    return false;
+  constexpr UInt32 kChunkFrames = 16384;
+  std::vector<float> chunk(kChunkFrames);
+
+  while (true) {
+    AudioBufferList bufferList = {};
+    bufferList.mNumberBuffers = 1;
+    bufferList.mBuffers[0].mNumberChannels = 1;
+    bufferList.mBuffers[0].mDataByteSize =
+        static_cast<UInt32>(chunk.size() * sizeof(float));
+    bufferList.mBuffers[0].mData = chunk.data();
+
+    UInt32 ioFrames = kChunkFrames;
+    OSStatus status = ExtAudioFileRead(audioFile, &ioFrames, &bufferList);
+    if (status != noErr) {
+      ExtAudioFileDispose(audioFile);
+      outData.clear();
+      return false;
+    }
+
+    if (ioFrames == 0)
+      break;
+
+    outData.insert(outData.end(), chunk.begin(), chunk.begin() + ioFrames);
   }
 
   ExtAudioFileDispose(audioFile);
-  return true;
+  return !outData.empty();
 }
 
 bool SaveWav(const std::string &path, const std::vector<float> &data,
@@ -113,8 +132,7 @@ bool SaveWav(const std::string &path, const std::vector<float> &data,
 
   ExtAudioFileRef audioFile = nullptr;
   if (ExtAudioFileCreateWithURL(url, kAudioFileWAVEType, &fileFormat, nullptr,
-                                kAudioFileFlags_EraseFile,
-                                &audioFile) != noErr) {
+                                kAudioFileFlags_EraseFile, &audioFile) != noErr) {
     CFRelease(url);
     return false;
   }
@@ -145,7 +163,7 @@ bool SaveWav(const std::string &path, const std::vector<float> &data,
   bufferList.mBuffers[0].mData = const_cast<float *>(data.data());
 
   UInt32 frameCount = static_cast<UInt32>(data.size());
-  bool ok = ExtAudioFileWrite(audioFile, frameCount, &bufferList) == noErr;
+  const bool ok = ExtAudioFileWrite(audioFile, frameCount, &bufferList) == noErr;
   ExtAudioFileDispose(audioFile);
   return ok;
 }
@@ -172,7 +190,9 @@ static inline double Hash01(uint32_t x) {
   return static_cast<double>(x) / static_cast<double>(UINT32_MAX);
 }
 
-static inline double HashSigned(uint32_t x) { return (Hash01(x) * 2.0) - 1.0; }
+static inline double HashSigned(uint32_t x) {
+  return (Hash01(x) * 2.0) - 1.0;
+}
 
 // -----------------------------------------------------
 // Real-Time Synthesizer Architecture
@@ -195,7 +215,7 @@ public:
   };
 
   struct StringVoice {
-    const std::vector<float> *anchor = nullptr;
+    const std::vector<float>* anchor = nullptr;
     double freq = 0.0;
     double pitchRatio = 1.0;
 
@@ -212,17 +232,19 @@ public:
     float releaseStartAmp = 1.0f;
 
     float lastAmp = 0.0f;
+    float lastOutputAbs = 0.0f;
+    size_t ageSamples = 0;
     bool active = false;
 
-    void Start(const std::vector<float> *inAnchor, double inFreq,
-               double inRatio, double startHead, size_t inMaxFrames,
-               float inGain, size_t inAttackSamples) {
+    void Start(const std::vector<float>* inAnchor, double inFreq, double inRatio,
+               double startHead, size_t inMaxFrames, float inGain,
+               size_t inAttackSamples) {
       anchor = inAnchor;
       freq = inFreq;
       pitchRatio = inRatio;
       readHead = startHead;
-      maxFrames = inMaxFrames;
       framesRendered = 0;
+      maxFrames = inMaxFrames;
       gain = inGain;
       attackSamples = inAttackSamples;
       releasing = false;
@@ -230,6 +252,8 @@ public:
       releasePos = 0;
       releaseStartAmp = 1.0f;
       lastAmp = 0.0f;
+      lastOutputAbs = 0.0f;
+      ageSamples = 0;
       active = (anchor != nullptr && !anchor->empty() && maxFrames > 0);
     }
 
@@ -244,48 +268,68 @@ public:
       }
     }
 
-    bool IsAudiblyActive() const {
+    bool IsAllocatedActive() const {
       return active && framesRendered < maxFrames;
+    }
+
+    bool IsMeaningfullyAudible() const {
+      if (!IsAllocatedActive())
+        return false;
+
+      if (framesRendered < attackSamples + 8)
+        return true; // brand-new note, treat as active even before lastOutputAbs builds
+
+      if (!releasing)
+        return true;
+
+      return lastOutputAbs > 0.0025f;
     }
 
     float RenderOne() {
       if (!active || framesRendered >= maxFrames) {
         active = false;
         lastAmp = 0.0f;
+        lastOutputAbs = 0.0f;
         return 0.0f;
       }
 
-      size_t idx = static_cast<size_t>(readHead);
-      if (idx >= anchor->size()) {
+      const size_t idx = static_cast<size_t>(readHead);
+      if (!anchor || idx >= anchor->size()) {
         active = false;
         lastAmp = 0.0f;
+        lastOutputAbs = 0.0f;
         return 0.0f;
       }
 
       float amp = 1.0f;
+
       if (attackSamples > 0 && framesRendered < attackSamples) {
         amp *= static_cast<float>(framesRendered) /
-               static_cast<float>(attackSamples);
+               static_cast<float>(std::max<size_t>(1, attackSamples));
       }
 
       if (releasing) {
-        float rel = 1.0f - (static_cast<float>(releasePos) /
-                            static_cast<float>(releaseSamples));
+        const float rel =
+            1.0f - (static_cast<float>(releasePos) /
+                    static_cast<float>(std::max<size_t>(1, releaseSamples)));
         amp *= std::max(0.0f, rel) * releaseStartAmp;
       }
 
       lastAmp = amp;
 
-      float v1 = (*anchor)[idx];
-      float v2 = (idx + 1 < anchor->size()) ? (*anchor)[idx + 1] : 0.0f;
-      float frac = static_cast<float>(readHead - idx);
-      float sample = (v1 + (v2 - v1) * frac) * gain * amp;
+      const float v1 = (*anchor)[idx];
+      const float v2 = (idx + 1 < anchor->size()) ? (*anchor)[idx + 1] : 0.0f;
+      const float frac = static_cast<float>(readHead - static_cast<double>(idx));
+      const float sample = (v1 + (v2 - v1) * frac) * gain * amp;
 
       readHead += pitchRatio;
       ++framesRendered;
+      ++ageSamples;
+      lastOutputAbs = std::fabs(sample);
 
-      if (releasing && ++releasePos >= releaseSamples)
+      if (releasing && ++releasePos >= releaseSamples) {
         active = false;
+      }
 
       return sample;
     }
@@ -296,7 +340,7 @@ public:
     baseFreqs_ = {82.41, 110.00, 146.83, 196.00, 246.94, 329.63};
   }
 
-  bool LoadAnchors(const std::array<std::string, 6> &paths) {
+  bool LoadAnchors(const std::array<std::string, 6>& paths) {
     for (int i = 0; i < 6; ++i) {
       if (!LoadWav(paths[i], anchors_[i], sampleRate_)) {
         std::cerr << "Failed to load anchor: " << paths[i] << std::endl;
@@ -325,6 +369,7 @@ public:
       return;
 
     const uint32_t gestureId = nextGestureId_++;
+
     double baseDelayMs = isDownStrum ? 12.0 : 9.0;
     baseDelayMs += HashSigned(gestureId * 101u + 7u) * 1.2;
     baseDelayMs = Clamp(baseDelayMs, 7.5, 15.0);
@@ -352,13 +397,13 @@ public:
         }
 
         if (relIdx > 0) {
-          offsetMs += HashSigned(gestureId * 313u +
-                                 static_cast<uint32_t>(strIndex) * 17u) *
-                      0.9;
+          offsetMs +=
+              HashSigned(gestureId * 313u + static_cast<uint32_t>(strIndex) * 17u) *
+              0.9;
         }
 
-        eventStart += static_cast<size_t>((std::max(0.0, offsetMs) / 1000.0) *
-                                          sampleRate_);
+        eventStart += static_cast<size_t>(
+            (std::max(0.0, offsetMs) / 1000.0) * sampleRate_);
       }
 
       NoteEvent ev;
@@ -403,7 +448,7 @@ public:
       ev.targetFreq = freqs[strIndex];
       ev.velocity = velocity;
       ev.durationSec = durationSec;
-      ev.isDownStrum = true;
+      ev.isDownStrum = false; // irrelevant for pluck path
       ev.isNewChord = isNewChord;
       ev.activeStrings = activeStrings;
       ev.gestureId = gestureId;
@@ -414,7 +459,7 @@ public:
 
   std::vector<float> Render() {
     std::sort(events_.begin(), events_.end(),
-              [](const NoteEvent &a, const NoteEvent &b) {
+              [](const NoteEvent& a, const NoteEvent& b) {
                 if (a.startSample != b.startSample)
                   return a.startSample < b.startSample;
                 return a.stringIndex < b.stringIndex;
@@ -432,8 +477,9 @@ public:
 
       float mix = 0.0f;
       for (int s = 0; s < 6; ++s) {
-        for (auto &voice : stringVoices_[s])
+        for (auto& voice : stringVoices_[s]) {
           mix += voice.RenderOne();
+        }
       }
 
       out[n] = ClampFloat(mix, -1.0f, 1.0f);
@@ -443,35 +489,105 @@ public:
   }
 
 private:
-  static constexpr size_t VOICES_PER_STRING = 3;
+  static constexpr size_t VOICES_PER_STRING = 4;
 
-  void TriggerEvent(const NoteEvent &ev) {
-    if (ev.stringIndex < 0 || ev.stringIndex >= 6 || ev.targetFreq <= 0.0)
-      return;
+  size_t MsToSamples(double ms) const {
+    return static_cast<size_t>((ms / 1000.0) * sampleRate_);
+  }
 
-    auto &voices = stringVoices_[ev.stringIndex];
-    bool alreadyRinging = false;
-    bool sameNoteRinging = false;
+  size_t ComputeRenderableFrames(const std::vector<float>& anchor,
+                                 double readHeadStart,
+                                 double pitchRatio,
+                                 size_t requestedFrames) const {
+    if (anchor.empty() || pitchRatio <= 0.0)
+      return 0;
 
-    for (const auto &v : voices) {
-      if (v.IsAudiblyActive()) {
-        alreadyRinging = true;
-        if (std::abs(v.freq - ev.targetFreq) <= 0.1)
-          sameNoteRinging = true;
+    const double availableSource =
+        std::max(0.0, static_cast<double>(anchor.size()) - readHeadStart - 1.0);
+    if (availableSource <= 0.0)
+      return 0;
+
+    const size_t maxFromSource =
+        static_cast<size_t>(std::floor(availableSource / pitchRatio));
+    return std::min(requestedFrames, maxFromSource);
+  }
+
+  bool AnyMeaningfullyAudible(const std::array<StringVoice, VOICES_PER_STRING>& voices) const {
+    for (const auto& v : voices) {
+      if (v.IsMeaningfullyAudible())
+        return true;
+    }
+    return false;
+  }
+
+  bool AnySameFreqMeaningfullyAudible(
+      const std::array<StringVoice, VOICES_PER_STRING>& voices,
+      double freq, double tolHz) const {
+    for (const auto& v : voices) {
+      if (v.IsMeaningfullyAudible() && std::abs(v.freq - freq) <= tolHz)
+        return true;
+    }
+    return false;
+  }
+
+  StringVoice* SelectVoiceSlot(std::array<StringVoice, VOICES_PER_STRING>& voices) {
+    // 1) Prefer completely inactive slots
+    for (auto& v : voices) {
+      if (!v.IsAllocatedActive()) {
+        return &v;
       }
     }
 
-    // Isolate soft retriggering to continuous strums; plucks demand clean
-    // transients
+    // 2) Prefer releasing + quietest
+    StringVoice* best = nullptr;
+    float bestScore = std::numeric_limits<float>::max();
+
+    for (auto& v : voices) {
+      if (v.releasing) {
+        const float score = v.lastOutputAbs + 0.000001f * static_cast<float>(v.ageSamples);
+        if (score < bestScore) {
+          bestScore = score;
+          best = &v;
+        }
+      }
+    }
+    if (best)
+      return best;
+
+    // 3) Otherwise quietest active voice
+    best = &voices[0];
+    bestScore = voices[0].lastOutputAbs;
+    for (auto& v : voices) {
+      const float score = v.lastOutputAbs + 0.000001f * static_cast<float>(v.ageSamples);
+      if (score < bestScore) {
+        bestScore = score;
+        best = &v;
+      }
+    }
+    return best;
+  }
+
+  void TriggerEvent(const NoteEvent& ev) {
+    if (ev.stringIndex < 0 || ev.stringIndex >= 6 || ev.targetFreq <= 0.0)
+      return;
+
+    auto& voices = stringVoices_[ev.stringIndex];
+
+    const bool alreadyRinging = AnyMeaningfullyAudible(voices);
+    const bool sameNoteRinging =
+        AnySameFreqMeaningfullyAudible(voices, ev.targetFreq, 0.1);
+
     const bool softRetrigger =
-        (ev.articulation == Articulation::Strum && !ev.isNewChord &&
-         alreadyRinging && sameNoteRinging);
+        (ev.articulation == Articulation::Strum &&
+         !ev.isNewChord &&
+         alreadyRinging &&
+         sameNoteRinging);
 
     const size_t quickRelease =
         softRetrigger ? MsToSamples(10.0) : MsToSamples(16.0);
 
-    for (auto &v : voices) {
-      if (v.IsAudiblyActive())
+    for (auto& v : voices) {
+      if (v.IsMeaningfullyAudible())
         v.StartRelease(quickRelease);
     }
 
@@ -485,13 +601,19 @@ private:
 
     if (softRetrigger) {
       readHeadStart = static_cast<double>(MsToSamples(12.0)) * pitchRatio;
-      retriggerGain = 0.40f;
+      retriggerGain = 0.80f;
       attackSamples = MsToSamples(1.5);
     }
 
     const size_t requestedFrames =
         static_cast<size_t>(ev.durationSec * sampleRate_);
     if (requestedFrames == 0)
+      return;
+
+    const size_t renderableFrames =
+        ComputeRenderableFrames(anchors_[ev.stringIndex], readHeadStart,
+                                pitchRatio, requestedFrames);
+    if (renderableFrames == 0)
       return;
 
     float stringVelocity = ev.velocity * retriggerGain;
@@ -501,7 +623,7 @@ private:
         stringVelocity *= (1.0f - static_cast<float>(ev.stringIndex) * 0.04f);
       } else {
         const float upPos = static_cast<float>(ev.stringIndex) / 5.0f;
-        stringVelocity *= (0.30f + 0.70f * upPos);
+        stringVelocity *= (0.55f + 0.45f * upPos);
       }
     } else {
       const float pos = static_cast<float>(ev.stringIndex) / 5.0f;
@@ -518,27 +640,15 @@ private:
 
     const float finalGain = 0.16f * stringVelocity * densityScale;
 
-    StringVoice *targetVoice = nullptr;
-    for (auto &v : voices) {
-      if (!v.IsAudiblyActive() && !v.releasing) {
-        targetVoice = &v;
-        break;
-      }
-    }
-    if (!targetVoice)
-      targetVoice = &voices[0];
-
+    StringVoice* targetVoice = SelectVoiceSlot(voices);
     targetVoice->Start(&anchors_[ev.stringIndex], ev.targetFreq, pitchRatio,
-                       readHeadStart, requestedFrames, finalGain,
+                       readHeadStart, renderableFrames, finalGain,
                        attackSamples);
-  }
-
-  size_t MsToSamples(double ms) const {
-    return static_cast<size_t>((ms / 1000.0) * sampleRate_);
   }
 
   double sampleRate_ = 44100.0;
   size_t totalSamples_ = 0;
+
   std::array<std::vector<float>, 6> anchors_;
   std::array<double, 6> baseFreqs_{};
   std::vector<NoteEvent> events_;
@@ -570,26 +680,26 @@ int main() {
     return 1;
   }
 
-  auto playStrum = [&](double barStartSec, bool isNewChord, double f1,
-                       double f2, double f3, double f4, double f5, double f6) {
+  auto playStrum = [&](double barStartSec, bool isNewChord,
+                       double f1, double f2, double f3,
+                       double f4, double f5, double f6) {
     const double ring = 2.0;
-    synth.ScheduleStrum(barStartSec + 0.00, true, 1.00f, ring, isNewChord, f1,
-                        f2, f3, f4, f5, f6);
-    synth.ScheduleStrum(barStartSec + 0.50, true, 0.85f, ring, false, f1, f2,
-                        f3, f4, f5, f6);
-    synth.ScheduleStrum(barStartSec + 0.75, false, 0.70f, ring, false, f1, f2,
-                        f3, f4, f5, f6);
-    synth.ScheduleStrum(barStartSec + 1.25, false, 0.75f, ring, false, f1, f2,
-                        f3, f4, f5, f6);
-    synth.ScheduleStrum(barStartSec + 1.50, true, 0.80f, ring, false, f1, f2,
-                        f3, f4, f5, f6);
-    synth.ScheduleStrum(barStartSec + 1.75, false, 0.65f, ring, false, f1, f2,
-                        f3, f4, f5, f6);
+
+    const float downAccent = 1.00f;
+    const float downFull   = 0.93f;
+    const float upFull     = 0.82f;
+
+    synth.ScheduleStrum(barStartSec + 0.00, true,  downAccent, ring, isNewChord, f1, f2, f3, f4, f5, f6);
+    synth.ScheduleStrum(barStartSec + 0.50, true,  downFull,   ring, false,      f1, f2, f3, f4, f5, f6);
+    synth.ScheduleStrum(barStartSec + 0.75, false, upFull,     ring, false,      f1, f2, f3, f4, f5, f6);
+    synth.ScheduleStrum(barStartSec + 1.25, false, upFull,     ring, false,      f1, f2, f3, f4, f5, f6);
+    synth.ScheduleStrum(barStartSec + 1.50, true,  downFull,   ring, false,      f1, f2, f3, f4, f5, f6);
+    synth.ScheduleStrum(barStartSec + 1.75, false, upFull,     ring, false,      f1, f2, f3, f4, f5, f6);
   };
 
-  auto playArpeggio = [&](double barStartSec, bool isNewChord, double f1,
-                          double f2, double f3, double f4, double f5,
-                          double f6) {
+  auto playArpeggio = [&](double barStartSec, bool isNewChord,
+                          double f1, double f2, double f3,
+                          double f4, double f5, double f6) {
     const double step = 0.25;
     const double ring = 0.70;
 
@@ -607,65 +717,77 @@ int main() {
       altBass = 0.0;
     }
 
-    auto pluck = [&](double t, double fr1, double fr2, double fr3, double fr4,
-                     double fr5, double fr6, float vel, bool nc) {
+    auto pluck = [&](double t, double fr1, double fr2, double fr3,
+                     double fr4, double fr5, double fr6,
+                     float vel, bool nc) {
       synth.SchedulePluck(barStartSec + t, vel, ring, nc, fr1, fr2, fr3, fr4,
                           fr5, fr6);
     };
 
-    pluck(0 * step, (primaryBass == f1) ? f1 : 0.0,
-          (primaryBass == f2) ? f2 : 0.0, (primaryBass == f3) ? f3 : 0.0, 0.0,
-          0.0, f6, 0.90f, isNewChord);
+    pluck(0 * step,
+          (primaryBass == f1) ? f1 : 0.0,
+          (primaryBass == f2) ? f2 : 0.0,
+          (primaryBass == f3) ? f3 : 0.0,
+          0.0, 0.0, f6, 0.90f, isNewChord);
 
     pluck(1 * step, 0.0, 0.0, 0.0, f4, 0.0, 0.0, 0.55f, false);
 
     if (altBass > 0.0) {
-      pluck(2 * step, (altBass == f1) ? f1 : 0.0, (altBass == f2) ? f2 : 0.0,
-            (altBass == f3) ? f3 : 0.0, 0.0, 0.0, 0.0, 0.75f, false);
+      pluck(2 * step,
+            (altBass == f1) ? f1 : 0.0,
+            (altBass == f2) ? f2 : 0.0,
+            (altBass == f3) ? f3 : 0.0,
+            0.0, 0.0, 0.0, 0.75f, false);
     } else {
       pluck(2 * step, 0.0, 0.0, 0.0, 0.0, f5, 0.0, 0.62f, false);
     }
 
     pluck(3 * step, 0.0, 0.0, 0.0, 0.0, f5, 0.0, 0.60f, false);
 
-    pluck(4 * step, (primaryBass == f1) ? f1 : 0.0,
-          (primaryBass == f2) ? f2 : 0.0, (primaryBass == f3) ? f3 : 0.0, 0.0,
-          0.0, 0.0, 0.85f, false);
+    pluck(4 * step,
+          (primaryBass == f1) ? f1 : 0.0,
+          (primaryBass == f2) ? f2 : 0.0,
+          (primaryBass == f3) ? f3 : 0.0,
+          0.0, 0.0, 0.0, 0.85f, false);
 
     pluck(5 * step, 0.0, 0.0, 0.0, f4, 0.0, 0.0, 0.55f, false);
 
     if (altBass > 0.0) {
-      pluck(6 * step, (altBass == f1) ? f1 : 0.0, (altBass == f2) ? f2 : 0.0,
-            (altBass == f3) ? f3 : 0.0, 0.0, 0.0, 0.0, 0.75f, false);
+      pluck(6 * step,
+            (altBass == f1) ? f1 : 0.0,
+            (altBass == f2) ? f2 : 0.0,
+            (altBass == f3) ? f3 : 0.0,
+            0.0, 0.0, 0.0, 0.75f, false);
     } else {
       pluck(6 * step, 0.0, 0.0, 0.0, 0.0, f5, 0.0, 0.62f, false);
     }
 
-    pluck(7 * step, 0.0, 0.0, 0.0, 0.0, 0.0, f6, 0.65f, false);
+    // End on B string to clear space for next phrase's pinch
+    pluck(7 * step, 0.0, 0.0, 0.0, 0.0, f5, 0.0, 0.60f, false);
   };
 
   const double ca1 = 0.0, ca2 = 130.81, ca3 = 164.81, ca4 = 196.00,
-               ca5 = 293.66, ca6 = 392.00;
-  const double g1 = 98.00, g2 = 123.47, g3 = 146.83, g4 = 196.00, g5 = 293.66,
-               g6 = 392.00;
+               ca5 = 293.66, ca6 = 392.00; // Cadd9
+  const double g1 = 98.00, g2 = 123.47, g3 = 146.83, g4 = 196.00,
+               g5 = 293.66, g6 = 392.00;   // G
   const double as1 = 0.0, as2 = 110.00, as3 = 164.81, as4 = 220.00,
-               as5 = 246.94, as6 = 329.63;
-  const double ds1 = 0.0, ds2 = 0.0, ds3 = 146.83, ds4 = 220.00, ds5 = 293.66,
-               ds6 = 392.00;
+               as5 = 246.94, as6 = 329.63; // Asus2
+  const double ds1 = 0.0, ds2 = 0.0, ds3 = 146.83, ds4 = 220.00,
+               ds5 = 293.66, ds6 = 392.00; // Dsus4
 
   std::cout << "Strumming: Cadd9 - G - Asus2 - Dsus4 (120 BPM)" << std::endl;
-  playStrum(0.0, true, ca1, ca2, ca3, ca4, ca5, ca6);
-  playStrum(2.0, true, g1, g2, g3, g4, g5, g6);
-  playStrum(4.0, true, as1, as2, as3, as4, as5, as6);
-  playStrum(6.0, true, ds1, ds2, ds3, ds4, ds5, ds6);
-  playStrum(8.0, true, ca1, ca2, ca3, ca4, ca5, ca6);
-  playStrum(10.0, true, g1, g2, g3, g4, g5, g6);
+  playStrum(0.0,  true, ca1, ca2, ca3, ca4, ca5, ca6);
+  playStrum(2.0,  true, g1,  g2,  g3,  g4,  g5,  g6);
+  playStrum(4.0,  true, as1, as2, as3, as4, as5, as6);
+  playStrum(6.0,  true, ds1, ds2, ds3, ds4, ds5, ds6);
+  playStrum(8.0,  true, ca1, ca2, ca3, ca4, ca5, ca6);
+  playStrum(10.0, true, g1,  g2,  g3,  g4,  g5,  g6);
   playStrum(12.0, true, as1, as2, as3, as4, as5, as6);
   playStrum(14.0, true, ds1, ds2, ds3, ds4, ds5, ds6);
 
   std::cout << "Arpeggios: Cadd9 - G - Asus2 - Dsus4" << std::endl;
   playArpeggio(16.0, true, ca1, ca2, ca3, ca4, ca5, ca6);
-  playArpeggio(18.0, true, g1, g2, g3, g4, g5, g6);
+  playArpeggio(18.0, true, g1,  g2,  g3,  g4,  g5,  g6);
   playArpeggio(20.0, true, as1, as2, as3, as4, as5, as6);
   playArpeggio(22.0, true, ds1, ds2, ds3, ds4, ds5, ds6);
 
