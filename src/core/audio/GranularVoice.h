@@ -3,7 +3,7 @@
 #include "SampleZone.h"
 #include <array>
 #include <atomic>
-#include <cmath>
+#include <cstdint>
 
 namespace Sonatrix {
 namespace Core {
@@ -16,57 +16,80 @@ public:
 
   // Called when a MIDI NoteOn is received.
   // pitchRatio dictates the pitch shift (e.g. 2.0 = octave up).
-  // Target pitch is strictly for voice stealing / reference.
+  // targetPitch is used for voice management / stealing.
   void Start(const SampleZone *zone, uint8_t targetPitch, double pitchRatio,
              float velocity);
 
-  // Triggers the Release phase of the ADSR envelope.
+  // Triggers the release phase of the envelope.
   void Stop();
 
-  // Renders the overlapping granular grains
+  // Renders hybrid direct-attack + granular-sustain output.
   void RenderNextBlock(float **outputChannels, uint32_t numFrames,
                        uint32_t numChannels);
 
-  // Status checks
   bool IsFree() const { return state_ == State::Free; }
   uint8_t GetCurrentPitch() const { return currentPitch_; }
   float GetStealingPriority() const { return envelopeLevel_; }
 
 private:
   enum class State { Free, Active, Releasing };
-  std::atomic<State> state_{State::Free};
 
+  struct StereoSample {
+    float left = 0.0f;
+    float right = 0.0f;
+  };
+
+  struct Grain {
+    double internalReadPos = 0.0; // current playback head for this grain
+    double durationSamples = 0.0; // grain lifespan
+    double ageSamples = 0.0;      // how old the grain is
+    bool active = false;
+  };
+
+  static constexpr size_t MAX_GRAINS = 8;
+
+  // Core note state
+  std::atomic<State> state_{State::Free};
   const SampleZone *activeZone_{nullptr};
   uint8_t currentPitch_{0};
   float currentVelocity_{0.0f};
 
-  // Master time advancement through the sample (advances at 1.0x)
-  double masterTimePos_{0.0};
+  // Time model
+  double masterTimePos_{0.0};    // sustain timeline, advances strictly at 1.0x
+  double directReadPos_{0.0};    // attack playback head, advances at pitchRatio
+  double granularMacroPos_{0.0}; // macro playback head for grains
+  double timeAdvanceRate_{1.0};  // how fast the granular macro head advances
+  double pitchRatio_{1.0};       // overall pitch shift ratio
 
-  // The pitch ratio applied to the inside of the grains
-  double pitchRatio_{1.0};
-
-  // ADSR Envelope
+  // PSOLA Model
+  double rootPeriodSamples_{1.0};
+  double targetPeriodSamples_{1.0};
+  double grainReadSpeed_{1.0};
+  // Envelope / release
   float envelopeLevel_{0.0f};
-  float envelopeTarget_{0.0f};
   double releasePos_{0.0};
-  double releaseSamples_{44100.0 * 0.05}; // 50ms quick release
+  double releaseSamples_{44100.0 * 0.05}; // 50 ms
   float releaseStartAmp_{1.0f};
 
-  struct Grain {
-    double internalReadPos = 0.0;
-    double durationSamples = 0.0;
-    double ageSamples = 0.0;
-    bool active = false;
-  };
+  // Hybrid attack -> sustain crossfade
+  double attackBypassSamples_{0.0}; // direct-only region
+  double transitionSamples_{0.0};   // crossfade region
+  bool sustainSeeded_{false};
 
-  // 4 overlapping grains is typical for granular
-  static constexpr size_t MAX_GRAINS = 4;
+  // Granular scheduler
   std::array<Grain, MAX_GRAINS> grains_{};
-
   double samplesUntilNextGrain_{0.0};
   double hopSizeSamples_{0.0};
-  double grainDurationSamples_{0.0};
+  double nominalGrainDurationSamples_{0.0};
+  uint32_t grainCounter_{0};
+
+  // Helpers
+  void ResetGrains();
+  bool HasActiveGrains() const;
+  void SpawnGrain(size_t maxSourceFrames);
+  StereoSample ReadInterpolated(double readPos) const;
+  StereoSample RenderGranularSample(size_t maxSourceFrames, float &outNorm);
+  double NextRand01();
 };
 
 } // namespace Audio
