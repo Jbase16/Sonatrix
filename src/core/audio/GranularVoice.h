@@ -1,7 +1,6 @@
 #pragma once
 
 #include "SampleZone.h"
-#include <array>
 #include <atomic>
 #include <cstdint>
 
@@ -34,57 +33,24 @@ private:
     float right = 0.0f;
   };
 
-  struct Grain {
-    double internalReadPos = 0.0;
-    double durationSamples = 0.0;
-    double ageSamples = 0.0;
-    bool active = false;
-  };
-
-  // With a strict 4x overlap, 8 grain slots provides plenty of safety headroom.
-  static constexpr size_t MAX_GRAINS = 8;
-
   // Core note state
   std::atomic<State> state_{State::Free};
   const SampleZone *activeZone_{nullptr};
   uint8_t currentPitch_{0};
   float currentVelocity_{0.0f};
 
-  // Time model
-  double masterTimePos_{0.0};
+  // Sampler Playhead Time Model
   double directReadPos_{0.0};
-  double granularMacroPos_{0.0};
-  double timeAdvanceRate_{1.0};
   double pitchRatio_{1.0};
 
-  // Envelope / release
+  // Envelope / Release
   float envelopeLevel_{0.0f};
   double releasePos_{0.0};
-  double releaseSamples_{44100.0 * 0.05};
+  double releaseSamples_{44100.0 * 0.05}; // 50ms release tail
   float releaseStartAmp_{1.0f};
 
-  // Hybrid attack -> sustain crossfade
-  double attackBypassSamples_{0.0};
-  double transitionSamples_{0.0};
-  bool sustainSeeded_{false};
-
-  // Granular scheduler
-  std::array<Grain, MAX_GRAINS> grains_{};
-  double samplesUntilNextGrain_{0.0};
-  double hopSizeSamples_{0.0};
-  double nominalGrainDurationSamples_{0.0};
-  double grainReadSpeed_{1.0};
-
-  // Fast, lock-free PRNG state for the DSP thread position jitter
-  uint32_t prngState_{881726454};
-
-  void ResetGrains();
-  bool HasActiveGrains() const;
-  void SpawnGrain(size_t maxSourceFrames);
+  // The only DSP math we need now: smooth fractional playhead reading
   StereoSample ReadInterpolated(double readPos) const;
-  
-  // Cleaned up signature: we no longer need to pass out a window sum
-  StereoSample RenderGranularSample(size_t maxSourceFrames); 
 };
 
 } // namespace Audio
