@@ -190,6 +190,14 @@ int main() {
 
   std::cout << "5. Rendering Progression Audio..." << std::endl;
 
+  for (const auto& ev : allStrums.events) {
+    std::cout << "tick=" << ev.timelinePosition.ticks
+              << " type=" << static_cast<int>(ev.type)
+              << " pitch=" << static_cast<int>(ev.data1)
+              << " vel=" << static_cast<int>(ev.data2)
+              << std::endl;
+  }
+
   std::vector<float> outputData(numFrames * 2, 0.0f);
 
   std::vector<float> leftBuffer(blockSize, 0.0f);

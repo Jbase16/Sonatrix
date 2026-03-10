@@ -43,6 +43,11 @@ float VoicingGraphSolver::EvaluateTransitionCost(const GuitarVoicing &a,
   // Jumping from a tiny compressed shape to a huge 4-fret stretch is penalized
   cost += std::abs(a.GetFretSpan() - b.GetFretSpan()) * 2.0f;
 
+  // 4. Sparsity Penalty
+  // Emulate the massive penalty from T=0 to prevent collapsing into 3-note triads
+  int missingStrings = 6 - b.GetNumFrettedNotes();
+  cost += (missingStrings * 10.0f);
+
   return std::max(cost, 0.0f); // Never return negative total costs for graphing
 }
 

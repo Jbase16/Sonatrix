@@ -69,7 +69,7 @@ MIDIStream GuitarCompiler::CompileClip(
     }
 
     if (!isMuted) {
-      EmitStrum(stream, lockedTime, mir.type, mir.velocityBase, activeVoicing);
+      EmitStrum(stream, lockedTime, mir.type, mir.velocityBase, BeatsToTime(mir.lengthBeats), activeVoicing);
     }
   }
 
@@ -79,13 +79,12 @@ MIDIStream GuitarCompiler::CompileClip(
 
 void GuitarCompiler::EmitStrum(
     MIDIStream &outStream, MusicalTime baseTime, ArticulationType direction,
-    uint8_t baseVelocity,
+    uint8_t baseVelocity, MusicalTime duration,
     const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const {
 
-  // We disperse the strums sequentially by 10-15 ticks to mimic a pick crossing
-  // 6 strings.
-  int64_t dispersionTicks =
-      (direction == ArticulationType::GuitarDownstroke) ? 15 : -15;
+  // We disperse the strums sequentially by 15 ticks to mimic a pick crossing 6 strings.
+  // Dispersion is always positive so time moves forward; stringTargets is reversed for upstrokes.
+  int64_t dispersionTicks = 15;
 
   // Build array of physical string targets (keeping both pitch and physical string index)
   struct NoteTarget { int pitch; int stringIndex; };
@@ -112,8 +111,8 @@ void GuitarCompiler::EmitStrum(
     outStream.events.push_back({triggerTime, MIDIEventType::NoteOn, strChannel,
                                 static_cast<uint8_t>(target.pitch), baseVelocity});
 
-    // Note Off (Generic 1.0 beat duration for demo)
-    MusicalTime endTime = triggerTime + BeatsToTime(1.0);
+    // Note Off (Match MIR event length)
+    MusicalTime endTime = triggerTime + duration;
     outStream.events.push_back(
         {endTime, MIDIEventType::NoteOff, strChannel, static_cast<uint8_t>(target.pitch), 0});
 
