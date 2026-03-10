@@ -53,6 +53,16 @@ int GuitarVoicing::GetNumFrettedNotes() const {
   return count;
 }
 
+int GuitarVoicing::GetNumSoundingStrings() const {
+  int count = 0;
+  for (int i = 0; i < 6; ++i) {
+    if (GetMidiPitch(i) != -1) {
+      ++count;
+    }
+  }
+  return count;
+}
+
 std::vector<GuitarVoicing>
 FretboardModel::GenerateValidVoicings(const ActiveChordContext &chord) const {
   std::vector<GuitarVoicing> results;

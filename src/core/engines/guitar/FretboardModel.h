@@ -25,6 +25,7 @@ struct GuitarVoicing {
   float GetAverageFret() const;
   int GetFretSpan() const; // Max fret - Min fret (excluding open strings 0)
   int GetNumFrettedNotes() const; // Count of strings > 0
+  int GetNumSoundingStrings() const; // Count of strings >= 0
 };
 
 class FretboardModel {
