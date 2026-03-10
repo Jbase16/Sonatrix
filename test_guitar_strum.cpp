@@ -84,7 +84,7 @@ static inline int64_t TicksToSample(double ticks, double sampleRate) {
 int main() {
   const double sampleRate = 44100.0;
   const size_t blockSize = 256;
-  const double totalSeconds = 4.0; // 8 beats @ 120 BPM
+  const double totalSeconds = 8.0; // 16 beats @ 120 BPM
   const size_t numFrames = static_cast<size_t>(totalSeconds * sampleRate);
 
   std::cout << "1. Initializing Audio Engines..." << std::endl;
@@ -106,83 +106,91 @@ int main() {
   cMajor.chord.overBass = PitchClass::C;
   chordTimeline.push_back(cMajor);
 
-  // G Major (Beats 2-4)
+  // G Major (Beats 4-8)
   ChordTrackEvent gMajor;
-  gMajor.position = BeatsToTime(2.0);
+  gMajor.position = BeatsToTime(4.0);
   gMajor.chord.root = PitchClass::G;
   gMajor.chord.quality = ChordQuality::Major;
   gMajor.chord.overBass = PitchClass::G;
   chordTimeline.push_back(gMajor);
 
-  // A Minor (Beats 4-6)
+  // A Minor (Beats 8-12)
   ChordTrackEvent aMinor;
-  aMinor.position = BeatsToTime(4.0);
+  aMinor.position = BeatsToTime(8.0);
   aMinor.chord.root = PitchClass::A;
   aMinor.chord.quality = ChordQuality::Minor;
   aMinor.chord.overBass = PitchClass::A;
   chordTimeline.push_back(aMinor);
 
-  // F Major (Beats 6-8)
+  // F Major (Beats 12-16)
   ChordTrackEvent fMajor;
-  fMajor.position = BeatsToTime(6.0);
+  fMajor.position = BeatsToTime(12.0);
   fMajor.chord.root = PitchClass::F;
   fMajor.chord.quality = ChordQuality::Major;
   fMajor.chord.overBass = PitchClass::F;
   chordTimeline.push_back(fMajor);
 
-  std::cout << "3. Defining MIR Pattern (D D U U D)..." << std::endl;
+  std::cout << "3. Defining MIR Pattern (D D U U D U) over 4 beats..." << std::endl;
   auto pattern = std::make_shared<MIRPattern>();
   pattern->intendedEngine = MIRPattern::TargetEngine::Guitar;
-  pattern->totalLength = BeatsToTime(2.0); // 2 beats long, repeats for each chord
+  pattern->totalLength = BeatsToTime(4.0); // Full 4 beat measure
   
   // Downstroke on beat 1
   MIREvent stroke1;
   stroke1.offsetMap = MusicalTime(0);
-  stroke1.lengthBeats = 0.5;
+  stroke1.lengthBeats = 1.0;
   stroke1.type = ArticulationType::GuitarDownstroke;
   stroke1.velocityBase = 110;
   pattern->events.push_back(stroke1);
 
-  // Downstroke on beat 1.5
+  // Downstroke on beat 2
   MIREvent stroke2;
-  stroke2.offsetMap = BeatsToTime(0.5);
+  stroke2.offsetMap = BeatsToTime(1.0);
   stroke2.lengthBeats = 0.5;
   stroke2.type = ArticulationType::GuitarDownstroke;
   stroke2.velocityBase = 90;
   pattern->events.push_back(stroke2);
 
-  // Upstroke on beat 2
+  // Upstroke on beat 2.5
   MIREvent stroke3;
-  stroke3.offsetMap = BeatsToTime(1.0);
-  stroke3.lengthBeats = 0.5;
+  stroke3.offsetMap = BeatsToTime(1.5);
+  stroke3.lengthBeats = 1.0;
   stroke3.type = ArticulationType::GuitarUpstroke;
   stroke3.velocityBase = 100;
   pattern->events.push_back(stroke3);
 
-  // Upstroke on beat 2.5
+  // Upstroke on beat 3.5
   MIREvent stroke4;
-  stroke4.offsetMap = BeatsToTime(1.5);
-  stroke4.lengthBeats = 0.25;
+  stroke4.offsetMap = BeatsToTime(2.5);
+  stroke4.lengthBeats = 0.5;
   stroke4.type = ArticulationType::GuitarUpstroke;
   stroke4.velocityBase = 90;
   pattern->events.push_back(stroke4);
 
-  // Downstroke on beat 2.75
+  // Downstroke on beat 4
   MIREvent stroke5;
-  stroke5.offsetMap = BeatsToTime(1.75);
-  stroke5.lengthBeats = 0.25;
+  stroke5.offsetMap = BeatsToTime(3.0);
+  stroke5.lengthBeats = 0.5;
   stroke5.type = ArticulationType::GuitarDownstroke;
   stroke5.velocityBase = 90;
   pattern->events.push_back(stroke5);
+
+  // Upstroke on beat 4.5
+  MIREvent stroke6;
+  stroke6.offsetMap = BeatsToTime(3.5);
+  stroke6.lengthBeats = 0.5;
+  stroke6.type = ArticulationType::GuitarUpstroke;
+  stroke6.velocityBase = 80;
+  pattern->events.push_back(stroke6);
 
   std::cout << "4. Compiling via GuitarCompiler..." << std::endl;
   MIDI::GuitarCompiler compiler;
   MIDI::MIDIStream allStrums;
 
-  // Repeat 2-beat clip 4 times => 8 beats total
+  // Repeat 4-beat clip 4 times => 16 beats total
   for (int i = 0; i < 4; ++i) {
     EditorClip clip(pattern);
-    clip.timelineStart = BeatsToTime(i * 2.0);
+    clip.timelineStart = BeatsToTime(i * 4.0);
 
     MIDI::MIDIStream strumMIDI = compiler.CompileClip(clip, chordTimeline);
     allStrums.events.insert(allStrums.events.end(), strumMIDI.events.begin(),
