@@ -19,13 +19,14 @@ void VoiceManager::ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
     if (ev.type == MIDI::MIDIEventType::NoteOn && ev.data2 > 0) {
 
       // PHYSICAL STRING CHOKING
-      if (stringId != -1) {
+     /* if (stringId != -1) {
         for (auto &v : voices_) {
           if (!v.IsFree() && v.GetStringId() == stringId) {
             v.Stop(); 
           }
         }
       }
+        */
 
       // Determine which physical acoustic zone to load via string-aware sparse routing
       const SampleZone *zone = articulation.FindZone(ev.data1, ev.data2, stringId);

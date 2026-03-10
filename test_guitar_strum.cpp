@@ -89,7 +89,8 @@ int main() {
 
   std::cout << "1. Initializing Audio Engines..." << std::endl;
   Audio::VoiceManager voiceManager;
-  voiceManager.LoadInstrumentKit("Assets/Exciters/FS_Guitars");
+  Audio::AssetManager::GetInstance().LoadAcousticGuitarAnchors(
+      "Assets/Exciters/FS_Guitars");
 
   auto &articulation =
       Audio::AssetManager::GetInstance().GetAcousticGuitarArticulation();
