@@ -1,5 +1,5 @@
 #include "src/core/audio/AssetManager.h"
-#include "src/core/audio/GranularVoice.h"
+#include "src/core/audio/SamplerVoice.h"
 #include <AudioToolbox/AudioToolbox.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <cmath>
@@ -178,7 +178,7 @@ int main() {
     double semitoneShift = static_cast<double>(pitch) - static_cast<double>(bestZone->rootKey);
     double pitchRatio = std::pow(2.0, semitoneShift / 12.0);
 
-    GranularVoice voice;
+    SamplerVoice voice;
     voice.Start(bestZone, pitch, pitchRatio, 1.0f);
 
     std::cout << "Note: " << (int)pitch << " -> Anchor: " << bestZone->filePath 

@@ -1,4 +1,4 @@
-#include "GranularVoice.h"
+#include "SamplerVoice.h"
 
 #include <algorithm>
 #include <cmath>
@@ -15,7 +15,7 @@ inline float ClampFloat(float x, float lo, float hi) {
 
 } // namespace
 
-void GranularVoice::Start(const SampleZone *zone, uint8_t targetPitch,
+void SamplerVoice::Start(const SampleZone *zone, uint8_t targetPitch,
                           double pitchRatio, float velocity) {
   if (!zone || zone->audioData.empty() || zone->numChannels == 0 ||
       zone->sampleRate <= 0.0) {
@@ -39,7 +39,7 @@ void GranularVoice::Start(const SampleZone *zone, uint8_t targetPitch,
   state_ = State::Active;
 }
 
-void GranularVoice::Stop() {
+void SamplerVoice::Stop() {
   if (state_ == State::Active) {
     state_ = State::Releasing;
     releasePos_ = 0.0;
@@ -48,8 +48,8 @@ void GranularVoice::Stop() {
 }
 
 // This is the core "Sampler" function. It reads fractional samples to pitch shift smoothly.
-GranularVoice::StereoSample
-GranularVoice::ReadInterpolated(double readPos) const {
+SamplerVoice::StereoSample
+SamplerVoice::ReadInterpolated(double readPos) const {
   StereoSample out{};
 
   if (!activeZone_ || activeZone_->audioData.empty() ||
@@ -81,7 +81,7 @@ GranularVoice::ReadInterpolated(double readPos) const {
   return out;
 }
 
-void GranularVoice::RenderNextBlock(float **outputChannels, uint32_t numFrames,
+void SamplerVoice::RenderNextBlock(float **outputChannels, uint32_t numFrames,
                                     uint32_t numChannels) {
   if (state_ == State::Free || !activeZone_ || !outputChannels ||
       numChannels == 0)

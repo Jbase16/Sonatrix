@@ -1,5 +1,5 @@
 #include "src/core/audio/AssetManager.h"
-#include "src/core/audio/GranularVoice.h"
+#include "src/core/audio/SamplerVoice.h"
 #include <AudioToolbox/AudioToolbox.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <cmath>
@@ -189,7 +189,7 @@ int main() {
             << std::endl;
   std::cout << "Required PSOLA Ratio: " << pitchRatio << "\n" << std::endl;
 
-  GranularVoice voice;
+  SamplerVoice voice;
   voice.Start(bestZone, targetPitch, pitchRatio, 1.0f);
 
   // 4. Render 4 Seconds of output

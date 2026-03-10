@@ -117,7 +117,7 @@ FretboardModel::GetRequiredPitches(const ActiveChordContext &chord) const {
 }
 
 void FretboardModel::PermuteStrings(
-    int stringIndex, std::array<int8_t, 6> &currentVoicing,
+    int stringIndex, std::array<int8_t, 6> currentVoicing,
     const std::vector<PitchClass> &targetPitches,
     std::vector<GuitarVoicing> &outValidVoicings) const {
   // Base Case: All 6 strings evaluated
@@ -128,16 +128,23 @@ void FretboardModel::PermuteStrings(
     // Final Physical Pruning (Is my hand big enough?)
     if (v.GetFretSpan() <= MAX_FRET_SPAN && v.GetNumFrettedNotes() <= 4) {
 
-      // Final Harmonic Pruning (Did I actually hit C, E, and G?)
-      // We pass in a mocked valid checking right now, but in full
-      // implementation it checks that all notes are present, and the lowest
-      // played string matches the requested inversion bass.
-      bool hasNotes = false;
-      for (int f : v.frets)
-        if (f != -1)
-          hasNotes = true;
+      // Final Harmonic Pruning: Enforce all required pitches are present
+      std::vector<int> presentPCs;
+      for (int i = 0; i < 6; ++i) {
+          if (v.frets[i] != -1) {
+              presentPCs.push_back(v.GetMidiPitch(i) % 12);
+          }
+      }
+      
+      bool containsAll = true;
+      for (PitchClass pc : targetPitches) {
+          if (std::find(presentPCs.begin(), presentPCs.end(), static_cast<int>(pc)) == presentPCs.end()) {
+              containsAll = false;
+              break;
+          }
+      }
 
-      if (hasNotes) {
+      if (containsAll) {
         outValidVoicings.push_back(v);
       }
     }

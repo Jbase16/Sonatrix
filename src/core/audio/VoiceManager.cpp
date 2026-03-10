@@ -1,5 +1,6 @@
 #include "VoiceManager.h"
 #include "AudioFileReader.h"
+#include "AssetManager.h"
 #include <limits>
 
 namespace Sonatrix {
@@ -7,7 +8,7 @@ namespace Core {
 namespace Audio {
 
 void VoiceManager::ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
-                               InstrumentArticulation &articulation) {
+                               const InstrumentArticulation &articulation) {
   for (const auto &ev : events) {
     if (ev.type == MIDI::MIDIEventType::NoteOn && ev.data2 > 0) {
 
@@ -20,7 +21,7 @@ void VoiceManager::ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
         continue; // No matching sample found
 
       // 2. Allocate a voice (stealing if necessary)
-      GranularVoice *v = GetBestAvailableVoice();
+      SamplerVoice *v = GetBestAvailableVoice();
       if (v) {
         // Calculate the pitch shift ratio in real-time
         double pitchRatio = std::pow(
@@ -45,8 +46,8 @@ void VoiceManager::ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
   }
 }
 
-GranularVoice *VoiceManager::GetBestAvailableVoice() {
-  GranularVoice *worstVoice = nullptr;
+SamplerVoice *VoiceManager::GetBestAvailableVoice() {
+  SamplerVoice *worstVoice = nullptr;
   float lowestPriority = std::numeric_limits<float>::max();
 
   for (auto &v : voices_) {
@@ -67,38 +68,17 @@ GranularVoice *VoiceManager::GetBestAvailableVoice() {
 }
 
 void VoiceManager::LoadInstrumentKit(const std::string &assetsAbsolutePath) {
-  activeArticulation_.name = "Bass_Sawtooth_Mock";
-  activeArticulation_.zones.clear();
-
-  // Load C1 (MIDI 36)
-  SampleZone zoneC1;
-  zoneC1.filePath = assetsAbsolutePath + "/C1.wav";
-  zoneC1.rootKey = 36;
-  zoneC1.lowVelocity = 0;
-  zoneC1.highVelocity = 127;
-  zoneC1.isLoaded = AudioFileReader::LoadFile(zoneC1.filePath, zoneC1.audioData,
-                                              zoneC1.sampleRate);
-  activeArticulation_.zones.push_back(zoneC1);
-
-  // Load C2 (MIDI 48)
-  SampleZone zoneC2;
-  zoneC2.filePath = assetsAbsolutePath + "/C2.wav";
-  zoneC2.rootKey = 48;
-  zoneC2.lowVelocity = 0;
-  zoneC2.highVelocity = 127;
-  zoneC2.isLoaded = AudioFileReader::LoadFile(zoneC2.filePath, zoneC2.audioData,
-                                              zoneC2.sampleRate);
-  activeArticulation_.zones.push_back(zoneC2);
-
-  // Load C3 (MIDI 60)
-  SampleZone zoneC3;
-  zoneC3.filePath = assetsAbsolutePath + "/C3.wav";
-  zoneC3.rootKey = 60;
-  zoneC3.lowVelocity = 0;
-  zoneC3.highVelocity = 127;
-  zoneC3.isLoaded = AudioFileReader::LoadFile(zoneC3.filePath, zoneC3.audioData,
-                                              zoneC3.sampleRate);
-  activeArticulation_.zones.push_back(zoneC3);
+  // Load the 6-anchor Acoustic Guitar into the AssetManager
+  auto &assets = AssetManager::GetInstance();
+  if (!assets.LoadAcousticGuitarAnchors(assetsAbsolutePath)) {
+    // Failure to load assets
+    activeArticulation_.name = "Error_Missing_Assets";
+    activeArticulation_.zones.clear();
+    return;
+  }
+  
+  // Point the active articulation to the multi-sampler guitar
+  activeArticulation_ = assets.GetAcousticGuitarArticulation();
 }
 
 void VoiceManager::RenderAudio(float **outputChannels, uint32_t numFrames,

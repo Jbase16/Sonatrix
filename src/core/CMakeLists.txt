@@ -25,8 +25,8 @@ add_library(SonatrixCore STATIC
     engines/strings/StringCompiler.cpp
     audio/SampleZone.h
     audio/SampleZone.cpp
-    audio/GranularVoice.h
-    audio/GranularVoice.cpp
+    audio/SamplerVoice.h
+    audio/SamplerVoice.cpp
     audio/AssetManager.h
     audio/AssetManager.cpp
     audio/VoiceManager.h

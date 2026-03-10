@@ -8,10 +8,10 @@ namespace Sonatrix {
 namespace Core {
 namespace Audio {
 
-class GranularVoice {
+class SamplerVoice {
 public:
-  GranularVoice() = default;
-  ~GranularVoice() = default;
+  SamplerVoice() = default;
+  ~SamplerVoice() = default;
 
   void Start(const SampleZone *zone, uint8_t targetPitch, double pitchRatio,
              float velocity);

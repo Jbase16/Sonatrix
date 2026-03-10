@@ -2,7 +2,7 @@
 
 #include "../midi/MIDIEvent.h"
 #include "AudioMixer.h"
-#include "GranularVoice.h"
+#include "SamplerVoice.h"
 #include <array>
 #include <vector>
 
@@ -26,7 +26,7 @@ public:
   // Process an incoming MIDI buffer (prepared by Phase 3 Engines)
   // Note: This must be called from the real-time audio thread
   void ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
-                   InstrumentArticulation &articulation);
+                   const InstrumentArticulation &articulation);
 
   // Renders all active voices into the given output buffer
   void RenderAudio(float **outputChannels, uint32_t numFrames,
@@ -42,13 +42,13 @@ public:
 private:
   // Max polyphony constraint (e.g., 64 stereo voices)
   static constexpr size_t MAX_VOICES = 64;
-  std::array<GranularVoice, MAX_VOICES> voices_;
+  std::array<SamplerVoice, MAX_VOICES> voices_;
 
   InstrumentArticulation activeArticulation_;
 
   // Finds the best voice to use (either truly Free, or by stealing the lowest
   // priority active voice)
-  GranularVoice *GetBestAvailableVoice();
+  SamplerVoice *GetBestAvailableVoice();
 
   AudioMixer mixer_;
 };

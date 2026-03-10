@@ -46,7 +46,7 @@ private:
   static constexpr int MAX_FRET_SPAN = 4;
 
   // Recursive graph-search to build fretboard states string by string
-  void PermuteStrings(int stringIndex, std::array<int8_t, 6> &currentVoicing,
+  void PermuteStrings(int stringIndex, std::array<int8_t, 6> currentVoicing,
                       const std::vector<PitchClass> &targetPitches,
                       std::vector<GuitarVoicing> &outValidVoicings) const;
 
