@@ -117,7 +117,8 @@ void GuitarCompiler::EmitStrum(
 
     // Make the note ring out for the duration specified by the MIR Event, OR at least 
     // 2.0 beats to ensure open acoustic chords don't cut off prematurely before the choke.
-    MusicalTime actualDuration = std::max(duration.ticks, BeatsToTime(2.0).ticks);
+    // FIXED: Using explicit constructor for MusicalTime to handle int64_t return from std::max.
+    MusicalTime actualDuration(std::max(duration.ticks, BeatsToTime(2.0).ticks));
     MusicalTime endTime = triggerTime + actualDuration;
 
     outStream.events.push_back({endTime, MIDIEventType::NoteOff, strChannel,
