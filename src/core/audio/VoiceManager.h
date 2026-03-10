@@ -50,6 +50,10 @@ private:
   InstrumentArticulation activeArticulation_;
   AudioMixer mixer_;
 
+  // Tracks how many active NoteOns exist per physical string (0-5)
+  // Used to prevent orphaned NoteOffs from silencing re-struck strings.
+  std::array<int, 6> stringActiveNotes_{0, 0, 0, 0, 0, 0};
+
   // Finds a free voice slot. If all slots are full, returns the active
   // voice with the lowest amplitude (stealing).
   SamplerVoice *GetBestAvailableVoice();

@@ -130,11 +130,11 @@ int main() {
   fMajor.chord.overBass = PitchClass::F;
   chordTimeline.push_back(fMajor);
 
-  std::cout << "3. Defining MIR Pattern (D D U U)..." << std::endl;
+  std::cout << "3. Defining MIR Pattern (D D U U D)..." << std::endl;
   auto pattern = std::make_shared<MIRPattern>();
   pattern->intendedEngine = MIRPattern::TargetEngine::Guitar;
-  pattern->totalLength = BeatsToTime(2.0); // 2 beats per clip
-
+  pattern->totalLength = BeatsToTime(2.0); // 2 beats long, repeats for each chord
+  
   // Downstroke on beat 1
   MIREvent stroke1;
   stroke1.offsetMap = MusicalTime(0);
@@ -162,10 +162,18 @@ int main() {
   // Upstroke on beat 2.5
   MIREvent stroke4;
   stroke4.offsetMap = BeatsToTime(1.5);
-  stroke4.lengthBeats = 0.5;
+  stroke4.lengthBeats = 0.25;
   stroke4.type = ArticulationType::GuitarUpstroke;
   stroke4.velocityBase = 90;
   pattern->events.push_back(stroke4);
+
+  // Downstroke on beat 2.75
+  MIREvent stroke5;
+  stroke5.offsetMap = BeatsToTime(1.75);
+  stroke5.lengthBeats = 0.25;
+  stroke5.type = ArticulationType::GuitarDownstroke;
+  stroke5.velocityBase = 90;
+  pattern->events.push_back(stroke5);
 
   std::cout << "4. Compiling via GuitarCompiler..." << std::endl;
   MIDI::GuitarCompiler compiler;
@@ -181,7 +189,7 @@ int main() {
                             strumMIDI.events.end());
   }
 
-  std::sort(allStrums.events.begin(), allStrums.events.end(),
+  std::stable_sort(allStrums.events.begin(), allStrums.events.end(),
             [](const MIDI::MIDIEvent &a, const MIDI::MIDIEvent &b) {
               return a.timelinePosition < b.timelinePosition;
             });
@@ -279,10 +287,11 @@ int main() {
                                static_cast<uint32_t>(remainingFrames), 2);
     }
 
-    // Interleave into final output buffer
+    // Interleave into final output buffer with -16dB Gain Reduction!
+    // This prevents the 6 overlapping strings from clipping the WAV file into a square wave.
     for (size_t i = 0; i < framesInBlock; ++i) {
-      outputData[(blockStartFrame + i) * 2] = leftBuffer[i];
-      outputData[(blockStartFrame + i) * 2 + 1] = rightBuffer[i];
+      outputData[(blockStartFrame + i) * 2] = leftBuffer[i] * 0.15f;
+      outputData[(blockStartFrame + i) * 2 + 1] = rightBuffer[i] * 0.15f;
     }
   }
 

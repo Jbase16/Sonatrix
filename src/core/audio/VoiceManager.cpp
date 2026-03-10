@@ -19,14 +19,17 @@ void VoiceManager::ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
     if (ev.type == MIDI::MIDIEventType::NoteOn && ev.data2 > 0) {
 
       // PHYSICAL STRING CHOKING
-     /* if (stringId != -1) {
+     if (stringId != -1) {
+        if (stringId >= 0 && stringId < 6) {
+          stringActiveNotes_[stringId]++;
+        }
         for (auto &v : voices_) {
           if (!v.IsFree() && v.GetStringId() == stringId) {
             v.Stop(); 
           }
         }
       }
-        */
+      
 
       // Determine which physical acoustic zone to load via string-aware sparse routing
       const SampleZone *zone = articulation.FindZone(ev.data1, ev.data2, stringId);
@@ -48,7 +51,15 @@ void VoiceManager::ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
     } else if (ev.type == MIDI::MIDIEventType::NoteOff ||
                (ev.type == MIDI::MIDIEventType::NoteOn && ev.data2 == 0)) {
       
-      // STRICT NOTEOFF LOGIC
+      // STRICT NOTEOFF LOGIC WITH ORPHAN PROTECTION
+      if (stringId >= 0 && stringId < 6) {
+        stringActiveNotes_[stringId]--;
+        if (stringActiveNotes_[stringId] > 0) {
+          continue; // Ignore this NoteOff, the string was struck again and is ringing the new note
+        }
+        stringActiveNotes_[stringId] = 0; // Prevent underflow
+      }
+
       for (auto &v : voices_) {
         if (!v.IsFree() && v.GetCurrentPitch() == ev.data1 && v.GetStringId() == stringId) {
           v.Stop();
