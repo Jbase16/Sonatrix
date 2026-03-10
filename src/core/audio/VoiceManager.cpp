@@ -11,9 +11,11 @@ void VoiceManager::ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
   for (const auto &ev : events) {
     if (ev.type == MIDI::MIDIEventType::NoteOn && ev.data2 > 0) {
 
-      // 1. Determine which physical acoustic zone to load based on the sparse
-      // matrix
-      const SampleZone *zone = articulation.FindZone(ev.data1, ev.data2);
+      // 1. Determine physical string context (if transmitted by GuitarCompiler on channels 1-6)
+      int stringId = (ev.channel >= 1 && ev.channel <= 6) ? static_cast<int>(ev.channel) - 1 : -1;
+
+      // Determine which physical acoustic zone to load via string-aware sparse routing
+      const SampleZone *zone = articulation.FindZone(ev.data1, ev.data2, stringId);
       if (!zone)
         continue; // No matching sample found
 

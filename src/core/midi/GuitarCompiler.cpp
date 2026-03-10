@@ -87,31 +87,35 @@ void GuitarCompiler::EmitStrum(
   int64_t dispersionTicks =
       (direction == ArticulationType::GuitarDownstroke) ? 15 : -15;
 
-  // Build array of physical string pitches to strum
-  std::vector<int> stringPitches;
+  // Build array of physical string targets (keeping both pitch and physical string index)
+  struct NoteTarget { int pitch; int stringIndex; };
+  std::vector<NoteTarget> stringTargets;
   for (int i = 0; i < 6; ++i) {
     int pitch = voicing.GetMidiPitch(i);
     if (pitch != -1) {
-      stringPitches.push_back(pitch);
+      stringTargets.push_back({pitch, i});
     }
   }
 
   if (direction == ArticulationType::GuitarUpstroke) {
-    std::reverse(stringPitches.begin(), stringPitches.end());
+    std::reverse(stringTargets.begin(), stringTargets.end());
   }
 
   int64_t accumulatedOffset = 0;
-  for (int pitch : stringPitches) {
+  for (const auto& target : stringTargets) {
     MusicalTime triggerTime = baseTime + MusicalTime(accumulatedOffset);
 
+    // Encode physical string info (+1 to avoid generic channel 0 collision) as MIDI channel
+    uint8_t strChannel = static_cast<uint8_t>(target.stringIndex + 1);
+
     // Note On
-    outStream.events.push_back({triggerTime, MIDIEventType::NoteOn, 0,
-                                static_cast<uint8_t>(pitch), baseVelocity});
+    outStream.events.push_back({triggerTime, MIDIEventType::NoteOn, strChannel,
+                                static_cast<uint8_t>(target.pitch), baseVelocity});
 
     // Note Off (Generic 1.0 beat duration for demo)
     MusicalTime endTime = triggerTime + BeatsToTime(1.0);
     outStream.events.push_back(
-        {endTime, MIDIEventType::NoteOff, 0, static_cast<uint8_t>(pitch), 0});
+        {endTime, MIDIEventType::NoteOff, strChannel, static_cast<uint8_t>(target.pitch), 0});
 
     accumulatedOffset += dispersionTicks;
   }

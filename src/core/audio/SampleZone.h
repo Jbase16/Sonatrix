@@ -43,8 +43,8 @@ struct InstrumentArticulation {
     std::string name;
     std::vector<SampleZone> zones;
     
-    // Real-time lookup: Find the best zone for a given requested pitch and velocity
-    const SampleZone* FindZone(uint8_t pitch, uint8_t velocity) const;
+    // Real-time lookup: Find the best zone for a given requested pitch, velocity, and optional explicit physical string
+    const SampleZone* FindZone(uint8_t pitch, uint8_t velocity, int stringId = -1) const;
 };
 
 } // namespace Audio
