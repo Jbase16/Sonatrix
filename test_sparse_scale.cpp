@@ -165,10 +165,11 @@ int main() {
   const auto &articulation = assets.GetAcousticGuitarArticulation();
   std::vector<float> outputData;
 
-  std::cout << "Rendering Chromatic Scale from MIDI 50 (D3) to 74 (D5)..." << std::endl;
+  std::cout << "Rendering Fretboard Walk from MIDI 55 (G3) to 67 (G4) strictly on the G String..." << std::endl;
 
-  for (uint8_t pitch = 50; pitch <= 74; pitch++) {
-    const SampleZone *bestZone = articulation.FindZone(pitch, 100);
+  for (uint8_t pitch = 55; pitch <= 67; pitch++) {
+    // Stage 6 Test: Explicitly demand the G String (Index 3).
+    const SampleZone *bestZone = articulation.FindZone(pitch, 100, 3);
     if (!bestZone) {
       std::cerr << "FindZone returned nullptr for pitch " << (int)pitch << std::endl;
       continue;
