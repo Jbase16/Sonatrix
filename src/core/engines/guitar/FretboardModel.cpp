@@ -126,7 +126,7 @@ void FretboardModel::PermuteStrings(
     v.frets = currentVoicing;
 
     // Final Physical Pruning (Is my hand big enough?)
-    if (v.GetFretSpan() <= MAX_FRET_SPAN && v.GetNumFrettedNotes() <= 4) {
+    if (v.GetFretSpan() <= MAX_FRET_SPAN && v.GetNumFrettedNotes() <= 6) {
 
       // Final Harmonic Pruning: Enforce all required pitches are present
       std::vector<int> presentPCs;

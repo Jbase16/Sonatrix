@@ -76,10 +76,13 @@ std::vector<GuitarVoicing> VoicingGraphSolver::SolveVoiceLeading(
   }
 
   // 2. Initialize T=0 costs
-  // We favor lower/more open voicings naturally as starting positions
+  // We favor lower/more open voicings naturally as starting positions,
+  // but we heavily penalize thin 3-string voicings so it prefers full chords.
   for (size_t i = 0; i < states[0].size(); ++i) {
-    trellis[0][i].minCost =
-        states[0][i].GetAverageFret(); // Arbitrary starting heuristic
+    float startingCost = states[0][i].GetAverageFret();
+    int missingStrings = 6 - states[0][i].GetNumFrettedNotes();
+    startingCost += (missingStrings * 10.0f); // Massive penalty for sparse chords
+    trellis[0][i].minCost = startingCost;
   }
 
   // 3. Viterbi Forward Pass
