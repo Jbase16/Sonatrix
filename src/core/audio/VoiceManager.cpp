@@ -8,8 +8,9 @@ namespace Sonatrix {
 namespace Core {
 namespace Audio {
 
+// Added 'const' to articulation to fix the compiler error
 void VoiceManager::ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
-                               InstrumentArticulation &articulation) {
+                               const InstrumentArticulation &articulation) {
   for (const auto &ev : events) {
     
     // 1. Determine physical string context (if transmitted by GuitarCompiler on channels 1-6)
@@ -17,9 +18,7 @@ void VoiceManager::ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
 
     if (ev.type == MIDI::MIDIEventType::NoteOn && ev.data2 > 0) {
 
-      // NEW: PHYSICAL STRING CHOKING
-      // A physical guitar string cannot play two overlapping notes. 
-      // If this exact string is already ringing, push it into its release phase immediately.
+      // PHYSICAL STRING CHOKING
       if (stringId != -1) {
         for (auto &v : voices_) {
           if (!v.IsFree() && v.GetStringId() == stringId) {
@@ -49,7 +48,6 @@ void VoiceManager::ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
                (ev.type == MIDI::MIDIEventType::NoteOn && ev.data2 == 0)) {
       
       // STRICT NOTEOFF LOGIC
-      // Find the active voice playing this exact pitch on this exact string and release it.
       for (auto &v : voices_) {
         if (!v.IsFree() && v.GetCurrentPitch() == ev.data1 && v.GetStringId() == stringId) {
           v.Stop();
@@ -76,15 +74,10 @@ SamplerVoice *VoiceManager::GetBestAvailableVoice() {
     }
   }
 
-  // Voice Stealing occurred. We return the active voice with the lowest
-  // volume/envelope priority.
   return worstVoice;
 }
 
 void VoiceManager::LoadInstrumentKit(const std::string &assetsAbsolutePath) {
-  // In a full implementation, this loads the mock synth. 
-  // For Phase 14 tests, AssetManager handles the acoustic anchors, 
-  // so this can remain mock or be safely skipped.
   activeArticulation_.name = "Bass_Sawtooth_Mock";
   activeArticulation_.zones.clear();
 
@@ -119,10 +112,8 @@ void VoiceManager::LoadInstrumentKit(const std::string &assetsAbsolutePath) {
 void VoiceManager::RenderAudio(float **outputChannels, uint32_t numFrames,
                                uint32_t numChannels) {
 
-  // 1. Clear the master output buffers first, as the Mixer accumulates rather than overwrites
   AudioMixer::ClearBuffers(outputChannels, numFrames, numChannels);
 
-  // 2. We need a temporary buffer to render the voices into before hitting the mixer.
   static thread_local std::vector<float> tempL;
   static thread_local std::vector<float> tempR;
 
@@ -136,13 +127,10 @@ void VoiceManager::RenderAudio(float **outputChannels, uint32_t numFrames,
 
   float *tempChannels[2] = {tempL.data(), tempR.data()};
 
-  // 3. Process every voice and accumulate into the temporary bus buffer
   for (auto &v : voices_) {
     v.RenderNextBlock(tempChannels, numFrames, 2);
   }
 
-  // 4. Send the accumulated bus through the Mixer to apply Gain/Pan and
-  // sum into the final master outputChannels.
   mixer_.MixBusToOutput(MixerBus::Bass, tempChannels, outputChannels, numFrames,
                         numChannels);
 }

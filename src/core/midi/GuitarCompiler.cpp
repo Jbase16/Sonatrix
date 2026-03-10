@@ -68,8 +68,9 @@ MIDIStream GuitarCompiler::CompileClip(
     }
 
     if (!isMuted) {
-      // Reverted to the correct 5-argument signature
-      EmitStrum(stream, lockedTime, mir.type, mir.velocityBase, activeVoicing);
+      // 6 Arguments, using the actual duration from the MIR event!
+      EmitStrum(stream, lockedTime, mir.type, mir.velocityBase,
+                BeatsToTime(mir.lengthBeats), activeVoicing);
     }
   }
 
@@ -77,9 +78,10 @@ MIDIStream GuitarCompiler::CompileClip(
   return stream;
 }
 
+// 6 Parameters to perfectly match GuitarCompiler.h
 void GuitarCompiler::EmitStrum(
     MIDIStream &outStream, MusicalTime baseTime, ArticulationType direction,
-    uint8_t baseVelocity,
+    uint8_t baseVelocity, MusicalTime duration, 
     const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const {
 
   // 40 ticks at 960 PPQ = ~20ms per string. This creates a beautiful, natural glide.
@@ -113,9 +115,11 @@ void GuitarCompiler::EmitStrum(
                                 static_cast<uint8_t>(target.pitch),
                                 baseVelocity});
 
-    // Make the duration longer (e.g. 2 full beats) so it rings out into the
-    // next strum
-    MusicalTime endTime = triggerTime + BeatsToTime(2.0);
+    // Make the note ring out for the duration specified by the MIR Event, OR at least 
+    // 2.0 beats to ensure open acoustic chords don't cut off prematurely before the choke.
+    MusicalTime actualDuration = std::max(duration.ticks, BeatsToTime(2.0).ticks);
+    MusicalTime endTime = triggerTime + actualDuration;
+
     outStream.events.push_back({endTime, MIDIEventType::NoteOff, strChannel,
                                 static_cast<uint8_t>(target.pitch), 0});
 

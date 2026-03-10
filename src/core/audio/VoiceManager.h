@@ -32,9 +32,9 @@ public:
 
   // Receives a stream of timestamped MIDI events.
   // In real-time use, this should only receive events meant for the *current*
-  // audio block.
+  // audio block. Note the 'const' added here for C++ const-correctness!
   void ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
-                   InstrumentArticulation &articulation);
+                   const InstrumentArticulation &articulation);
 
   // Pulls the next N samples from all active voices, sums them together,
   // passes them through the mixer for gain/pan staging, and accumulates
