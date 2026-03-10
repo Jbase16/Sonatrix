@@ -16,7 +16,7 @@ inline float ClampFloat(float x, float lo, float hi) {
 } // namespace
 
 void SamplerVoice::Start(const SampleZone *zone, uint8_t targetPitch,
-                          double pitchRatio, float velocity) {
+                          double pitchRatio, float velocity, int stringId) {
   if (!zone || zone->audioData.empty() || zone->numChannels == 0 ||
       zone->sampleRate <= 0.0) {
     state_ = State::Free;
@@ -26,6 +26,7 @@ void SamplerVoice::Start(const SampleZone *zone, uint8_t targetPitch,
 
   activeZone_ = zone;
   currentPitch_ = targetPitch;
+  currentStringId_ = stringId;
   pitchRatio_ = std::max(0.01, pitchRatio);
   currentVelocity_ = ClampFloat(velocity, 0.0f, 1.0f);
 

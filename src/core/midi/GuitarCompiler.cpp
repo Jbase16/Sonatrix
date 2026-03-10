@@ -68,8 +68,8 @@ MIDIStream GuitarCompiler::CompileClip(
     }
 
     if (!isMuted) {
-      EmitStrum(stream, lockedTime, mir.type, mir.velocityBase,
-                BeatsToTime(mir.lengthBeats), activeVoicing);
+      // Reverted to the correct 5-argument signature
+      EmitStrum(stream, lockedTime, mir.type, mir.velocityBase, activeVoicing);
     }
   }
 
@@ -79,86 +79,45 @@ MIDIStream GuitarCompiler::CompileClip(
 
 void GuitarCompiler::EmitStrum(
     MIDIStream &outStream, MusicalTime baseTime, ArticulationType direction,
-    uint8_t baseVelocity, MusicalTime duration,
+    uint8_t baseVelocity,
     const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const {
 
-  // Sequential string sweep timing
-  constexpr int64_t dispersionTicks = 15;
-
-  // Shorter guitar-like restrum sustain.
-  // Do NOT simply hold every string for the full MIR event length.
-  const MusicalTime maxStrumLength = BeatsToTime(0.28);
-
-  auto minTime = [](const MusicalTime &a, const MusicalTime &b) {
-    return (a.ticks < b.ticks) ? a : b;
-  };
-
-  const MusicalTime noteLength = minTime(duration, maxStrumLength);
+  // 40 ticks at 960 PPQ = ~20ms per string. This creates a beautiful, natural glide.
+  int64_t dispersionTicks = 40;
 
   struct NoteTarget {
     int pitch;
     int stringIndex;
   };
-
   std::vector<NoteTarget> stringTargets;
-  stringTargets.reserve(6);
-
-  for (int stringIndex = 0; stringIndex < 6; ++stringIndex) {
-    const int pitch = voicing.GetMidiPitch(stringIndex);
+  for (int i = 0; i < 6; ++i) {
+    int pitch = voicing.GetMidiPitch(i);
     if (pitch != -1) {
-      stringTargets.push_back({pitch, stringIndex});
+      stringTargets.push_back({pitch, i});
     }
   }
 
-  // Reverse for true upstroke
+  // To play an upstroke, simply reverse the physical string order.
+  // The time offset will remain positive, so the high strings are plucked FIRST.
   if (direction == ArticulationType::GuitarUpstroke) {
     std::reverse(stringTargets.begin(), stringTargets.end());
   }
 
-  // Track the newest ringing note per physical string within this emitted strum.
-  // This lets us choke same-string retriggers before re-articulating them.
-  std::array<int, 6> lastPitchPerString;
-  std::array<bool, 6> hasActivePerString;
-  lastPitchPerString.fill(-1);
-  hasActivePerString.fill(false);
-
   int64_t accumulatedOffset = 0;
-
   for (const auto &target : stringTargets) {
-    const MusicalTime triggerTime = baseTime + MusicalTime(accumulatedOffset);
-    const uint8_t strChannel = static_cast<uint8_t>(target.stringIndex + 1);
-
-    // If this physical string already has a ringing note in this emitted sequence,
-    // choke it just before re-triggering.
-    if (hasActivePerString[target.stringIndex]) {
-      MusicalTime chokeTime = triggerTime - MusicalTime(1);
-      outStream.events.push_back(
-          {chokeTime,
-           MIDIEventType::NoteOff,
-           strChannel,
-           static_cast<uint8_t>(lastPitchPerString[target.stringIndex]),
-           0});
-    }
+    MusicalTime triggerTime = baseTime + MusicalTime(accumulatedOffset);
+    uint8_t strChannel = static_cast<uint8_t>(target.stringIndex + 1);
 
     // Note On
-    outStream.events.push_back(
-        {triggerTime,
-         MIDIEventType::NoteOn,
-         strChannel,
-         static_cast<uint8_t>(target.pitch),
-         baseVelocity});
+    outStream.events.push_back({triggerTime, MIDIEventType::NoteOn, strChannel,
+                                static_cast<uint8_t>(target.pitch),
+                                baseVelocity});
 
-    // Note Off
-    const MusicalTime endTime = triggerTime + noteLength;
-    outStream.events.push_back(
-        {endTime,
-         MIDIEventType::NoteOff,
-         strChannel,
-         static_cast<uint8_t>(target.pitch),
-         0});
-
-    hasActivePerString[target.stringIndex] = true;
-    lastPitchPerString[target.stringIndex] = target.pitch;
+    // Make the duration longer (e.g. 2 full beats) so it rings out into the
+    // next strum
+    MusicalTime endTime = triggerTime + BeatsToTime(2.0);
+    outStream.events.push_back({endTime, MIDIEventType::NoteOff, strChannel,
+                                static_cast<uint8_t>(target.pitch), 0});
 
     accumulatedOffset += dispersionTicks;
   }

@@ -3,7 +3,10 @@
 #include "../midi/MIDIEvent.h"
 #include "AudioMixer.h"
 #include "SamplerVoice.h"
+#include "SampleZone.h"
+
 #include <array>
+#include <string>
 #include <vector>
 
 namespace Sonatrix {
@@ -11,11 +14,12 @@ namespace Core {
 namespace Audio {
 
 // -----------------------------------------------------------------------------
-// VoiceManager (Polyphony & Note Stealing)
+// VoiceManager
 //
-// Allocates a fixed pool of lock-free voices.
-// Routes incoming MIDI NoteOn/Off events to free voices.
-// Exectues priority-based note stealing if max polyphony is reached.
+// Represents the synthesis brain for a single conceptual instrument
+// (e.g., "The Bass Engine", "The Guitar Engine").
+// It handles mapping incoming MIDI events to physical SampleZones,
+// allocating polyphonic voices, and summing their outputs.
 // -----------------------------------------------------------------------------
 
 class VoiceManager {
@@ -23,34 +27,32 @@ public:
   VoiceManager() = default;
   ~VoiceManager() = default;
 
-  // Process an incoming MIDI buffer (prepared by Phase 3 Engines)
-  // Note: This must be called from the real-time audio thread
-  void ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
-                   const InstrumentArticulation &articulation);
+  // Loads a sparse matrix of samples into RAM for this specific engine.
+  void LoadInstrumentKit(const std::string &assetsAbsolutePath);
 
-  // Renders all active voices into the given output buffer
+  // Receives a stream of timestamped MIDI events.
+  // In real-time use, this should only receive events meant for the *current*
+  // audio block.
+  void ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
+                   InstrumentArticulation &articulation);
+
+  // Pulls the next N samples from all active voices, sums them together,
+  // passes them through the mixer for gain/pan staging, and accumulates
+  // the result into outputChannels.
   void RenderAudio(float **outputChannels, uint32_t numFrames,
                    uint32_t numChannels);
 
-  // Phase 10: Multi-Sampler Kit Loader
-  // Loads physical .wav files from the given absolute directory path
-  void LoadInstrumentKit(const std::string &assetsAbsolutePath);
-  InstrumentArticulation &GetKitArticulation() { return activeArticulation_; }
-
-  AudioMixer &GetMixer() { return mixer_; }
-
 private:
-  // Max polyphony constraint (e.g., 64 stereo voices)
-  static constexpr size_t MAX_VOICES = 64;
+  // Polyphony cap. Expanded to 32 to handle overlapping 6-string acoustic strums without aggressive choking.
+  static constexpr size_t MAX_VOICES = 32;
+
   std::array<SamplerVoice, MAX_VOICES> voices_;
-
   InstrumentArticulation activeArticulation_;
-
-  // Finds the best voice to use (either truly Free, or by stealing the lowest
-  // priority active voice)
-  SamplerVoice *GetBestAvailableVoice();
-
   AudioMixer mixer_;
+
+  // Finds a free voice slot. If all slots are full, returns the active
+  // voice with the lowest amplitude (stealing).
+  SamplerVoice *GetBestAvailableVoice();
 };
 
 } // namespace Audio

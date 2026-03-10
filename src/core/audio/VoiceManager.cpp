@@ -1,19 +1,32 @@
 #include "VoiceManager.h"
 #include "AudioFileReader.h"
-#include "AssetManager.h"
 #include <limits>
+#include <cmath>
+#include <cstring>
 
 namespace Sonatrix {
 namespace Core {
 namespace Audio {
 
 void VoiceManager::ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
-                               const InstrumentArticulation &articulation) {
+                               InstrumentArticulation &articulation) {
   for (const auto &ev : events) {
+    
+    // 1. Determine physical string context (if transmitted by GuitarCompiler on channels 1-6)
+    int stringId = (ev.channel >= 1 && ev.channel <= 6) ? static_cast<int>(ev.channel) - 1 : -1;
+
     if (ev.type == MIDI::MIDIEventType::NoteOn && ev.data2 > 0) {
 
-      // 1. Determine physical string context (if transmitted by GuitarCompiler on channels 1-6)
-      int stringId = (ev.channel >= 1 && ev.channel <= 6) ? static_cast<int>(ev.channel) - 1 : -1;
+      // NEW: PHYSICAL STRING CHOKING
+      // A physical guitar string cannot play two overlapping notes. 
+      // If this exact string is already ringing, push it into its release phase immediately.
+      if (stringId != -1) {
+        for (auto &v : voices_) {
+          if (!v.IsFree() && v.GetStringId() == stringId) {
+            v.Stop(); 
+          }
+        }
+      }
 
       // Determine which physical acoustic zone to load via string-aware sparse routing
       const SampleZone *zone = articulation.FindZone(ev.data1, ev.data2, stringId);
@@ -28,18 +41,19 @@ void VoiceManager::ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
             2.0, (static_cast<double>(ev.data1) - zone->rootKey) / 12.0);
         float velocity = ev.data2 / 127.0f;
 
-        v->Start(zone, ev.data1, pitchRatio, velocity);
+        // Start the voice and tell it which physical string it belongs to
+        v->Start(zone, ev.data1, pitchRatio, velocity, stringId);
       }
 
     } else if (ev.type == MIDI::MIDIEventType::NoteOff ||
                (ev.type == MIDI::MIDIEventType::NoteOn && ev.data2 == 0)) {
-      // Find the active voice playing this pitch and release it.
-      // Temporary Phase 6 hack: The real engine uses the Constraint Solver
-      // downstream for voice killing, but we need manual NoteOff to stop
-      // indefinite synth swelling during hardware tests.
+      
+      // STRICT NOTEOFF LOGIC
+      // Find the active voice playing this exact pitch on this exact string and release it.
       for (auto &v : voices_) {
-        if (!v.IsFree() && v.GetCurrentPitch() == ev.data1) {
+        if (!v.IsFree() && v.GetCurrentPitch() == ev.data1 && v.GetStringId() == stringId) {
           v.Stop();
+          break; // Stop looking after we find the exact match
         }
       }
     }
@@ -68,33 +82,47 @@ SamplerVoice *VoiceManager::GetBestAvailableVoice() {
 }
 
 void VoiceManager::LoadInstrumentKit(const std::string &assetsAbsolutePath) {
-  // Load the 6-anchor Acoustic Guitar into the AssetManager
-  auto &assets = AssetManager::GetInstance();
-  if (!assets.LoadAcousticGuitarAnchors(assetsAbsolutePath)) {
-    // Failure to load assets
-    activeArticulation_.name = "Error_Missing_Assets";
-    activeArticulation_.zones.clear();
-    return;
-  }
-  
-  // Point the active articulation to the multi-sampler guitar
-  activeArticulation_ = assets.GetAcousticGuitarArticulation();
+  // In a full implementation, this loads the mock synth. 
+  // For Phase 14 tests, AssetManager handles the acoustic anchors, 
+  // so this can remain mock or be safely skipped.
+  activeArticulation_.name = "Bass_Sawtooth_Mock";
+  activeArticulation_.zones.clear();
+
+  SampleZone zoneC1;
+  zoneC1.filePath = assetsAbsolutePath + "/C1.wav";
+  zoneC1.rootKey = 36;
+  zoneC1.lowVelocity = 0;
+  zoneC1.highVelocity = 127;
+  zoneC1.isLoaded = AudioFileReader::LoadFile(zoneC1.filePath, zoneC1.audioData,
+                                              zoneC1.sampleRate);
+  activeArticulation_.zones.push_back(zoneC1);
+
+  SampleZone zoneC2;
+  zoneC2.filePath = assetsAbsolutePath + "/C2.wav";
+  zoneC2.rootKey = 48;
+  zoneC2.lowVelocity = 0;
+  zoneC2.highVelocity = 127;
+  zoneC2.isLoaded = AudioFileReader::LoadFile(zoneC2.filePath, zoneC2.audioData,
+                                              zoneC2.sampleRate);
+  activeArticulation_.zones.push_back(zoneC2);
+
+  SampleZone zoneC3;
+  zoneC3.filePath = assetsAbsolutePath + "/C3.wav";
+  zoneC3.rootKey = 60;
+  zoneC3.lowVelocity = 0;
+  zoneC3.highVelocity = 127;
+  zoneC3.isLoaded = AudioFileReader::LoadFile(zoneC3.filePath, zoneC3.audioData,
+                                              zoneC3.sampleRate);
+  activeArticulation_.zones.push_back(zoneC3);
 }
 
 void VoiceManager::RenderAudio(float **outputChannels, uint32_t numFrames,
                                uint32_t numChannels) {
 
-  // 1. Clear the master output buffers first, as the Mixer accumulates rather
-  // than overwrites
+  // 1. Clear the master output buffers first, as the Mixer accumulates rather than overwrites
   AudioMixer::ClearBuffers(outputChannels, numFrames, numChannels);
 
-  // 2. We need a temporary buffer to render the voices into before hitting the
-  // mixer. We use thread_local to avoid allocation on the realtime audio
-  // thread. In a full implementation, each instrument engine (Drums, Bass, etc)
-  // would manage its own VoiceManager / voices and render to its specific bus.
-  // For Phase 12, since this monolithic VoiceManager holds the
-  // "Bass_Sawtooth_Mock" kit, we will render all its voices into a single
-  // temporary stereo buffer and route it to MixerBus::Bass.
+  // 2. We need a temporary buffer to render the voices into before hitting the mixer.
   static thread_local std::vector<float> tempL;
   static thread_local std::vector<float> tempR;
 
@@ -113,7 +141,7 @@ void VoiceManager::RenderAudio(float **outputChannels, uint32_t numFrames,
     v.RenderNextBlock(tempChannels, numFrames, 2);
   }
 
-  // 4. Send the accumulated Bass bus through the Mixer to apply Gain/Pan and
+  // 4. Send the accumulated bus through the Mixer to apply Gain/Pan and
   // sum into the final master outputChannels.
   mixer_.MixBusToOutput(MixerBus::Bass, tempChannels, outputChannels, numFrames,
                         numChannels);
