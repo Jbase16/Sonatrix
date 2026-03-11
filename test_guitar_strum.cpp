@@ -119,7 +119,7 @@ int main() {
   ChordTrackEvent cAdd9;
   cAdd9.position = BeatsToTime(8.0);
   cAdd9.chord.root = PitchClass::C;
-  cAdd9.chord.quality = ChordQuality::Major;
+  cAdd9.chord.quality = ChordQuality::Add9;
   cAdd9.chord.overBass = PitchClass::C;
   chordTimeline.push_back(cAdd9);
 

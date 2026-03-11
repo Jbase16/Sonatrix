@@ -25,6 +25,18 @@ MIDIStream GuitarCompiler::CompileClip(
 
   if (!chordTimeline.empty()) {
     optimalVoicings = solver.SolveVoiceLeading(chordTimeline);
+    
+    // Debug output to verify what frets the solver actually chose
+    std::cout << "--- CHOSEN VOICINGS ---" << std::endl;
+    for (size_t i = 0; i < optimalVoicings.size(); ++i) {
+       std::cout << "Chord " << i << ": ";
+       for(int s = 0; s < 6; ++s) {
+          int f = optimalVoicings[i].frets[s];
+          if (f == -1) std::cout << "X ";
+          else std::cout << f << " ";
+       }
+       std::cout << std::endl;
+    }
   }
 
   Sonatrix::Core::Engines::Guitar::GuitarVoicing fallbackVoicing;
@@ -94,18 +106,27 @@ void GuitarCompiler::EmitStrum(
   std::vector<NoteTarget> stringTargets;
   
   if (direction == ArticulationType::GuitarPluck) {
-      // Only strike the specified string index (0 = Low E, 5 = High E)
-      if (actionParameter >= 0 && actionParameter < 6) {
+      if (actionParameter == 64) {
+          int lowest = voicing.GetLowestSoundingString();
+          if (lowest != -1) {
+              stringTargets.push_back({voicing.GetMidiPitch(lowest), lowest});
+          }
+      } else if (actionParameter >= 0 && actionParameter < 6) {
           int pitch = voicing.GetMidiPitch(actionParameter);
           if (pitch != -1) {
               stringTargets.push_back({pitch, actionParameter});
           }
       }
   } else if (direction == ArticulationType::GuitarPinch) {
-      // Strike multiple strings simultaneously based on a bitmask (actionParameter)
-      // Bit 0 = Low E, Bit 1 = A, ..., Bit 5 = High E
+      int bitmask = actionParameter;
+      if ((bitmask & 64) != 0) {
+          int lowest = voicing.GetLowestSoundingString();
+          if (lowest != -1) {
+              bitmask |= (1 << lowest); // Inject the lowest string into the bitmask
+          }
+      }
       for (int i = 0; i < 6; ++i) {
-          if ((actionParameter & (1 << i)) != 0) {
+          if ((bitmask & (1 << i)) != 0) {
               int pitch = voicing.GetMidiPitch(i);
               if (pitch != -1) {
                   stringTargets.push_back({pitch, i});

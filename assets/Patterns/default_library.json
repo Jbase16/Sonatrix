@@ -718,7 +718,7 @@
               "lengthBeats": 0.5,
               "velocityBase": 110,
               "type": "GuitarPinch",
-              "actionParameter": 17
+              "actionParameter": 80
             },
             {
               "offsetBeats": 0.3333333,
@@ -739,7 +739,7 @@
               "lengthBeats": 0.5,
               "velocityBase": 105,
               "type": "GuitarPinch",
-              "actionParameter": 17
+              "actionParameter": 80
             },
             {
               "offsetBeats": 1.3333333,
@@ -760,7 +760,7 @@
               "lengthBeats": 0.5,
               "velocityBase": 115,
               "type": "GuitarPinch",
-              "actionParameter": 17
+              "actionParameter": 80
             },
             {
               "offsetBeats": 2.3333333,
@@ -781,7 +781,7 @@
               "lengthBeats": 0.5,
               "velocityBase": 100,
               "type": "GuitarPinch",
-              "actionParameter": 17
+              "actionParameter": 80
             },
             {
               "offsetBeats": 3.3333333,

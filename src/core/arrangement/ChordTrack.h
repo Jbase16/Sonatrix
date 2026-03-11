@@ -17,7 +17,7 @@ enum class PitchClass : uint8_t {
 enum class ChordQuality : uint8_t {
     Major, Minor, Diminished, Augmented,
     Dominant7, Major7, Minor7, HalfDiminished7,
-    Suspended2, Suspended4, PowerChord
+    Sus2, Sus4, Add9, PowerChord
 };
 
 // Represents a harmonic context at a specific point in time

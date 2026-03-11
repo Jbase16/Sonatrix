@@ -1,0 +1,36 @@
+--- test_guitar_strum.cpp
++++ test_guitar_strum.cpp
+@@ -101,6 +101,7 @@
+     return "Minor";
+   case ChordQuality::Dominant7:
+     return "Dom7";
++  case ChordQuality::Add9: return "Add9";
+   default:
+     return "Unknown";
+   }
+@@ -119,7 +120,7 @@
+   ChordTrackEvent cAdd9;
+   cAdd9.position = BeatsToTime(8.0);
+   cAdd9.chord.root = PitchClass::C;
+-  cAdd9.chord.quality = ChordQuality::Major;
++  cAdd9.chord.quality = ChordQuality::Add9;
+   cAdd9.chord.overBass = PitchClass::C;
+   chordTimeline.push_back(cAdd9);
+ 
+@@ -155,6 +156,16 @@
+     }
+     
+     if (graphOutput.size() == chordTimeline.size()) {
++      std::cout << "--- CHOSEN VOICINGS ---" << std::endl;
++      for (size_t i = 0; i < graphOutput.size(); ++i) {
++         std::cout << "Chord " << i << ": ";
++         for(int s = 0; s < 6; ++s) {
++            int f = graphOutput[i].frets[s];
++            if(f == -1) std::cout << "X ";
++            else std::cout << f << " ";
++         }
++         std::cout << std::endl;
++      }
+       std::cout << "Compiling via GuitarCompiler..." << std::endl;
+       MIDI::MIDIStream allStrums = compiler.CompileClip(clip, graphOutput, timeline);
+       

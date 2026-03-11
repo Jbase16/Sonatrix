@@ -17,54 +17,43 @@ namespace Guitar {
 struct GuitarVoicing {
   std::array<int8_t, 6> frets{-1, -1, -1, -1, -1, -1};
 
-  // Calculates the absolute MIDI pitch of a specific string given this
-  // voicing's fret. Returns -1 if the string is muted.
   int GetMidiPitch(int stringIndex) const;
-
-  // Physical cost metrics used by the A* heuristic
   float GetAverageFret() const;
-  int GetFretSpan() const; // Max fret - Min fret (excluding open strings 0)
-  int GetNumFrettedNotes() const; // Count of strings > 0
-  int GetNumSoundingStrings() const; // Count of strings >= 0
+  int GetFretSpan() const;
+  int GetNumFrettedNotes() const;
+  int GetNumSoundingStrings() const;
+
+  int GetLowestSoundingString() const;
+  int GetLowestMidiPitch() const;
 };
 
 class FretboardModel {
 public:
   FretboardModel() = default;
 
-  // Top-level combinatorial generator.
-  // Yields every physically possible hand-shape on the 6-string guitar
-  // that satisfies the requested harmonic structure.
   std::vector<GuitarVoicing>
   GenerateValidVoicings(const ActiveChordContext &chord) const;
 
 private:
-  // Standard Guitar Tuning MIDI Pitches [E2, A2, D3, G3, B3, E4]
-  static constexpr std::array<uint8_t, 6> STANDARD_TUNING = {40, 45, 50,
-                                                             55, 59, 64};
-
-  // Max physical finger stretch constraint
+  static constexpr std::array<uint8_t, 6> STANDARD_TUNING = {40, 45, 50, 55, 59, 64};
   static constexpr int MAX_FRET_SPAN = 4;
+  static constexpr int MAX_SEARCH_FRET = 15;
 
-  // Recursive graph-search to build fretboard states string by string
-  void PermuteStrings(int stringIndex, std::array<int8_t, 6> currentVoicing,
-                      const std::vector<PitchClass> &targetPitches,
+  void PermuteStrings(int stringIndex,
+                      std::array<int8_t, 6> currentVoicing,
+                      const ActiveChordContext &chord,
+                      const std::vector<PitchClass> &requiredPitches,
                       std::vector<GuitarVoicing> &outValidVoicings) const;
 
-  // Converts a PitchClass (e.g., C) to an absolute MIDI pitch on a specific
-  // string near a target fret area. Returns -1 if physically unreachable.
-  int GetFretForPitchClass(PitchClass targetClass, int stringIndex,
-                           int anchorFret) const;
-
-  // Validates a completed 6-string permutation against the actual requested
-  // chord structure (e.g., ensuring it contains at least a root, third, and
-  // fifth, and the bass note is correct).
   bool IsVoicingHarmonicallyValid(const GuitarVoicing &voicing,
-                                  const ActiveChordContext &chord) const;
+                                  const ActiveChordContext &chord,
+                                  const std::vector<PitchClass> &requiredPitches) const;
 
-  // Helpers
   std::vector<PitchClass>
   GetRequiredPitches(const ActiveChordContext &chord) const;
+
+  bool ContainsPitchClass(const GuitarVoicing &voicing, PitchClass pc) const;
+  int CountPitchClass(const GuitarVoicing &voicing, PitchClass pc) const;
 };
 
 } // namespace Guitar
