@@ -1,0 +1,19 @@
+--- test_guitar_strum.cpp
++++ test_guitar_strum.cpp
+@@ -165,6 +165,16 @@
+ 
+       std::cout << "5. Rendering Progression Audio..." << std::endl;
+ 
++      std::cout << "--- MIDI EVENTS DUMP ---" << std::endl;
++      for (const auto& ev : allStrums.events) {
++        if (ev.type == MIDI::MIDIEventType::NoteOn && ev.data2 > 0) {
++            std::cout << "Tick: " << ev.timelinePosition.ticks 
++                      << " | String: " << (int)ev.data1 
++                      << " | Pitch: " << (int)ev.data1 
++                      << " | Vel: " << (int)ev.data2 << std::endl;
++        }
++      }
++
+       std::vector<float> outputData(numFrames * 2, 0.0f);
+       std::vector<float> leftBuffer(blockSize, 0.0f);
+       std::vector<float> rightBuffer(blockSize, 0.0f);
