@@ -711,6 +711,7 @@
       "timeSignature": "12/8",
       "patterns": {
         "Guitar": {
+          "guitarVoicingMode": "AcousticOpen",
           "totalLengthBeats": 4.0,
           "events": [
             {

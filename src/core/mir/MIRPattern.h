@@ -51,6 +51,11 @@ enum class GuitarTargetRole : uint8_t {
     Top
 };
 
+enum class GuitarVoicingMode : uint8_t {
+    Default,
+    AcousticOpen
+};
+
 // A single stroke or intent command within a pattern
 struct MIREvent {
     MusicalTime offsetMap;      // Position relative to start of pattern (in ticks)
@@ -80,6 +85,7 @@ struct MIREvent {
 struct MIRPattern {
     MusicalTime totalLength;
     std::vector<MIREvent> events;
+    GuitarVoicingMode guitarVoicingMode{GuitarVoicingMode::Default};
     
     // Metadata for the engine to know how to interpret actionParameters
     enum class TargetEngine { Guitar, Piano, Bass, Strings, Drums };

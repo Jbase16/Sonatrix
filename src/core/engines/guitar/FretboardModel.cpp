@@ -44,6 +44,18 @@ float GuitarVoicing::GetAverageFret() const {
   return (count > 0) ? static_cast<float>(sum) / static_cast<float>(count) : 0.0f;
 }
 
+int GuitarVoicing::GetMaxFret() const {
+  int maxFret = -1;
+
+  for (int8_t f : frets) {
+    if (f > 0) {
+      maxFret = std::max(maxFret, static_cast<int>(f));
+    }
+  }
+
+  return (maxFret < 0) ? 0 : maxFret;
+}
+
 int GuitarVoicing::GetFretSpan() const {
   int minFret = 99;
   int maxFret = -1;
@@ -65,6 +77,15 @@ int GuitarVoicing::GetNumFrettedNotes() const {
   int count = 0;
   for (int8_t f : frets) {
     if (f > 0)
+      ++count;
+  }
+  return count;
+}
+
+int GuitarVoicing::GetNumOpenStrings() const {
+  int count = 0;
+  for (int8_t f : frets) {
+    if (f == 0)
       ++count;
   }
   return count;

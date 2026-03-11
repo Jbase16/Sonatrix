@@ -19,8 +19,10 @@ struct GuitarVoicing {
 
   int GetMidiPitch(int stringIndex) const;
   float GetAverageFret() const;
+  int GetMaxFret() const;
   int GetFretSpan() const;
   int GetNumFrettedNotes() const;
+  int GetNumOpenStrings() const;
   int GetNumSoundingStrings() const;
 
   int GetLowestSoundingString() const;

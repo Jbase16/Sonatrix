@@ -34,7 +34,8 @@ MIDIStream GuitarCompiler::CompileClip(
   std::vector<Sonatrix::Core::Engines::Guitar::GuitarVoicing> optimalVoicings;
 
   if (!chordTimeline.empty()) {
-    optimalVoicings = solver.SolveVoiceLeading(chordTimeline);
+    optimalVoicings = solver.SolveVoiceLeading(
+        chordTimeline, clip.basePattern->guitarVoicingMode);
     
     // Debug output to verify what frets the solver actually chose
     std::cout << "--- CHOSEN VOICINGS ---" << std::endl;
@@ -45,7 +46,11 @@ MIDIStream GuitarCompiler::CompileClip(
           if (f == -1) std::cout << "X ";
           else std::cout << f << " ";
        }
-       std::cout << std::endl;
+       std::cout << "| avg=" << optimalVoicings[i].GetAverageFret()
+                 << " span=" << optimalVoicings[i].GetFretSpan()
+                 << " open=" << optimalVoicings[i].GetNumOpenStrings()
+                 << " sounding=" << optimalVoicings[i].GetNumSoundingStrings()
+                 << std::endl;
     }
   }
 

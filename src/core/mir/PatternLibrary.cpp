@@ -37,6 +37,11 @@ NLOHMANN_JSON_SERIALIZE_ENUM( GuitarTargetRole, {
     {GuitarTargetRole::Top, "Top"}
 })
 
+NLOHMANN_JSON_SERIALIZE_ENUM( GuitarVoicingMode, {
+    {GuitarVoicingMode::Default, "Default"},
+    {GuitarVoicingMode::AcousticOpen, "AcousticOpen"}
+})
+
 NLOHMANN_JSON_SERIALIZE_ENUM( MIRPattern::TargetEngine, {
     {MIRPattern::TargetEngine::Guitar, "Guitar"},
     {MIRPattern::TargetEngine::Piano, "Piano"},
@@ -75,6 +80,10 @@ bool PatternLibrary::LoadFromJSON(const std::string& absolutePath) {
                     
                     auto pattern = std::make_shared<MIRPattern>();
                     pattern->intendedEngine = engineVal;
+                    if (patternJson.contains("guitarVoicingMode")) {
+                        pattern->guitarVoicingMode =
+                            patternJson["guitarVoicingMode"].get<GuitarVoicingMode>();
+                    }
                     
                     double lengthBeats = patternJson.value("totalLengthBeats", 4.0);
                     pattern->totalLength = BeatsToTime(lengthBeats);
