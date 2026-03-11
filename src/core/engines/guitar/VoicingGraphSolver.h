@@ -37,6 +37,9 @@ private:
   float EvaluateVoicingPreferenceCost(
       const GuitarVoicing &voicing, const ActiveChordContext &chord,
       Sonatrix::Core::GuitarVoicingMode voicingMode) const;
+  std::vector<GuitarVoicing> ResolveAcousticShapeFamilyCandidates(
+      const ActiveChordContext &chord,
+      const std::vector<GuitarVoicing> &candidates) const;
 };
 
 } // namespace Guitar

@@ -13,11 +13,6 @@ namespace {
 
 constexpr int kLowestStringFlag = 64;
 
-bool ContainsPitch(const std::vector<int> &usedFigurePitches, int pitch) {
-  return std::find(usedFigurePitches.begin(), usedFigurePitches.end(), pitch) !=
-         usedFigurePitches.end();
-}
-
 } // namespace
 
 std::unique_ptr<IMIRCompiler> CreateGuitarEngine() {
@@ -55,8 +50,6 @@ MIDIStream GuitarCompiler::CompileClip(
   }
 
   Sonatrix::Core::Engines::Guitar::GuitarVoicing fallbackVoicing;
-  int previousChordIndex = -2;
-  std::vector<int> usedFigurePitches;
 
   for (const auto &mir : clip.basePattern->events) {
     const MusicalTime eventAbsoluteTime = clip.timelineStart + mir.offsetMap;
@@ -87,20 +80,6 @@ MIDIStream GuitarCompiler::CompileClip(
       activeVoicing = optimalVoicings[currentChordIndex];
     }
 
-    if (currentChordIndex != previousChordIndex) {
-      usedFigurePitches.clear();
-      previousChordIndex = currentChordIndex;
-    }
-
-    const bool isPickingEvent =
-        mir.type == ArticulationType::GuitarPluck ||
-        mir.type == ArticulationType::GuitarPinch;
-    if (mir.type == ArticulationType::GuitarPinch) {
-      usedFigurePitches.clear();
-    } else if (!isPickingEvent) {
-      usedFigurePitches.clear();
-    }
-
     bool isMuted = false;
     for (const auto &delta : clip.overrides) {
       if (delta.startOffset == mir.offsetMap &&
@@ -111,20 +90,11 @@ MIDIStream GuitarCompiler::CompileClip(
     }
 
     if (!isMuted) {
-      auto resolvedTargets =
-          ResolveTargetsForEvent(mir, activeVoicing, usedFigurePitches);
+      auto resolvedTargets = ResolveTargetsForEvent(mir, activeVoicing);
       DebugPrintResolvedEvent(eventAbsoluteTime, currentChordIndex, mir,
                               activeVoicing, resolvedTargets);
       EmitStrum(stream, lockedTime, mir.type, mir.velocityBase,
                 BeatsToTime(mir.lengthBeats), resolvedTargets);
-
-      if (isPickingEvent) {
-        for (const auto &target : resolvedTargets) {
-          if (!ContainsPitch(usedFigurePitches, target.pitch)) {
-            usedFigurePitches.push_back(target.pitch);
-          }
-        }
-      }
     }
   }
 
@@ -171,7 +141,7 @@ void GuitarCompiler::EmitStrum(
 }
 
 std::vector<GuitarCompiler::SoundingString>
-GuitarCompiler::GetSoundingStringsByPitch(
+GuitarCompiler::GetSoundingStringsByLane(
     const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const {
   std::vector<SoundingString> soundingStrings;
   soundingStrings.reserve(6);
@@ -183,170 +153,102 @@ GuitarCompiler::GetSoundingStringsByPitch(
     }
   }
 
-  std::sort(soundingStrings.begin(), soundingStrings.end(),
-            [](const SoundingString &a, const SoundingString &b) {
-              if (a.pitch != b.pitch) {
-                return a.pitch < b.pitch;
-              }
-              return a.stringIndex < b.stringIndex;
-            });
-
   return soundingStrings;
+}
+
+int GuitarCompiler::GetLaneString(
+    const std::vector<SoundingString> &soundingStrings, int lane) const {
+  if (soundingStrings.empty()) {
+    return -1;
+  }
+
+  const int clampedLane = std::clamp(
+      lane, 0, static_cast<int>(soundingStrings.size()) - 1);
+  return soundingStrings[static_cast<size_t>(clampedLane)].stringIndex;
 }
 
 int GuitarCompiler::ResolveBassString(
     const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const {
-  const auto soundingStrings = GetSoundingStringsByPitch(voicing);
-  return soundingStrings.empty() ? -1 : soundingStrings.front().stringIndex;
+  const auto soundingStrings = GetSoundingStringsByLane(voicing);
+  return GetLaneString(soundingStrings, 0);
 }
 
 int GuitarCompiler::ResolveAltBassString(
     const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const {
-  const auto soundingStrings = GetSoundingStringsByPitch(voicing);
-  if (soundingStrings.size() >= 2) {
-    return soundingStrings[1].stringIndex;
-  }
-  return soundingStrings.empty() ? -1 : soundingStrings.front().stringIndex;
+  const auto soundingStrings = GetSoundingStringsByLane(voicing);
+  return GetLaneString(soundingStrings, 1);
 }
 
 int GuitarCompiler::ResolveTopString(
-    const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing,
-    const std::vector<int> &usedFigurePitches) const {
-  auto soundingStrings = GetSoundingStringsByPitch(voicing);
-  std::reverse(soundingStrings.begin(), soundingStrings.end());
-
-  for (const auto &candidate : soundingStrings) {
-    if (!ContainsPitch(usedFigurePitches, candidate.pitch)) {
-      return candidate.stringIndex;
-    }
-  }
-
-  return soundingStrings.empty() ? -1 : soundingStrings.front().stringIndex;
+    const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const {
+  const auto soundingStrings = GetSoundingStringsByLane(voicing);
+  return GetLaneString(soundingStrings, static_cast<int>(soundingStrings.size()) - 1);
 }
 
 int GuitarCompiler::ResolveTrebleString(
-    const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing,
-    const std::vector<int> &usedFigurePitches) const {
-  auto soundingStrings = GetSoundingStringsByPitch(voicing);
+    const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const {
+  const auto soundingStrings = GetSoundingStringsByLane(voicing);
   if (soundingStrings.empty()) {
     return -1;
   }
-
-  std::reverse(soundingStrings.begin(), soundingStrings.end());
-
-  std::vector<SoundingString> candidates;
-  if (soundingStrings.size() > 1) {
-    candidates.insert(candidates.end(), std::next(soundingStrings.begin()),
-                      soundingStrings.end());
+  if (soundingStrings.size() == 1) {
+    return soundingStrings.front().stringIndex;
   }
-  candidates.push_back(soundingStrings.front());
-
-  for (const auto &candidate : candidates) {
-    if (!ContainsPitch(usedFigurePitches, candidate.pitch)) {
-      return candidate.stringIndex;
-    }
-  }
-
-  return candidates.front().stringIndex;
+  return GetLaneString(soundingStrings, static_cast<int>(soundingStrings.size()) - 2);
 }
 
 int GuitarCompiler::ResolveInnerLowString(
-    const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing,
-    const std::vector<int> &usedFigurePitches) const {
-  const auto soundingStrings = GetSoundingStringsByPitch(voicing);
+    const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const {
+  const auto soundingStrings = GetSoundingStringsByLane(voicing);
   if (soundingStrings.empty()) {
     return -1;
   }
-
-  const int bassString = ResolveBassString(voicing);
-  const int topString = ResolveTopString(voicing);
-
-  std::vector<SoundingString> candidates;
-  for (const auto &candidate : soundingStrings) {
-    if (candidate.stringIndex != bassString && candidate.stringIndex != topString) {
-      candidates.push_back(candidate);
-    }
+  if (soundingStrings.size() >= 3) {
+    return GetLaneString(soundingStrings, 1);
   }
-
-  if (candidates.empty()) {
-    for (const auto &candidate : soundingStrings) {
-      if (candidate.stringIndex != bassString) {
-        candidates.push_back(candidate);
-      }
-    }
+  if (soundingStrings.size() == 2) {
+    return GetLaneString(soundingStrings, 1);
   }
-
-  if (candidates.empty()) {
-    candidates = soundingStrings;
-  }
-
-  for (const auto &candidate : candidates) {
-    if (!ContainsPitch(usedFigurePitches, candidate.pitch)) {
-      return candidate.stringIndex;
-    }
-  }
-
-  return candidates.front().stringIndex;
+  return soundingStrings.front().stringIndex;
 }
 
 int GuitarCompiler::ResolveInnerHighString(
-    const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing,
-    const std::vector<int> &usedFigurePitches) const {
-  auto soundingStrings = GetSoundingStringsByPitch(voicing);
+    const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const {
+  const auto soundingStrings = GetSoundingStringsByLane(voicing);
   if (soundingStrings.empty()) {
     return -1;
   }
-
-  const int bassString = ResolveBassString(voicing);
-  const int topString = ResolveTopString(voicing);
-
-  std::reverse(soundingStrings.begin(), soundingStrings.end());
-
-  std::vector<SoundingString> candidates;
-  for (const auto &candidate : soundingStrings) {
-    if (candidate.stringIndex != bassString && candidate.stringIndex != topString) {
-      candidates.push_back(candidate);
-    }
+  if (soundingStrings.size() >= 5) {
+    return GetLaneString(soundingStrings, static_cast<int>(soundingStrings.size()) - 3);
   }
-
-  if (candidates.empty()) {
-    for (const auto &candidate : soundingStrings) {
-      if (candidate.stringIndex != topString) {
-        candidates.push_back(candidate);
-      }
-    }
+  if (soundingStrings.size() == 4) {
+    return GetLaneString(soundingStrings, 1);
   }
-
-  if (candidates.empty()) {
-    candidates = soundingStrings;
+  if (soundingStrings.size() == 3) {
+    return GetLaneString(soundingStrings, 1);
   }
-
-  for (const auto &candidate : candidates) {
-    if (!ContainsPitch(usedFigurePitches, candidate.pitch)) {
-      return candidate.stringIndex;
-    }
+  if (soundingStrings.size() == 2) {
+    return GetLaneString(soundingStrings, 0);
   }
-
-  return candidates.front().stringIndex;
+  return soundingStrings.front().stringIndex;
 }
 
 int GuitarCompiler::ResolveRoleString(
     GuitarTargetRole role,
-    const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing,
-    const std::vector<int> &usedFigurePitches) const {
+    const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const {
   switch (role) {
   case GuitarTargetRole::Bass:
     return ResolveBassString(voicing);
   case GuitarTargetRole::AltBass:
     return ResolveAltBassString(voicing);
   case GuitarTargetRole::InnerLow:
-    return ResolveInnerLowString(voicing, usedFigurePitches);
+    return ResolveInnerLowString(voicing);
   case GuitarTargetRole::InnerHigh:
-    return ResolveInnerHighString(voicing, usedFigurePitches);
+    return ResolveInnerHighString(voicing);
   case GuitarTargetRole::Treble:
-    return ResolveTrebleString(voicing, usedFigurePitches);
+    return ResolveTrebleString(voicing);
   case GuitarTargetRole::Top:
-    return ResolveTopString(voicing, usedFigurePitches);
+    return ResolveTopString(voicing);
   case GuitarTargetRole::None:
   default:
     return -1;
@@ -376,20 +278,26 @@ const char *GuitarCompiler::GetRoleName(GuitarTargetRole role) const {
 std::vector<GuitarCompiler::NoteTarget>
 GuitarCompiler::ResolveTargetsForEvent(
     const MIREvent &event,
-    const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing,
-    const std::vector<int> &usedFigurePitches) const {
+    const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const {
   std::vector<NoteTarget> stringTargets;
 
   if (event.UsesGuitarTargetRoles()) {
-    std::vector<int> localUsedPitches = usedFigurePitches;
-
     auto appendRoleTarget = [&](GuitarTargetRole role) {
       if (role == GuitarTargetRole::None) {
         return;
       }
 
-      const int stringIndex = ResolveRoleString(role, voicing, localUsedPitches);
+      const int stringIndex = ResolveRoleString(role, voicing);
       if (stringIndex == -1) {
+        return;
+      }
+
+      const bool alreadyAdded = std::any_of(
+          stringTargets.begin(), stringTargets.end(),
+          [&](const NoteTarget &existing) {
+            return existing.stringIndex == stringIndex;
+          });
+      if (alreadyAdded) {
         return;
       }
 
@@ -399,9 +307,6 @@ GuitarCompiler::ResolveTargetsForEvent(
       }
 
       stringTargets.push_back({pitch, stringIndex, role});
-      if (!ContainsPitch(localUsedPitches, pitch)) {
-        localUsedPitches.push_back(pitch);
-      }
     };
 
     appendRoleTarget(event.guitarTargetRole);

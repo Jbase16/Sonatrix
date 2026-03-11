@@ -48,33 +48,29 @@ private:
   std::vector<NoteTarget>
   ResolveTargetsForEvent(const MIREvent &event,
                          const Sonatrix::Core::Engines::Guitar::GuitarVoicing
-                             &voicing,
-                         const std::vector<int> &usedFigurePitches) const;
+                             &voicing) const;
 
-  std::vector<SoundingString> GetSoundingStringsByPitch(
+  std::vector<SoundingString> GetSoundingStringsByLane(
       const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const;
+  int GetLaneString(const std::vector<SoundingString> &soundingStrings,
+                    int lane) const;
 
   int ResolveBassString(
       const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const;
   int ResolveAltBassString(
       const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const;
   int ResolveInnerLowString(
-      const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing,
-      const std::vector<int> &usedFigurePitches = {}) const;
+      const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const;
   int ResolveInnerHighString(
-      const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing,
-      const std::vector<int> &usedFigurePitches = {}) const;
+      const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const;
   int ResolveTrebleString(
-      const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing,
-      const std::vector<int> &usedFigurePitches = {}) const;
+      const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const;
   int ResolveTopString(
-      const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing,
-      const std::vector<int> &usedFigurePitches = {}) const;
+      const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const;
 
   int ResolveRoleString(
       GuitarTargetRole role,
-      const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing,
-      const std::vector<int> &usedFigurePitches = {}) const;
+      const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const;
   const char *GetRoleName(GuitarTargetRole role) const;
   void DebugPrintResolvedEvent(
       MusicalTime absoluteTime, int chordIndex, const MIREvent &event,

@@ -72,6 +72,22 @@ bool HasKnownAcousticEquivalent(const ActiveChordContext &chord) {
       });
 }
 
+std::vector<std::array<int8_t, 6>>
+GetAcousticShapeFamilyVariants(const ActiveChordContext &chord) {
+  std::vector<std::array<int8_t, 6>> variants;
+  if (!chord.isRootPosition()) {
+    return variants;
+  }
+
+  for (const auto &shape : kKnownAcousticShapes) {
+    if (shape.root == chord.root && shape.quality == chord.quality) {
+      variants.push_back(shape.frets);
+    }
+  }
+
+  return variants;
+}
+
 int ExpectedBassString(const ActiveChordContext &chord) {
   const PitchClass bass = chord.isRootPosition() ? chord.root : chord.overBass;
   switch (bass) {
@@ -252,6 +268,31 @@ float VoicingGraphSolver::EvaluateVoicingPreferenceCost(
   return cost;
 }
 
+std::vector<GuitarVoicing> VoicingGraphSolver::ResolveAcousticShapeFamilyCandidates(
+    const ActiveChordContext &chord,
+    const std::vector<GuitarVoicing> &candidates) const {
+  const auto familyVariants = GetAcousticShapeFamilyVariants(chord);
+  if (familyVariants.empty()) {
+    return {};
+  }
+
+  std::vector<GuitarVoicing> familyCandidates;
+  familyCandidates.reserve(candidates.size());
+
+  for (const auto &candidate : candidates) {
+    const bool inFamily = std::any_of(
+        familyVariants.begin(), familyVariants.end(),
+        [&](const std::array<int8_t, 6> &variantFrets) {
+          return candidate.frets == variantFrets;
+        });
+    if (inFamily) {
+      familyCandidates.push_back(candidate);
+    }
+  }
+
+  return familyCandidates;
+}
+
 std::vector<GuitarVoicing> VoicingGraphSolver::SolveVoiceLeading(
     const std::vector<ChordTrackEvent> &chords,
     Sonatrix::Core::GuitarVoicingMode voicingMode) const {
@@ -266,10 +307,23 @@ std::vector<GuitarVoicing> VoicingGraphSolver::SolveVoiceLeading(
 
   std::vector<std::vector<TrellisNode>> trellis(chords.size());
   std::vector<std::vector<GuitarVoicing>> states(chords.size());
+  std::vector<bool> usedFamilyRestrictedCandidates(chords.size(), false);
 
   // 1. Generate valid voicing states for each chord
   for (size_t t = 0; t < chords.size(); ++t) {
-    states[t] = fretboard_.GenerateValidVoicings(chords[t].chord);
+    auto generatedCandidates = fretboard_.GenerateValidVoicings(chords[t].chord);
+    if (voicingMode == Sonatrix::Core::GuitarVoicingMode::AcousticOpen) {
+      auto familyCandidates =
+          ResolveAcousticShapeFamilyCandidates(chords[t].chord, generatedCandidates);
+      if (!familyCandidates.empty()) {
+        states[t] = std::move(familyCandidates);
+        usedFamilyRestrictedCandidates[t] = true;
+      } else {
+        states[t] = std::move(generatedCandidates);
+      }
+    } else {
+      states[t] = std::move(generatedCandidates);
+    }
     trellis[t].resize(states[t].size());
 
     if (states[t].empty()) {
@@ -281,16 +335,19 @@ std::vector<GuitarVoicing> VoicingGraphSolver::SolveVoiceLeading(
 
   // 2. Initialize starting costs
   for (size_t i = 0; i < states[0].size(); ++i) {
-    float startingCost = states[0][i].GetAverageFret();
+    float startingCost = 0.0f;
+    if (!usedFamilyRestrictedCandidates[0]) {
+      startingCost = states[0][i].GetAverageFret();
 
-    // Penalize sparse voicings based on sounding strings, not fretted notes
-    const int missingStrings = 6 - states[0][i].GetNumSoundingStrings();
-    const float missingStringPenalty =
-        (voicingMode == Sonatrix::Core::GuitarVoicingMode::AcousticOpen) ? 2.0f
-                                                                          : 10.0f;
-    startingCost += static_cast<float>(missingStrings) * missingStringPenalty;
-    startingCost +=
-        EvaluateVoicingPreferenceCost(states[0][i], chords[0].chord, voicingMode);
+      // Penalize sparse voicings based on sounding strings, not fretted notes
+      const int missingStrings = 6 - states[0][i].GetNumSoundingStrings();
+      const float missingStringPenalty =
+          (voicingMode == Sonatrix::Core::GuitarVoicingMode::AcousticOpen) ? 2.0f
+                                                                            : 10.0f;
+      startingCost += static_cast<float>(missingStrings) * missingStringPenalty;
+      startingCost +=
+          EvaluateVoicingPreferenceCost(states[0][i], chords[0].chord, voicingMode);
+    }
 
     trellis[0][i].minCost = startingCost;
   }
@@ -304,8 +361,11 @@ std::vector<GuitarVoicing> VoicingGraphSolver::SolveVoiceLeading(
       for (size_t j = 0; j < states[t - 1].size(); ++j) {
         const float transitionCost =
             EvaluateTransitionCost(states[t - 1][j], states[t][i], voicingMode);
-        const float voicingPreferenceCost =
-            EvaluateVoicingPreferenceCost(states[t][i], chords[t].chord, voicingMode);
+        const float voicingPreferenceCost = usedFamilyRestrictedCandidates[t]
+                                                ? 0.0f
+                                                : EvaluateVoicingPreferenceCost(
+                                                      states[t][i], chords[t].chord,
+                                                      voicingMode);
         const float totalCost =
             trellis[t - 1][j].minCost + transitionCost + voicingPreferenceCost;
 

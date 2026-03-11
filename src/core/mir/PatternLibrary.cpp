@@ -58,6 +58,10 @@ bool PatternLibrary::LoadFromJSON(const std::string& absolutePath) {
         return false;
     }
 
+    // Reload should replace in-memory templates, not append duplicates.
+    templates_.clear();
+    templateMap_.clear();
+
     try {
         json j;
         file >> j;
