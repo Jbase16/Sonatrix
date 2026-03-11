@@ -1,41 +1,802 @@
 {
   "templates": [
     {
-      "id": "island_strum_1",
-      "name": "Island Strum (DDUUDU)",
+      "id": "acoustic_basic_8ths",
+      "name": "Acoustic Basic 8ths (D DU UDU)",
+      "genre": "Acoustic Pop",
+      "timeSignature": "4/4",
+      "patterns": {
+        "Guitar": {
+          "totalLengthBeats": 4.0,
+          "events": [
+            {
+              "offsetBeats": 0.0,
+              "lengthBeats": 0.75,
+              "velocityBase": 112,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 1.0,
+              "lengthBeats": 0.45,
+              "velocityBase": 92,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 1.5,
+              "lengthBeats": 0.35,
+              "velocityBase": 78,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 2.5,
+              "lengthBeats": 0.35,
+              "velocityBase": 82,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 3.0,
+              "lengthBeats": 0.45,
+              "velocityBase": 94,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 3.5,
+              "lengthBeats": 0.30,
+              "velocityBase": 74,
+              "type": "GuitarUpstroke"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "acoustic_island_soft",
+      "name": "Acoustic Island Soft (DDUUDU)",
+      "genre": "Acoustic Pop",
+      "timeSignature": "4/4",
+      "patterns": {
+        "Guitar": {
+          "totalLengthBeats": 4.0,
+          "events": [
+            {
+              "offsetBeats": 0.0,
+              "lengthBeats": 0.90,
+              "velocityBase": 108,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 1.0,
+              "lengthBeats": 0.40,
+              "velocityBase": 88,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 1.5,
+              "lengthBeats": 0.30,
+              "velocityBase": 76,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 2.5,
+              "lengthBeats": 0.35,
+              "velocityBase": 84,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 3.0,
+              "lengthBeats": 0.40,
+              "velocityBase": 90,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 3.5,
+              "lengthBeats": 0.28,
+              "velocityBase": 72,
+              "type": "GuitarUpstroke"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "acoustic_ballad_sparse",
+      "name": "Acoustic Ballad Sparse",
+      "genre": "Ballad",
+      "timeSignature": "4/4",
+      "patterns": {
+        "Guitar": {
+          "totalLengthBeats": 4.0,
+          "events": [
+            {
+              "offsetBeats": 0.0,
+              "lengthBeats": 1.20,
+              "velocityBase": 115,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 1.5,
+              "lengthBeats": 0.35,
+              "velocityBase": 70,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 2.0,
+              "lengthBeats": 0.75,
+              "velocityBase": 96,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 3.5,
+              "lengthBeats": 0.30,
+              "velocityBase": 68,
+              "type": "GuitarUpstroke"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "acoustic_folk_drive",
+      "name": "Acoustic Folk Drive",
+      "genre": "Folk",
+      "timeSignature": "4/4",
+      "patterns": {
+        "Guitar": {
+          "totalLengthBeats": 4.0,
+          "events": [
+            {
+              "offsetBeats": 0.0,
+              "lengthBeats": 0.70,
+              "velocityBase": 116,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 0.75,
+              "lengthBeats": 0.28,
+              "velocityBase": 72,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 1.0,
+              "lengthBeats": 0.50,
+              "velocityBase": 98,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 1.5,
+              "lengthBeats": 0.30,
+              "velocityBase": 76,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 2.0,
+              "lengthBeats": 0.65,
+              "velocityBase": 108,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 2.75,
+              "lengthBeats": 0.25,
+              "velocityBase": 70,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 3.0,
+              "lengthBeats": 0.45,
+              "velocityBase": 94,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 3.5,
+              "lengthBeats": 0.28,
+              "velocityBase": 74,
+              "type": "GuitarUpstroke"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "acoustic_pop_push",
+      "name": "Acoustic Pop Push",
       "genre": "Pop",
       "timeSignature": "4/4",
       "patterns": {
         "Guitar": {
           "totalLengthBeats": 4.0,
           "events": [
-            { "offsetBeats": 0.0, "lengthBeats": 1.0, "velocityBase": 110, "type": "GuitarDownstroke" },
-            { "offsetBeats": 1.0, "lengthBeats": 0.5, "velocityBase": 90, "type": "GuitarDownstroke" },
-            { "offsetBeats": 1.5, "lengthBeats": 1.0, "velocityBase": 100, "type": "GuitarUpstroke" },
-            { "offsetBeats": 2.5, "lengthBeats": 0.5, "velocityBase": 90, "type": "GuitarUpstroke" },
-            { "offsetBeats": 3.0, "lengthBeats": 0.5, "velocityBase": 90, "type": "GuitarDownstroke" },
-            { "offsetBeats": 3.5, "lengthBeats": 0.5, "velocityBase": 80, "type": "GuitarUpstroke" }
+            {
+              "offsetBeats": 0.0,
+              "lengthBeats": 0.80,
+              "velocityBase": 114,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 1.0,
+              "lengthBeats": 0.45,
+              "velocityBase": 92,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 1.75,
+              "lengthBeats": 0.25,
+              "velocityBase": 72,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 2.0,
+              "lengthBeats": 0.65,
+              "velocityBase": 102,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 3.0,
+              "lengthBeats": 0.40,
+              "velocityBase": 88,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 3.5,
+              "lengthBeats": 0.25,
+              "velocityBase": 70,
+              "type": "GuitarUpstroke"
+            }
           ]
         }
       }
     },
     {
-      "id": "rock_strum_8ths",
-      "name": "Rock 8ths (DUDUDUDU)",
-      "genre": "Rock",
+      "id": "acoustic_gentle_train",
+      "name": "Acoustic Gentle Train",
+      "genre": "Country Folk",
       "timeSignature": "4/4",
       "patterns": {
         "Guitar": {
           "totalLengthBeats": 4.0,
           "events": [
-            { "offsetBeats": 0.0, "lengthBeats": 0.5, "velocityBase": 120, "type": "GuitarDownstroke" },
-            { "offsetBeats": 0.5, "lengthBeats": 0.5, "velocityBase": 85, "type": "GuitarUpstroke" },
-            { "offsetBeats": 1.0, "lengthBeats": 0.5, "velocityBase": 105, "type": "GuitarDownstroke" },
-            { "offsetBeats": 1.5, "lengthBeats": 0.5, "velocityBase": 85, "type": "GuitarUpstroke" },
-            { "offsetBeats": 2.0, "lengthBeats": 0.5, "velocityBase": 115, "type": "GuitarDownstroke" },
-            { "offsetBeats": 2.5, "lengthBeats": 0.5, "velocityBase": 85, "type": "GuitarUpstroke" },
-            { "offsetBeats": 3.0, "lengthBeats": 0.5, "velocityBase": 105, "type": "GuitarDownstroke" },
-            { "offsetBeats": 3.5, "lengthBeats": 0.5, "velocityBase": 85, "type": "GuitarUpstroke" }
+            {
+              "offsetBeats": 0.0,
+              "lengthBeats": 0.65,
+              "velocityBase": 110,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 0.5,
+              "lengthBeats": 0.25,
+              "velocityBase": 74,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 1.0,
+              "lengthBeats": 0.55,
+              "velocityBase": 94,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 1.5,
+              "lengthBeats": 0.25,
+              "velocityBase": 72,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 2.0,
+              "lengthBeats": 0.65,
+              "velocityBase": 106,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 2.5,
+              "lengthBeats": 0.25,
+              "velocityBase": 74,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 3.0,
+              "lengthBeats": 0.50,
+              "velocityBase": 92,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 3.5,
+              "lengthBeats": 0.22,
+              "velocityBase": 70,
+              "type": "GuitarUpstroke"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "acoustic_half_time",
+      "name": "Acoustic Half-Time Open",
+      "genre": "Singer-Songwriter",
+      "timeSignature": "4/4",
+      "patterns": {
+        "Guitar": {
+          "totalLengthBeats": 4.0,
+          "events": [
+            {
+              "offsetBeats": 0.0,
+              "lengthBeats": 1.40,
+              "velocityBase": 118,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 1.5,
+              "lengthBeats": 0.30,
+              "velocityBase": 68,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 2.0,
+              "lengthBeats": 1.00,
+              "velocityBase": 102,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 3.5,
+              "lengthBeats": 0.25,
+              "velocityBase": 66,
+              "type": "GuitarUpstroke"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "acoustic_busy_but_human",
+      "name": "Acoustic Busy but Human",
+      "genre": "Pop Folk",
+      "timeSignature": "4/4",
+      "patterns": {
+        "Guitar": {
+          "totalLengthBeats": 4.0,
+          "events": [
+            {
+              "offsetBeats": 0.0,
+              "lengthBeats": 0.70,
+              "velocityBase": 112,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 0.5,
+              "lengthBeats": 0.22,
+              "velocityBase": 70,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 1.0,
+              "lengthBeats": 0.52,
+              "velocityBase": 96,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 1.5,
+              "lengthBeats": 0.24,
+              "velocityBase": 74,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 2.0,
+              "lengthBeats": 0.62,
+              "velocityBase": 108,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 2.5,
+              "lengthBeats": 0.24,
+              "velocityBase": 72,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 3.0,
+              "lengthBeats": 0.48,
+              "velocityBase": 92,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 3.5,
+              "lengthBeats": 0.22,
+              "velocityBase": 68,
+              "type": "GuitarUpstroke"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "acoustic_singer_songwriter_1",
+      "name": "Singer-Songwriter Warm Push",
+      "genre": "Singer-Songwriter",
+      "timeSignature": "4/4",
+      "patterns": {
+        "Guitar": {
+          "totalLengthBeats": 4.0,
+          "events": [
+            {
+              "offsetBeats": 0.0,
+              "lengthBeats": 1.10,
+              "velocityBase": 112,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 1.5,
+              "lengthBeats": 0.25,
+              "velocityBase": 70,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 2.0,
+              "lengthBeats": 0.75,
+              "velocityBase": 96,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 3.0,
+              "lengthBeats": 0.40,
+              "velocityBase": 84,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 3.5,
+              "lengthBeats": 0.22,
+              "velocityBase": 66,
+              "type": "GuitarUpstroke"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "acoustic_singer_songwriter_2",
+      "name": "Singer-Songwriter Open Air",
+      "genre": "Singer-Songwriter",
+      "timeSignature": "4/4",
+      "patterns": {
+        "Guitar": {
+          "totalLengthBeats": 4.0,
+          "events": [
+            {
+              "offsetBeats": 0.0,
+              "lengthBeats": 1.30,
+              "velocityBase": 118,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 1.0,
+              "lengthBeats": 0.30,
+              "velocityBase": 74,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 2.0,
+              "lengthBeats": 0.95,
+              "velocityBase": 102,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 3.5,
+              "lengthBeats": 0.20,
+              "velocityBase": 64,
+              "type": "GuitarUpstroke"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "acoustic_singer_songwriter_3",
+      "name": "Singer-Songwriter Gentle Pulse",
+      "genre": "Singer-Songwriter",
+      "timeSignature": "4/4",
+      "patterns": {
+        "Guitar": {
+          "totalLengthBeats": 4.0,
+          "events": [
+            {
+              "offsetBeats": 0.0,
+              "lengthBeats": 0.90,
+              "velocityBase": 108,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 1.0,
+              "lengthBeats": 0.40,
+              "velocityBase": 86,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 1.5,
+              "lengthBeats": 0.20,
+              "velocityBase": 68,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 2.5,
+              "lengthBeats": 0.35,
+              "velocityBase": 80,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 3.0,
+              "lengthBeats": 0.45,
+              "velocityBase": 88,
+              "type": "GuitarDownstroke"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "acoustic_muted_percussive_1",
+      "name": "Muted Percussive Pocket",
+      "genre": "Acoustic Percussive",
+      "timeSignature": "4/4",
+      "patterns": {
+        "Guitar": {
+          "totalLengthBeats": 4.0,
+          "events": [
+            {
+              "offsetBeats": 0.0,
+              "lengthBeats": 0.18,
+              "velocityBase": 108,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 0.5,
+              "lengthBeats": 0.12,
+              "velocityBase": 72,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 1.0,
+              "lengthBeats": 0.18,
+              "velocityBase": 96,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 1.5,
+              "lengthBeats": 0.12,
+              "velocityBase": 70,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 2.0,
+              "lengthBeats": 0.20,
+              "velocityBase": 110,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 2.5,
+              "lengthBeats": 0.12,
+              "velocityBase": 72,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 3.0,
+              "lengthBeats": 0.18,
+              "velocityBase": 94,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 3.5,
+              "lengthBeats": 0.10,
+              "velocityBase": 66,
+              "type": "GuitarUpstroke"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "acoustic_muted_percussive_2",
+      "name": "Muted Train Groove",
+      "genre": "Acoustic Percussive",
+      "timeSignature": "4/4",
+      "patterns": {
+        "Guitar": {
+          "totalLengthBeats": 4.0,
+          "events": [
+            {
+              "offsetBeats": 0.0,
+              "lengthBeats": 0.16,
+              "velocityBase": 112,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 0.75,
+              "lengthBeats": 0.10,
+              "velocityBase": 68,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 1.0,
+              "lengthBeats": 0.16,
+              "velocityBase": 94,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 1.75,
+              "lengthBeats": 0.10,
+              "velocityBase": 66,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 2.0,
+              "lengthBeats": 0.18,
+              "velocityBase": 108,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 2.75,
+              "lengthBeats": 0.10,
+              "velocityBase": 68,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 3.0,
+              "lengthBeats": 0.16,
+              "velocityBase": 92,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 3.75,
+              "lengthBeats": 0.08,
+              "velocityBase": 64,
+              "type": "GuitarUpstroke"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "acoustic_muted_percussive_3",
+      "name": "Muted Pop Chops",
+      "genre": "Acoustic Percussive",
+      "timeSignature": "4/4",
+      "patterns": {
+        "Guitar": {
+          "totalLengthBeats": 4.0,
+          "events": [
+            {
+              "offsetBeats": 0.0,
+              "lengthBeats": 0.15,
+              "velocityBase": 106,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 0.5,
+              "lengthBeats": 0.10,
+              "velocityBase": 70,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 1.5,
+              "lengthBeats": 0.12,
+              "velocityBase": 74,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 2.0,
+              "lengthBeats": 0.18,
+              "velocityBase": 102,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 2.5,
+              "lengthBeats": 0.10,
+              "velocityBase": 68,
+              "type": "GuitarUpstroke"
+            },
+            {
+              "offsetBeats": 3.0,
+              "lengthBeats": 0.16,
+              "velocityBase": 96,
+              "type": "GuitarDownstroke"
+            },
+            {
+              "offsetBeats": 3.5,
+              "lengthBeats": 0.10,
+              "velocityBase": 66,
+              "type": "GuitarUpstroke"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "acoustic_12_8_arpeggiated",
+      "name": "12/8 Arpeggiated Strum",
+      "genre": "Pop Ballad",
+      "timeSignature": "12/8",
+      "patterns": {
+        "Guitar": {
+          "totalLengthBeats": 4.0,
+          "events": [
+            {
+              "offsetBeats": 0.0,
+              "lengthBeats": 1.0,
+              "velocityBase": 115,
+              "type": "GuitarDownstroke",
+              "actionParameter": 0
+            },
+            {
+              "offsetBeats": 0.3333333,
+              "lengthBeats": 0.33,
+              "velocityBase": 75,
+              "type": "GuitarUpstroke",
+              "actionParameter": 2
+            },
+            {
+              "offsetBeats": 0.6666667,
+              "lengthBeats": 0.33,
+              "velocityBase": 70,
+              "type": "GuitarDownstroke",
+              "actionParameter": 2
+            },
+            {
+              "offsetBeats": 1.0,
+              "lengthBeats": 1.0,
+              "velocityBase": 105,
+              "type": "GuitarDownstroke",
+              "actionParameter": 0
+            },
+            {
+              "offsetBeats": 1.3333333,
+              "lengthBeats": 0.33,
+              "velocityBase": 70,
+              "type": "GuitarUpstroke",
+              "actionParameter": 2
+            },
+            {
+              "offsetBeats": 1.6666667,
+              "lengthBeats": 0.33,
+              "velocityBase": 65,
+              "type": "GuitarDownstroke",
+              "actionParameter": 2
+            },
+            {
+              "offsetBeats": 2.0,
+              "lengthBeats": 1.0,
+              "velocityBase": 110,
+              "type": "GuitarDownstroke",
+              "actionParameter": 0
+            },
+            {
+              "offsetBeats": 2.3333333,
+              "lengthBeats": 0.33,
+              "velocityBase": 75,
+              "type": "GuitarUpstroke",
+              "actionParameter": 2
+            },
+            {
+              "offsetBeats": 2.6666667,
+              "lengthBeats": 0.33,
+              "velocityBase": 70,
+              "type": "GuitarDownstroke",
+              "actionParameter": 2
+            },
+            {
+              "offsetBeats": 3.0,
+              "lengthBeats": 1.0,
+              "velocityBase": 100,
+              "type": "GuitarDownstroke",
+              "actionParameter": 0
+            },
+            {
+              "offsetBeats": 3.3333333,
+              "lengthBeats": 0.33,
+              "velocityBase": 65,
+              "type": "GuitarUpstroke",
+              "actionParameter": 2
+            },
+            {
+              "offsetBeats": 3.6666667,
+              "lengthBeats": 0.33,
+              "velocityBase": 60,
+              "type": "GuitarDownstroke",
+              "actionParameter": 2
+            }
           ]
         }
       }

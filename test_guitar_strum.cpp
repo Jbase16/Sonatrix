@@ -89,192 +89,191 @@ int main() {
   const size_t numFrames = static_cast<size_t>(totalSeconds * sampleRate);
 
   std::cout << "1. Initializing Audio Engines..." << std::endl;
-  Audio::VoiceManager voiceManager;
+
   Audio::AssetManager::GetInstance().LoadAcousticGuitarAnchors(
       "Assets/Exciters/FS_Guitars");
 
   auto &articulation =
       Audio::AssetManager::GetInstance().GetAcousticGuitarArticulation();
 
-  std::cout << "2. Creating Chord Timeline (C -> G -> Am -> F)..." << std::endl;
+  std::cout << "2. Creating Chord Timeline (G -> Em7 -> Cadd9 -> D)..." << std::endl;
   std::vector<ChordTrackEvent> chordTimeline;
 
-  // C Major (Beats 0-2)
-  ChordTrackEvent cMajor;
-  cMajor.position = MusicalTime(0);
-  cMajor.chord.root = PitchClass::C;
-  cMajor.chord.quality = ChordQuality::Major;
-  cMajor.chord.overBass = PitchClass::C;
-  chordTimeline.push_back(cMajor);
-
-  // G Major (Beats 4-8)
+  // G Major (Beats 0-4)
   ChordTrackEvent gMajor;
-  gMajor.position = BeatsToTime(4.0);
+  gMajor.position = MusicalTime(0);
   gMajor.chord.root = PitchClass::G;
   gMajor.chord.quality = ChordQuality::Major;
   gMajor.chord.overBass = PitchClass::G;
   chordTimeline.push_back(gMajor);
 
-  // A Minor (Beats 8-12)
-  ChordTrackEvent aMinor;
-  aMinor.position = BeatsToTime(8.0);
-  aMinor.chord.root = PitchClass::A;
-  aMinor.chord.quality = ChordQuality::Minor;
-  aMinor.chord.overBass = PitchClass::A;
-  chordTimeline.push_back(aMinor);
+  // E Minor 7 (Beats 4-8)
+  ChordTrackEvent eMinor7;
+  eMinor7.position = BeatsToTime(4.0);
+  eMinor7.chord.root = PitchClass::E;
+  eMinor7.chord.quality = ChordQuality::Minor7;
+  eMinor7.chord.overBass = PitchClass::E;
+  chordTimeline.push_back(eMinor7);
 
-  // F Major (Beats 12-16)
-  ChordTrackEvent fMajor;
-  fMajor.position = BeatsToTime(12.0);
-  fMajor.chord.root = PitchClass::F;
-  fMajor.chord.quality = ChordQuality::Major;
-  fMajor.chord.overBass = PitchClass::F;
-  chordTimeline.push_back(fMajor);
+  // C Add9  (Beats 8-12) -- Using Major + ExtensionsMask placeholder if needed, or just Major for now
+  ChordTrackEvent cAdd9;
+  cAdd9.position = BeatsToTime(8.0);
+  cAdd9.chord.root = PitchClass::C;
+  cAdd9.chord.quality = ChordQuality::Major;
+  cAdd9.chord.overBass = PitchClass::C;
+  chordTimeline.push_back(cAdd9);
 
-  std::cout << "3. Loading MIR Pattern (Island Strum) from JSON library..." << std::endl;
+  // D Major (Beats 12-16)
+  ChordTrackEvent dMajor;
+  dMajor.position = BeatsToTime(12.0);
+  dMajor.chord.root = PitchClass::D;
+  dMajor.chord.quality = ChordQuality::Major;
+  dMajor.chord.overBass = PitchClass::D;
+  chordTimeline.push_back(dMajor);
+
+  std::cout << "3. Loading MIR Patterns from JSON library..." << std::endl;
   if (!PatternLibrary::GetInstance().LoadFromJSON("Assets/Patterns/default_library.json")) {
       std::cerr << "Failed to load patterns from JSON." << std::endl;
       return 1;
   }
 
-  auto templatePtr = PatternLibrary::GetInstance().GetTemplate("rock_strum_8ths");
+  auto templatePtr = PatternLibrary::GetInstance().GetTemplate("acoustic_12_8_arpeggiated");
   if (!templatePtr) {
-      std::cerr << "Failed to find template rock_strum_8ths." << std::endl;
+      std::cerr << "Failed to find template acoustic_12_8_arpeggiated." << std::endl;
       return 1;
   }
   
-  auto pattern = templatePtr->patterns[MIRPattern::TargetEngine::Guitar];
-  if (!pattern) {
-      std::cerr << "Failed to find guitar pattern in island_strum_1." << std::endl;
-      return 1;
-  }
+  std::vector<std::shared_ptr<GrooveTemplate>> singleTemplateList;
+  singleTemplateList.push_back(templatePtr);
 
-  std::cout << "4. Compiling via GuitarCompiler..." << std::endl;
-  MIDI::GuitarCompiler compiler;
-  MIDI::MIDIStream allStrums;
+  for (const auto& tmplPtr : singleTemplateList) {
+      std::string patternId = tmplPtr->id;
+      auto pattern = tmplPtr->patterns[MIRPattern::TargetEngine::Guitar];
+      if (!pattern) continue;
 
-  // Repeat 4-beat clip 4 times => 16 beats total
-  for (int i = 0; i < 4; ++i) {
-    EditorClip clip(pattern);
-    clip.timelineStart = BeatsToTime(i * 4.0);
+      std::cout << "\n=== Rendering Pattern: " << patternId << " ===" << std::endl;
+      
+      Audio::VoiceManager voiceManager;
 
-    MIDI::MIDIStream strumMIDI = compiler.CompileClip(clip, chordTimeline);
-    allStrums.events.insert(allStrums.events.end(), strumMIDI.events.begin(),
-                            strumMIDI.events.end());
-  }
+      std::cout << "4. Compiling via GuitarCompiler..." << std::endl;
+      MIDI::GuitarCompiler compiler;
+      MIDI::MIDIStream allStrums;
 
-  std::stable_sort(allStrums.events.begin(), allStrums.events.end(),
-            [](const MIDI::MIDIEvent &a, const MIDI::MIDIEvent &b) {
-              return a.timelinePosition < b.timelinePosition;
-            });
+      // Repeat 4-beat clip 4 times => 16 beats total
+      for (int i = 0; i < 4; ++i) {
+        EditorClip clip(pattern);
+        clip.timelineStart = BeatsToTime(i * 4.0);
 
-  std::cout << "Generated " << allStrums.events.size()
-            << " total MIDI Events over 8 beats." << std::endl;
-
-  std::cout << "5. Rendering Progression Audio..." << std::endl;
-
-  for (const auto& ev : allStrums.events) {
-    std::cout << "tick=" << ev.timelinePosition.ticks
-              << " type=" << static_cast<int>(ev.type)
-              << " pitch=" << static_cast<int>(ev.data1)
-              << " vel=" << static_cast<int>(ev.data2)
-              << std::endl;
-  }
-
-  std::vector<float> outputData(numFrames * 2, 0.0f);
-
-  std::vector<float> leftBuffer(blockSize, 0.0f);
-  std::vector<float> rightBuffer(blockSize, 0.0f);
-  float *outChannels[2] = {leftBuffer.data(), rightBuffer.data()};
-
-  size_t eventIndex = 0;
-
-  // Precompute absolute sample positions for all MIDI events
-  struct ScheduledEvent {
-    int64_t samplePosition = 0;
-    MIDI::MIDIEvent event;
-  };
-
-  std::vector<ScheduledEvent> scheduledEvents;
-  scheduledEvents.reserve(allStrums.events.size());
-
-  for (const auto &ev : allStrums.events) {
-    ScheduledEvent s;
-    s.samplePosition = TicksToSample(static_cast<double>(ev.timelinePosition.ticks),
-                                     sampleRate);
-    s.event = ev;
-    scheduledEvents.push_back(s);
-  }
-
-  for (size_t blockStartFrame = 0; blockStartFrame < numFrames;
-       blockStartFrame += blockSize) {
-    const size_t framesInBlock =
-        std::min(blockSize, numFrames - blockStartFrame);
-
-    std::fill(leftBuffer.begin(), leftBuffer.end(), 0.0f);
-    std::fill(rightBuffer.begin(), rightBuffer.end(), 0.0f);
-
-    size_t renderedSoFar = 0;
-    const int64_t blockStartSample = static_cast<int64_t>(blockStartFrame);
-    const int64_t blockEndSample =
-        static_cast<int64_t>(blockStartFrame + framesInBlock);
-
-    // Process all events that fall inside this block at sample-accurate offsets
-    while (eventIndex < scheduledEvents.size() &&
-           scheduledEvents[eventIndex].samplePosition < blockEndSample) {
-      const int64_t eventSample = scheduledEvents[eventIndex].samplePosition;
-
-      // Clamp just in case of rounding weirdness
-      const int64_t clampedEventSample =
-          std::max(blockStartSample, std::min(eventSample, blockEndSample));
-
-      const size_t framesUntilEvent =
-          static_cast<size_t>(clampedEventSample - blockStartSample) - renderedSoFar;
-
-      // Render audio up to the event
-      if (framesUntilEvent > 0) {
-        float *subChannels[2] = {
-            leftBuffer.data() + renderedSoFar,
-            rightBuffer.data() + renderedSoFar};
-
-        voiceManager.RenderAudio(subChannels,
-                                 static_cast<uint32_t>(framesUntilEvent), 2);
-        renderedSoFar += framesUntilEvent;
+        MIDI::MIDIStream strumMIDI = compiler.CompileClip(clip, chordTimeline);
+        allStrums.events.insert(allStrums.events.end(), strumMIDI.events.begin(),
+                                strumMIDI.events.end());
       }
 
-      // Inject exactly this event at this sample point
-      std::vector<MIDI::MIDIEvent> singleEvent;
-      singleEvent.push_back(scheduledEvents[eventIndex].event);
-      voiceManager.ProcessMIDI(singleEvent, articulation);
+      std::stable_sort(allStrums.events.begin(), allStrums.events.end(),
+                [](const MIDI::MIDIEvent &a, const MIDI::MIDIEvent &b) {
+                  return a.timelinePosition < b.timelinePosition;
+                });
 
-      ++eventIndex;
-    }
+      std::cout << "Generated " << allStrums.events.size()
+                << " total MIDI Events over 16 beats." << std::endl;
+      
+      std::cout << "5. Rendering Progression Audio..." << std::endl;
 
-    // Render the remainder of the block after the last event
-    const size_t remainingFrames = framesInBlock - renderedSoFar;
-    if (remainingFrames > 0) {
-      float *subChannels[2] = {
-          leftBuffer.data() + renderedSoFar,
-          rightBuffer.data() + renderedSoFar};
+      std::vector<float> outputData(numFrames * 2, 0.0f);
+      std::vector<float> leftBuffer(blockSize, 0.0f);
+      std::vector<float> rightBuffer(blockSize, 0.0f);
+      float *outChannels[2] = {leftBuffer.data(), rightBuffer.data()};
 
-      voiceManager.RenderAudio(subChannels,
-                               static_cast<uint32_t>(remainingFrames), 2);
-    }
+      size_t eventIndex = 0;
 
-    // Interleave into final output buffer with -16dB Gain Reduction!
-    // This prevents the 6 overlapping strings from clipping the WAV file into a square wave.
-    for (size_t i = 0; i < framesInBlock; ++i) {
-      outputData[(blockStartFrame + i) * 2] = leftBuffer[i] * 0.15f;
-      outputData[(blockStartFrame + i) * 2 + 1] = rightBuffer[i] * 0.15f;
-    }
-  }
+      // Precompute absolute sample positions for all MIDI events
+      struct ScheduledEvent {
+        int64_t samplePosition = 0;
+        MIDI::MIDIEvent event;
+      };
 
-  std::cout << "6. Saving test_guitar_strum_output.wav..." << std::endl;
-  if (!SaveWav("test_guitar_strum_output.wav", outputData, sampleRate)) {
-    std::cerr << "Failed to save WAV." << std::endl;
-    return 1;
+      std::vector<ScheduledEvent> scheduledEvents;
+      scheduledEvents.reserve(allStrums.events.size());
+
+      for (const auto &ev : allStrums.events) {
+        ScheduledEvent s;
+        s.samplePosition = TicksToSample(static_cast<double>(ev.timelinePosition.ticks),
+                                         sampleRate);
+        s.event = ev;
+        scheduledEvents.push_back(s);
+      }
+
+      for (size_t blockStartFrame = 0; blockStartFrame < numFrames;
+           blockStartFrame += blockSize) {
+        const size_t framesInBlock =
+            std::min(blockSize, numFrames - blockStartFrame);
+
+        std::fill(leftBuffer.begin(), leftBuffer.end(), 0.0f);
+        std::fill(rightBuffer.begin(), rightBuffer.end(), 0.0f);
+
+        size_t renderedSoFar = 0;
+        const int64_t blockStartSample = static_cast<int64_t>(blockStartFrame);
+        const int64_t blockEndSample =
+            static_cast<int64_t>(blockStartFrame + framesInBlock);
+
+        // Process all events that fall inside this block at sample-accurate offsets
+        while (eventIndex < scheduledEvents.size() &&
+               scheduledEvents[eventIndex].samplePosition < blockEndSample) {
+          const int64_t eventSample = scheduledEvents[eventIndex].samplePosition;
+
+          // Clamp just in case of rounding weirdness
+          const int64_t clampedEventSample =
+              std::max(blockStartSample, std::min(eventSample, blockEndSample));
+
+          const size_t eventOffsetInBlock =
+              static_cast<size_t>(clampedEventSample - blockStartSample);
+          const size_t framesUntilEvent =
+              (eventOffsetInBlock > renderedSoFar) ? (eventOffsetInBlock - renderedSoFar) : 0;
+
+          // Render audio up to the event
+          if (framesUntilEvent > 0) {
+            float *subChannels[2] = {
+                leftBuffer.data() + renderedSoFar,
+                rightBuffer.data() + renderedSoFar};
+
+            voiceManager.RenderAudio(subChannels,
+                                     static_cast<uint32_t>(framesUntilEvent), 2);
+            renderedSoFar += framesUntilEvent;
+          }
+
+          // Inject exactly this event at this sample point
+          std::vector<MIDI::MIDIEvent> singleEvent;
+          singleEvent.push_back(scheduledEvents[eventIndex].event);
+          voiceManager.ProcessMIDI(singleEvent, articulation);
+
+          ++eventIndex;
+        }
+
+        // Render the remainder of the block after the last event
+        const size_t remainingFrames = framesInBlock - renderedSoFar;
+        if (remainingFrames > 0) {
+          float *subChannels[2] = {
+              leftBuffer.data() + renderedSoFar,
+              rightBuffer.data() + renderedSoFar};
+
+          voiceManager.RenderAudio(subChannels,
+                                   static_cast<uint32_t>(remainingFrames), 2);
+        }
+
+        // Interleave into final output buffer with -16dB Gain Reduction!
+        for (size_t i = 0; i < framesInBlock; ++i) {
+          outputData[(blockStartFrame + i) * 2] = leftBuffer[i] * 0.15f;
+          outputData[(blockStartFrame + i) * 2 + 1] = rightBuffer[i] * 0.15f;
+        }
+      }
+
+      std::cout << "6. Saving test_" << patternId << ".wav..." << std::endl;
+      if (!SaveWav("test_" + patternId + ".wav", outputData, sampleRate)) {
+        std::cerr << "Failed to save WAV." << std::endl;
+      }
   }
 
   std::cout << "Done." << std::endl;
+
   return 0;
 }

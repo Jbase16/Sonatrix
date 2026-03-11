@@ -30,7 +30,7 @@ private:
   // (micro-timing dispersion)
   void EmitStrum(
       MIDIStream &outStream, MusicalTime baseTime, ArticulationType direction,
-      uint8_t baseVelocity, MusicalTime duration,
+      uint8_t baseVelocity, MusicalTime duration, int16_t actionParameter,
       const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const;
 };
 

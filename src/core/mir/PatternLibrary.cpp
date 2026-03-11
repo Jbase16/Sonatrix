@@ -15,6 +15,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM( ArticulationType, {
     {ArticulationType::PianoArpeggioDown, "PianoArpeggioDown"},
     {ArticulationType::GuitarDownstroke, "GuitarDownstroke"},
     {ArticulationType::GuitarUpstroke, "GuitarUpstroke"},
+    {ArticulationType::GuitarPluck, "GuitarPluck"},
     {ArticulationType::GuitarMute, "GuitarMute"},
     {ArticulationType::GuitarPalmDrop, "GuitarPalmDrop"},
     {ArticulationType::BassSlap, "BassSlap"},

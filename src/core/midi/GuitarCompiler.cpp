@@ -68,9 +68,9 @@ MIDIStream GuitarCompiler::CompileClip(
     }
 
     if (!isMuted) {
-      // 6 Arguments, using the actual duration from the MIR event!
+      // Pass actionParameter through!
       EmitStrum(stream, lockedTime, mir.type, mir.velocityBase,
-                BeatsToTime(mir.lengthBeats), activeVoicing);
+                BeatsToTime(mir.lengthBeats), mir.actionParameter, activeVoicing);
     }
   }
 
@@ -81,7 +81,7 @@ MIDIStream GuitarCompiler::CompileClip(
 // 6 Parameters to perfectly match GuitarCompiler.h
 void GuitarCompiler::EmitStrum(
     MIDIStream &outStream, MusicalTime baseTime, ArticulationType direction,
-    uint8_t baseVelocity, MusicalTime duration, 
+    uint8_t baseVelocity, MusicalTime duration, int16_t actionParameter,
     const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const {
 
   // 40 ticks at 960 PPQ = ~20ms per string. This creates a beautiful, natural glide.
@@ -92,11 +92,23 @@ void GuitarCompiler::EmitStrum(
     int stringIndex;
   };
   std::vector<NoteTarget> stringTargets;
-  for (int i = 0; i < 6; ++i) {
-    int pitch = voicing.GetMidiPitch(i);
-    if (pitch != -1) {
-      stringTargets.push_back({pitch, i});
-    }
+  
+  if (direction == ArticulationType::GuitarPluck) {
+      // Only strike the specified string index (0 = Low E, 5 = High E)
+      if (actionParameter >= 0 && actionParameter < 6) {
+          int pitch = voicing.GetMidiPitch(actionParameter);
+          if (pitch != -1) {
+              stringTargets.push_back({pitch, actionParameter});
+          }
+      }
+  } else {
+      // Standard Strum: gather all active strings
+      for (int i = 0; i < 6; ++i) {
+        int pitch = voicing.GetMidiPitch(i);
+        if (pitch != -1) {
+          stringTargets.push_back({pitch, i});
+        }
+      }
   }
 
   // To play an upstroke, simply reverse the physical string order.
