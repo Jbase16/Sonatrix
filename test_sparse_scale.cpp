@@ -157,7 +157,7 @@ int main() {
 
   std::cout << "Loading 6 Open-String Acoustic Anchors..." << std::endl;
   auto &assets = AssetManager::GetInstance();
-  if (!assets.LoadAcousticGuitarAnchors("Assets/Exciters/FS_Guitars")) {
+  if (!assets.LoadAcousticGuitarAnchors("assets/Exciters/FS_Guitars")) {
     std::cerr << "Failed to load acoustic anchors." << std::endl;
     return 1;
   }

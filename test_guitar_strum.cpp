@@ -91,7 +91,7 @@ int main() {
   std::cout << "1. Initializing Audio Engines..." << std::endl;
 
   Audio::AssetManager::GetInstance().LoadAcousticGuitarAnchors(
-      "Assets/Exciters/FS_Guitars");
+      "assets/Exciters/FS_Guitars");
 
   auto &articulation =
       Audio::AssetManager::GetInstance().GetAcousticGuitarArticulation();
@@ -132,7 +132,7 @@ int main() {
   chordTimeline.push_back(dMajor);
 
   std::cout << "3. Loading MIR Patterns from JSON library..." << std::endl;
-  if (!PatternLibrary::GetInstance().LoadFromJSON("Assets/Patterns/default_library.json")) {
+  if (!PatternLibrary::GetInstance().LoadFromJSON("assets/Patterns/default_library.json")) {
       std::cerr << "Failed to load patterns from JSON." << std::endl;
       return 1;
   }

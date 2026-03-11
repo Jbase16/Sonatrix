@@ -1,6 +1,6 @@
 import json
 
-file_path = "Assets/Patterns/default_library.json"
+file_path = "assets/Patterns/default_library.json"
 with open(file_path, "r") as f:
     data = json.load(f)
 
@@ -17,4 +17,3 @@ for template in data["templates"]:
 
 with open(file_path, "w") as f:
     json.dump(data, f, indent=2)
-

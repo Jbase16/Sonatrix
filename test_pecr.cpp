@@ -731,12 +731,12 @@ int main() {
 
   std::cout << "Loading 6 FSS Acoustic Guitar Anchors..." << std::endl;
   if (!synth.LoadAnchors({
-          "Assets/Exciters/FS_Guitars/E2.wav",
-          "Assets/Exciters/FS_Guitars/A2.wav",
-          "Assets/Exciters/FS_Guitars/D3.wav",
-          "Assets/Exciters/FS_Guitars/G3.wav",
-          "Assets/Exciters/FS_Guitars/B3.wav",
-          "Assets/Exciters/FS_Guitars/E4.wav",
+          "assets/Exciters/FS_Guitars/E2.wav",
+          "assets/Exciters/FS_Guitars/A2.wav",
+          "assets/Exciters/FS_Guitars/D3.wav",
+          "assets/Exciters/FS_Guitars/G3.wav",
+          "assets/Exciters/FS_Guitars/B3.wav",
+          "assets/Exciters/FS_Guitars/E4.wav",
       })) {
     std::cerr << "Failed to load one or more anchors." << std::endl;
     return 1;
