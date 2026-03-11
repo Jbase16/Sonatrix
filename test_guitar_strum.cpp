@@ -3,6 +3,7 @@
 #include "src/core/midi/GuitarCompiler.h"
 #include "src/core/mir/MIRPattern.h"
 #include "src/core/mir/DeltaGraph.h"
+#include "src/core/mir/PatternLibrary.h"
 #include "src/core/arrangement/ChordTrack.h"
 
 #include <AudioToolbox/AudioToolbox.h>
@@ -130,58 +131,23 @@ int main() {
   fMajor.chord.overBass = PitchClass::F;
   chordTimeline.push_back(fMajor);
 
-  std::cout << "3. Defining MIR Pattern (D D U U D U) over 4 beats..." << std::endl;
-  auto pattern = std::make_shared<MIRPattern>();
-  pattern->intendedEngine = MIRPattern::TargetEngine::Guitar;
-  pattern->totalLength = BeatsToTime(4.0); // Full 4 beat measure
+  std::cout << "3. Loading MIR Pattern (Island Strum) from JSON library..." << std::endl;
+  if (!PatternLibrary::GetInstance().LoadFromJSON("Assets/Patterns/default_library.json")) {
+      std::cerr << "Failed to load patterns from JSON." << std::endl;
+      return 1;
+  }
+
+  auto templatePtr = PatternLibrary::GetInstance().GetTemplate("rock_strum_8ths");
+  if (!templatePtr) {
+      std::cerr << "Failed to find template rock_strum_8ths." << std::endl;
+      return 1;
+  }
   
-  // Downstroke on beat 1
-  MIREvent stroke1;
-  stroke1.offsetMap = MusicalTime(0);
-  stroke1.lengthBeats = 1.0;
-  stroke1.type = ArticulationType::GuitarDownstroke;
-  stroke1.velocityBase = 110;
-  pattern->events.push_back(stroke1);
-
-  // Downstroke on beat 2
-  MIREvent stroke2;
-  stroke2.offsetMap = BeatsToTime(1.0);
-  stroke2.lengthBeats = 0.5;
-  stroke2.type = ArticulationType::GuitarDownstroke;
-  stroke2.velocityBase = 90;
-  pattern->events.push_back(stroke2);
-
-  // Upstroke on beat 2.5
-  MIREvent stroke3;
-  stroke3.offsetMap = BeatsToTime(1.5);
-  stroke3.lengthBeats = 1.0;
-  stroke3.type = ArticulationType::GuitarUpstroke;
-  stroke3.velocityBase = 100;
-  pattern->events.push_back(stroke3);
-
-  // Upstroke on beat 3.5
-  MIREvent stroke4;
-  stroke4.offsetMap = BeatsToTime(2.5);
-  stroke4.lengthBeats = 0.5;
-  stroke4.type = ArticulationType::GuitarUpstroke;
-  stroke4.velocityBase = 90;
-  pattern->events.push_back(stroke4);
-
-  // Downstroke on beat 4
-  MIREvent stroke5;
-  stroke5.offsetMap = BeatsToTime(3.0);
-  stroke5.lengthBeats = 0.5;
-  stroke5.type = ArticulationType::GuitarDownstroke;
-  stroke5.velocityBase = 90;
-  pattern->events.push_back(stroke5);
-
-  // Upstroke on beat 4.5
-  MIREvent stroke6;
-  stroke6.offsetMap = BeatsToTime(3.5);
-  stroke6.lengthBeats = 0.5;
-  stroke6.type = ArticulationType::GuitarUpstroke;
-  stroke6.velocityBase = 80;
-  pattern->events.push_back(stroke6);
+  auto pattern = templatePtr->patterns[MIRPattern::TargetEngine::Guitar];
+  if (!pattern) {
+      std::cerr << "Failed to find guitar pattern in island_strum_1." << std::endl;
+      return 1;
+  }
 
   std::cout << "4. Compiling via GuitarCompiler..." << std::endl;
   MIDI::GuitarCompiler compiler;

@@ -1,0 +1,44 @@
+{
+  "templates": [
+    {
+      "id": "island_strum_1",
+      "name": "Island Strum (DDUUDU)",
+      "genre": "Pop",
+      "timeSignature": "4/4",
+      "patterns": {
+        "Guitar": {
+          "totalLengthBeats": 4.0,
+          "events": [
+            { "offsetBeats": 0.0, "lengthBeats": 1.0, "velocityBase": 110, "type": "GuitarDownstroke" },
+            { "offsetBeats": 1.0, "lengthBeats": 0.5, "velocityBase": 90, "type": "GuitarDownstroke" },
+            { "offsetBeats": 1.5, "lengthBeats": 1.0, "velocityBase": 100, "type": "GuitarUpstroke" },
+            { "offsetBeats": 2.5, "lengthBeats": 0.5, "velocityBase": 90, "type": "GuitarUpstroke" },
+            { "offsetBeats": 3.0, "lengthBeats": 0.5, "velocityBase": 90, "type": "GuitarDownstroke" },
+            { "offsetBeats": 3.5, "lengthBeats": 0.5, "velocityBase": 80, "type": "GuitarUpstroke" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "rock_strum_8ths",
+      "name": "Rock 8ths (DUDUDUDU)",
+      "genre": "Rock",
+      "timeSignature": "4/4",
+      "patterns": {
+        "Guitar": {
+          "totalLengthBeats": 4.0,
+          "events": [
+            { "offsetBeats": 0.0, "lengthBeats": 0.5, "velocityBase": 120, "type": "GuitarDownstroke" },
+            { "offsetBeats": 0.5, "lengthBeats": 0.5, "velocityBase": 85, "type": "GuitarUpstroke" },
+            { "offsetBeats": 1.0, "lengthBeats": 0.5, "velocityBase": 105, "type": "GuitarDownstroke" },
+            { "offsetBeats": 1.5, "lengthBeats": 0.5, "velocityBase": 85, "type": "GuitarUpstroke" },
+            { "offsetBeats": 2.0, "lengthBeats": 0.5, "velocityBase": 115, "type": "GuitarDownstroke" },
+            { "offsetBeats": 2.5, "lengthBeats": 0.5, "velocityBase": 85, "type": "GuitarUpstroke" },
+            { "offsetBeats": 3.0, "lengthBeats": 0.5, "velocityBase": 105, "type": "GuitarDownstroke" },
+            { "offsetBeats": 3.5, "lengthBeats": 0.5, "velocityBase": 85, "type": "GuitarUpstroke" }
+          ]
+        }
+      }
+    }
+  ]
+}

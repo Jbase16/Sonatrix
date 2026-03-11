@@ -17,6 +17,8 @@ enum class ArticulationType : uint8_t {
     // Shared / Keyboard
     GenericNote, // Piano, Bass
     PianoChord,
+    PianoArpeggioUp,
+    PianoArpeggioDown,
     
     // Guitar Specific
     GuitarDownstroke,
@@ -24,12 +26,17 @@ enum class ArticulationType : uint8_t {
     GuitarMute,
     GuitarPalmDrop,
     
+    // Bass Specific
+    BassSlap,
+    BassPop,
+
     // String Specific
     StringSwell,
     StringSpiccato,
     
     // Drum Specific
-    DrumHit
+    DrumHit,
+    DrumGhostNote
 };
 
 // A single stroke or intent command within a pattern
