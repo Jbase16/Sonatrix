@@ -41,6 +41,16 @@ enum class ArticulationType : uint8_t {
     DrumGhostNote
 };
 
+enum class GuitarTargetRole : uint8_t {
+    None,
+    Bass,
+    AltBass,
+    InnerLow,
+    InnerHigh,
+    Treble,
+    Top
+};
+
 // A single stroke or intent command within a pattern
 struct MIREvent {
     MusicalTime offsetMap;      // Position relative to start of pattern (in ticks)
@@ -49,10 +59,21 @@ struct MIREvent {
     ArticulationType type{ArticulationType::GenericNote};
     
     // Meaning depends on the instrument:
-    // Guitar: 0 = full chord, 1 = low strings only, 2 = high strings only.
+    // Guitar: legacy raw string index / pinch bitmask routing.
     // Piano:  Note interval relative to chord root.
     // Drums:  Kit piece ID (e.g., 1 = Kick, 2 = Snare)
     int16_t actionParameter{0}; 
+
+    // Guitar-specific semantic targets for reusable picking patterns.
+    // Legacy raw string indices and pinch bitmasks remain supported through
+    // actionParameter when these are left as None.
+    GuitarTargetRole guitarTargetRole{GuitarTargetRole::None};
+    GuitarTargetRole guitarSecondaryTargetRole{GuitarTargetRole::None};
+
+    bool UsesGuitarTargetRoles() const {
+        return guitarTargetRole != GuitarTargetRole::None ||
+               guitarSecondaryTargetRole != GuitarTargetRole::None;
+    }
 };
 
 // A read-only memory representation of a musical pattern (e.g., "Pop Rock Verse")

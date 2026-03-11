@@ -2,6 +2,7 @@
 
 #include "../engines/guitar/FretboardModel.h"
 #include "IMIRCompiler.h"
+#include <vector>
 
 namespace Sonatrix {
 namespace Core {
@@ -26,12 +27,59 @@ private:
   // We removed the old EvaluateVoiceLeadingCost function as the Viterbi Graph
   // Solver handles this natively.
 
+  struct NoteTarget {
+    int pitch{-1};
+    int stringIndex{-1};
+    GuitarTargetRole role{GuitarTargetRole::None};
+  };
+
+  struct SoundingString {
+    int stringIndex{-1};
+    int pitch{-1};
+  };
+
   // Helper that adds strings sequentially based on Strum direction
-  // (micro-timing dispersion)
-  void EmitStrum(
-      MIDIStream &outStream, MusicalTime baseTime, ArticulationType direction,
-      uint8_t baseVelocity, MusicalTime duration, int16_t actionParameter,
+  // (micro-timing dispersion).
+  void EmitStrum(MIDIStream &outStream, MusicalTime baseTime,
+                 ArticulationType direction, uint8_t baseVelocity,
+                 MusicalTime duration,
+                 const std::vector<NoteTarget> &stringTargets) const;
+
+  std::vector<NoteTarget>
+  ResolveTargetsForEvent(const MIREvent &event,
+                         const Sonatrix::Core::Engines::Guitar::GuitarVoicing
+                             &voicing,
+                         const std::vector<int> &usedFigurePitches) const;
+
+  std::vector<SoundingString> GetSoundingStringsByPitch(
       const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const;
+
+  int ResolveBassString(
+      const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const;
+  int ResolveAltBassString(
+      const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing) const;
+  int ResolveInnerLowString(
+      const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing,
+      const std::vector<int> &usedFigurePitches = {}) const;
+  int ResolveInnerHighString(
+      const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing,
+      const std::vector<int> &usedFigurePitches = {}) const;
+  int ResolveTrebleString(
+      const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing,
+      const std::vector<int> &usedFigurePitches = {}) const;
+  int ResolveTopString(
+      const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing,
+      const std::vector<int> &usedFigurePitches = {}) const;
+
+  int ResolveRoleString(
+      GuitarTargetRole role,
+      const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing,
+      const std::vector<int> &usedFigurePitches = {}) const;
+  const char *GetRoleName(GuitarTargetRole role) const;
+  void DebugPrintResolvedEvent(
+      MusicalTime absoluteTime, int chordIndex, const MIREvent &event,
+      const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing,
+      const std::vector<NoteTarget> &resolvedTargets) const;
 };
 
 // Provides instantiation without exposing the class externally

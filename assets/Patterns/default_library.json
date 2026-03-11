@@ -718,84 +718,88 @@
               "lengthBeats": 0.5,
               "velocityBase": 110,
               "type": "GuitarPinch",
-              "actionParameter": 80
+              "targetRole": "Bass",
+              "secondaryTargetRole": "Top"
             },
             {
               "offsetBeats": 0.3333333,
               "lengthBeats": 0.33,
               "velocityBase": 75,
               "type": "GuitarPluck",
-              "actionParameter": 3
+              "targetRole": "InnerHigh"
             },
             {
               "offsetBeats": 0.6666667,
               "lengthBeats": 0.33,
               "velocityBase": 80,
               "type": "GuitarPluck",
-              "actionParameter": 4
+              "targetRole": "Treble"
             },
             {
               "offsetBeats": 1.0,
               "lengthBeats": 0.5,
               "velocityBase": 105,
               "type": "GuitarPinch",
-              "actionParameter": 80
+              "targetRole": "Bass",
+              "secondaryTargetRole": "Top"
             },
             {
               "offsetBeats": 1.3333333,
               "lengthBeats": 0.33,
               "velocityBase": 75,
               "type": "GuitarPluck",
-              "actionParameter": 3
+              "targetRole": "InnerHigh"
             },
             {
               "offsetBeats": 1.6666667,
               "lengthBeats": 0.33,
               "velocityBase": 80,
               "type": "GuitarPluck",
-              "actionParameter": 4
+              "targetRole": "Treble"
             },
             {
               "offsetBeats": 2.0,
               "lengthBeats": 0.5,
               "velocityBase": 115,
               "type": "GuitarPinch",
-              "actionParameter": 80
+              "targetRole": "Bass",
+              "secondaryTargetRole": "Top"
             },
             {
               "offsetBeats": 2.3333333,
               "lengthBeats": 0.33,
               "velocityBase": 75,
               "type": "GuitarPluck",
-              "actionParameter": 3
+              "targetRole": "InnerHigh"
             },
             {
               "offsetBeats": 2.6666667,
               "lengthBeats": 0.33,
               "velocityBase": 80,
               "type": "GuitarPluck",
-              "actionParameter": 4
+              "targetRole": "Treble"
             },
             {
               "offsetBeats": 3.0,
               "lengthBeats": 0.5,
               "velocityBase": 100,
               "type": "GuitarPinch",
-              "actionParameter": 80
+              "targetRole": "Bass",
+              "secondaryTargetRole": "Top"
             },
             {
               "offsetBeats": 3.3333333,
               "lengthBeats": 0.33,
               "velocityBase": 75,
               "type": "GuitarPluck",
-              "actionParameter": 3
+              "targetRole": "InnerHigh"
             },
             {
               "offsetBeats": 3.6666667,
               "lengthBeats": 0.33,
               "velocityBase": 80,
               "type": "GuitarPluck",
-              "actionParameter": 4
+              "targetRole": "Treble"
             }
           ]
         }

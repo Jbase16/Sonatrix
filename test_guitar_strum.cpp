@@ -182,9 +182,9 @@ int main() {
       std::cout << "--- MIDI EVENTS DUMP ---" << std::endl;
       for (const auto& ev : allStrums.events) {
         if (ev.type == MIDI::MIDIEventType::NoteOn && ev.data2 > 0) {
-            std::cout << "Tick: " << ev.timelinePosition.ticks 
-                      << " | String: " << (int)ev.data1 
-                      << " | Pitch: " << (int)ev.data1 
+            std::cout << "Tick: " << ev.timelinePosition.ticks
+                      << " | StringIndex: " << (static_cast<int>(ev.channel) - 1)
+                      << " | Pitch: " << static_cast<int>(ev.data1)
                       << " | Vel: " << (int)ev.data2 << std::endl;
         }
       }

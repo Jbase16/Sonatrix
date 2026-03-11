@@ -27,6 +27,16 @@ NLOHMANN_JSON_SERIALIZE_ENUM( ArticulationType, {
     {ArticulationType::DrumGhostNote, "DrumGhostNote"}
 })
 
+NLOHMANN_JSON_SERIALIZE_ENUM( GuitarTargetRole, {
+    {GuitarTargetRole::None, "None"},
+    {GuitarTargetRole::Bass, "Bass"},
+    {GuitarTargetRole::AltBass, "AltBass"},
+    {GuitarTargetRole::InnerLow, "InnerLow"},
+    {GuitarTargetRole::InnerHigh, "InnerHigh"},
+    {GuitarTargetRole::Treble, "Treble"},
+    {GuitarTargetRole::Top, "Top"}
+})
+
 NLOHMANN_JSON_SERIALIZE_ENUM( MIRPattern::TargetEngine, {
     {MIRPattern::TargetEngine::Guitar, "Guitar"},
     {MIRPattern::TargetEngine::Piano, "Piano"},
@@ -82,6 +92,22 @@ bool PatternLibrary::LoadFromJSON(const std::string& absolutePath) {
                                 ev.type = evJson["type"].get<ArticulationType>();
                             }
                             ev.actionParameter = evJson.value("actionParameter", 0);
+
+                            if (evJson.contains("targetRole")) {
+                                ev.guitarTargetRole =
+                                    evJson["targetRole"].get<GuitarTargetRole>();
+                            } else if (evJson.contains("guitarTargetRole")) {
+                                ev.guitarTargetRole =
+                                    evJson["guitarTargetRole"].get<GuitarTargetRole>();
+                            }
+
+                            if (evJson.contains("secondaryTargetRole")) {
+                                ev.guitarSecondaryTargetRole =
+                                    evJson["secondaryTargetRole"].get<GuitarTargetRole>();
+                            } else if (evJson.contains("guitarSecondaryTargetRole")) {
+                                ev.guitarSecondaryTargetRole =
+                                    evJson["guitarSecondaryTargetRole"].get<GuitarTargetRole>();
+                            }
                             
                             pattern->events.push_back(ev);
                         }
