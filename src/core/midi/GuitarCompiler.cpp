@@ -101,6 +101,17 @@ void GuitarCompiler::EmitStrum(
               stringTargets.push_back({pitch, actionParameter});
           }
       }
+  } else if (direction == ArticulationType::GuitarPinch) {
+      // Strike multiple strings simultaneously based on a bitmask (actionParameter)
+      // Bit 0 = Low E, Bit 1 = A, ..., Bit 5 = High E
+      for (int i = 0; i < 6; ++i) {
+          if ((actionParameter & (1 << i)) != 0) {
+              int pitch = voicing.GetMidiPitch(i);
+              if (pitch != -1) {
+                  stringTargets.push_back({pitch, i});
+              }
+          }
+      }
   } else {
       // Standard Strum: gather all active strings
       for (int i = 0; i < 6; ++i) {

@@ -41,7 +41,7 @@
             },
             {
               "offsetBeats": 3.5,
-              "lengthBeats": 0.30,
+              "lengthBeats": 0.3,
               "velocityBase": 74,
               "type": "GuitarUpstroke"
             }
@@ -60,19 +60,19 @@
           "events": [
             {
               "offsetBeats": 0.0,
-              "lengthBeats": 0.90,
+              "lengthBeats": 0.9,
               "velocityBase": 108,
               "type": "GuitarDownstroke"
             },
             {
               "offsetBeats": 1.0,
-              "lengthBeats": 0.40,
+              "lengthBeats": 0.4,
               "velocityBase": 88,
               "type": "GuitarDownstroke"
             },
             {
               "offsetBeats": 1.5,
-              "lengthBeats": 0.30,
+              "lengthBeats": 0.3,
               "velocityBase": 76,
               "type": "GuitarUpstroke"
             },
@@ -84,7 +84,7 @@
             },
             {
               "offsetBeats": 3.0,
-              "lengthBeats": 0.40,
+              "lengthBeats": 0.4,
               "velocityBase": 90,
               "type": "GuitarDownstroke"
             },
@@ -109,7 +109,7 @@
           "events": [
             {
               "offsetBeats": 0.0,
-              "lengthBeats": 1.20,
+              "lengthBeats": 1.2,
               "velocityBase": 115,
               "type": "GuitarDownstroke"
             },
@@ -127,7 +127,7 @@
             },
             {
               "offsetBeats": 3.5,
-              "lengthBeats": 0.30,
+              "lengthBeats": 0.3,
               "velocityBase": 68,
               "type": "GuitarUpstroke"
             }
@@ -146,7 +146,7 @@
           "events": [
             {
               "offsetBeats": 0.0,
-              "lengthBeats": 0.70,
+              "lengthBeats": 0.7,
               "velocityBase": 116,
               "type": "GuitarDownstroke"
             },
@@ -158,13 +158,13 @@
             },
             {
               "offsetBeats": 1.0,
-              "lengthBeats": 0.50,
+              "lengthBeats": 0.5,
               "velocityBase": 98,
               "type": "GuitarDownstroke"
             },
             {
               "offsetBeats": 1.5,
-              "lengthBeats": 0.30,
+              "lengthBeats": 0.3,
               "velocityBase": 76,
               "type": "GuitarUpstroke"
             },
@@ -207,7 +207,7 @@
           "events": [
             {
               "offsetBeats": 0.0,
-              "lengthBeats": 0.80,
+              "lengthBeats": 0.8,
               "velocityBase": 114,
               "type": "GuitarDownstroke"
             },
@@ -231,7 +231,7 @@
             },
             {
               "offsetBeats": 3.0,
-              "lengthBeats": 0.40,
+              "lengthBeats": 0.4,
               "velocityBase": 88,
               "type": "GuitarDownstroke"
             },
@@ -292,7 +292,7 @@
             },
             {
               "offsetBeats": 3.0,
-              "lengthBeats": 0.50,
+              "lengthBeats": 0.5,
               "velocityBase": 92,
               "type": "GuitarDownstroke"
             },
@@ -317,19 +317,19 @@
           "events": [
             {
               "offsetBeats": 0.0,
-              "lengthBeats": 1.40,
+              "lengthBeats": 1.4,
               "velocityBase": 118,
               "type": "GuitarDownstroke"
             },
             {
               "offsetBeats": 1.5,
-              "lengthBeats": 0.30,
+              "lengthBeats": 0.3,
               "velocityBase": 68,
               "type": "GuitarUpstroke"
             },
             {
               "offsetBeats": 2.0,
-              "lengthBeats": 1.00,
+              "lengthBeats": 1.0,
               "velocityBase": 102,
               "type": "GuitarDownstroke"
             },
@@ -354,7 +354,7 @@
           "events": [
             {
               "offsetBeats": 0.0,
-              "lengthBeats": 0.70,
+              "lengthBeats": 0.7,
               "velocityBase": 112,
               "type": "GuitarDownstroke"
             },
@@ -415,7 +415,7 @@
           "events": [
             {
               "offsetBeats": 0.0,
-              "lengthBeats": 1.10,
+              "lengthBeats": 1.1,
               "velocityBase": 112,
               "type": "GuitarDownstroke"
             },
@@ -433,7 +433,7 @@
             },
             {
               "offsetBeats": 3.0,
-              "lengthBeats": 0.40,
+              "lengthBeats": 0.4,
               "velocityBase": 84,
               "type": "GuitarDownstroke"
             },
@@ -458,13 +458,13 @@
           "events": [
             {
               "offsetBeats": 0.0,
-              "lengthBeats": 1.30,
+              "lengthBeats": 1.3,
               "velocityBase": 118,
               "type": "GuitarDownstroke"
             },
             {
               "offsetBeats": 1.0,
-              "lengthBeats": 0.30,
+              "lengthBeats": 0.3,
               "velocityBase": 74,
               "type": "GuitarUpstroke"
             },
@@ -476,7 +476,7 @@
             },
             {
               "offsetBeats": 3.5,
-              "lengthBeats": 0.20,
+              "lengthBeats": 0.2,
               "velocityBase": 64,
               "type": "GuitarUpstroke"
             }
@@ -495,19 +495,19 @@
           "events": [
             {
               "offsetBeats": 0.0,
-              "lengthBeats": 0.90,
+              "lengthBeats": 0.9,
               "velocityBase": 108,
               "type": "GuitarDownstroke"
             },
             {
               "offsetBeats": 1.0,
-              "lengthBeats": 0.40,
+              "lengthBeats": 0.4,
               "velocityBase": 86,
               "type": "GuitarDownstroke"
             },
             {
               "offsetBeats": 1.5,
-              "lengthBeats": 0.20,
+              "lengthBeats": 0.2,
               "velocityBase": 68,
               "type": "GuitarUpstroke"
             },
@@ -562,7 +562,7 @@
             },
             {
               "offsetBeats": 2.0,
-              "lengthBeats": 0.20,
+              "lengthBeats": 0.2,
               "velocityBase": 110,
               "type": "GuitarDownstroke"
             },
@@ -580,7 +580,7 @@
             },
             {
               "offsetBeats": 3.5,
-              "lengthBeats": 0.10,
+              "lengthBeats": 0.1,
               "velocityBase": 66,
               "type": "GuitarUpstroke"
             }
@@ -605,7 +605,7 @@
             },
             {
               "offsetBeats": 0.75,
-              "lengthBeats": 0.10,
+              "lengthBeats": 0.1,
               "velocityBase": 68,
               "type": "GuitarUpstroke"
             },
@@ -617,7 +617,7 @@
             },
             {
               "offsetBeats": 1.75,
-              "lengthBeats": 0.10,
+              "lengthBeats": 0.1,
               "velocityBase": 66,
               "type": "GuitarUpstroke"
             },
@@ -629,7 +629,7 @@
             },
             {
               "offsetBeats": 2.75,
-              "lengthBeats": 0.10,
+              "lengthBeats": 0.1,
               "velocityBase": 68,
               "type": "GuitarUpstroke"
             },
@@ -666,7 +666,7 @@
             },
             {
               "offsetBeats": 0.5,
-              "lengthBeats": 0.10,
+              "lengthBeats": 0.1,
               "velocityBase": 70,
               "type": "GuitarUpstroke"
             },
@@ -684,7 +684,7 @@
             },
             {
               "offsetBeats": 2.5,
-              "lengthBeats": 0.10,
+              "lengthBeats": 0.1,
               "velocityBase": 68,
               "type": "GuitarUpstroke"
             },
@@ -696,7 +696,7 @@
             },
             {
               "offsetBeats": 3.5,
-              "lengthBeats": 0.10,
+              "lengthBeats": 0.1,
               "velocityBase": 66,
               "type": "GuitarUpstroke"
             }
@@ -715,87 +715,87 @@
           "events": [
             {
               "offsetBeats": 0.0,
-              "lengthBeats": 1.0,
-              "velocityBase": 115,
-              "type": "GuitarDownstroke",
-              "actionParameter": 0
+              "lengthBeats": 0.5,
+              "velocityBase": 110,
+              "type": "GuitarPinch",
+              "actionParameter": 33
             },
             {
               "offsetBeats": 0.3333333,
               "lengthBeats": 0.33,
               "velocityBase": 75,
-              "type": "GuitarUpstroke",
-              "actionParameter": 2
+              "type": "GuitarPluck",
+              "actionParameter": 3
             },
             {
               "offsetBeats": 0.6666667,
               "lengthBeats": 0.33,
-              "velocityBase": 70,
-              "type": "GuitarDownstroke",
-              "actionParameter": 2
+              "velocityBase": 80,
+              "type": "GuitarPluck",
+              "actionParameter": 4
             },
             {
               "offsetBeats": 1.0,
-              "lengthBeats": 1.0,
+              "lengthBeats": 0.5,
               "velocityBase": 105,
-              "type": "GuitarDownstroke",
-              "actionParameter": 0
+              "type": "GuitarPinch",
+              "actionParameter": 33
             },
             {
               "offsetBeats": 1.3333333,
               "lengthBeats": 0.33,
-              "velocityBase": 70,
-              "type": "GuitarUpstroke",
-              "actionParameter": 2
+              "velocityBase": 75,
+              "type": "GuitarPluck",
+              "actionParameter": 3
             },
             {
               "offsetBeats": 1.6666667,
               "lengthBeats": 0.33,
-              "velocityBase": 65,
-              "type": "GuitarDownstroke",
-              "actionParameter": 2
+              "velocityBase": 80,
+              "type": "GuitarPluck",
+              "actionParameter": 4
             },
             {
               "offsetBeats": 2.0,
-              "lengthBeats": 1.0,
-              "velocityBase": 110,
-              "type": "GuitarDownstroke",
-              "actionParameter": 0
+              "lengthBeats": 0.5,
+              "velocityBase": 115,
+              "type": "GuitarPinch",
+              "actionParameter": 33
             },
             {
               "offsetBeats": 2.3333333,
               "lengthBeats": 0.33,
               "velocityBase": 75,
-              "type": "GuitarUpstroke",
-              "actionParameter": 2
+              "type": "GuitarPluck",
+              "actionParameter": 3
             },
             {
               "offsetBeats": 2.6666667,
               "lengthBeats": 0.33,
-              "velocityBase": 70,
-              "type": "GuitarDownstroke",
-              "actionParameter": 2
+              "velocityBase": 80,
+              "type": "GuitarPluck",
+              "actionParameter": 4
             },
             {
               "offsetBeats": 3.0,
-              "lengthBeats": 1.0,
+              "lengthBeats": 0.5,
               "velocityBase": 100,
-              "type": "GuitarDownstroke",
-              "actionParameter": 0
+              "type": "GuitarPinch",
+              "actionParameter": 33
             },
             {
               "offsetBeats": 3.3333333,
               "lengthBeats": 0.33,
-              "velocityBase": 65,
-              "type": "GuitarUpstroke",
-              "actionParameter": 2
+              "velocityBase": 75,
+              "type": "GuitarPluck",
+              "actionParameter": 3
             },
             {
               "offsetBeats": 3.6666667,
               "lengthBeats": 0.33,
-              "velocityBase": 60,
-              "type": "GuitarDownstroke",
-              "actionParameter": 2
+              "velocityBase": 80,
+              "type": "GuitarPluck",
+              "actionParameter": 4
             }
           ]
         }

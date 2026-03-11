@@ -24,6 +24,7 @@ enum class ArticulationType : uint8_t {
     GuitarDownstroke,
     GuitarUpstroke,
     GuitarPluck,
+    GuitarPinch,
     GuitarMute,
     GuitarPalmDrop,
     
