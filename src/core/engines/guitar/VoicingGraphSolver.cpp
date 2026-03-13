@@ -469,16 +469,11 @@ std::vector<GuitarVoicing> VoicingGraphSolver::SolveVoiceLeading(
     auto generatedCandidates = fretboard_.GenerateValidVoicings(chords[t].chord);
     if (voicingMode == Sonatrix::Core::GuitarVoicingMode::AcousticOpen) {
       auto familyCandidates = ResolveAcousticShapeFamilyCandidates(chords[t].chord);
-      std::vector<GuitarVoicing> acousticCandidatePool = generatedCandidates;
-      for (const auto &familyCandidate : familyCandidates) {
-        AppendUniqueVoicing(acousticCandidatePool, familyCandidate);
-      }
-
       if (!familyCandidates.empty()) {
         states[t] = std::move(familyCandidates);
         usedFamilyRestrictedCandidates[t] = true;
       } else {
-        states[t] = std::move(acousticCandidatePool);
+        states[t] = std::move(generatedCandidates);
       }
     } else {
       states[t] = std::move(generatedCandidates);

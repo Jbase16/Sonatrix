@@ -319,20 +319,7 @@ int GuitarCompiler::ResolveBassString(
     return -1;
   }
 
-  const int defaultString = candidates.front();
-  const int defaultPitch = voicing.GetMidiPitch(defaultString);
-  if (!ContainsPitch(usedFigurePitches, defaultPitch)) {
-    return defaultString;
-  }
-
-  for (int candidateString : candidates) {
-    const int pitch = voicing.GetMidiPitch(candidateString);
-    if (!ContainsPitch(usedFigurePitches, pitch)) {
-      return candidateString;
-    }
-  }
-
-  return defaultString;
+  return candidates.front();
 }
 
 int GuitarCompiler::ResolveAltBassString(
@@ -371,20 +358,7 @@ int GuitarCompiler::ResolveTopString(
     return -1;
   }
 
-  const int defaultString = candidates.front();
-  const int defaultPitch = voicing.GetMidiPitch(defaultString);
-  if (!ContainsPitch(usedFigurePitches, defaultPitch)) {
-    return defaultString;
-  }
-
-  for (int candidateString : candidates) {
-    const int pitch = voicing.GetMidiPitch(candidateString);
-    if (!ContainsPitch(usedFigurePitches, pitch)) {
-      return candidateString;
-    }
-  }
-
-  return defaultString;
+  return candidates.front();
 }
 
 int GuitarCompiler::ResolveTrebleString(
