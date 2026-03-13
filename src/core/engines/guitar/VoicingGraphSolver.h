@@ -38,8 +38,7 @@ private:
       const GuitarVoicing &voicing, const ActiveChordContext &chord,
       Sonatrix::Core::GuitarVoicingMode voicingMode) const;
   std::vector<GuitarVoicing> ResolveAcousticShapeFamilyCandidates(
-      const ActiveChordContext &chord,
-      const std::vector<GuitarVoicing> &candidates) const;
+      const ActiveChordContext &chord) const;
 };
 
 } // namespace Guitar

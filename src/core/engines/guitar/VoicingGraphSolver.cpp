@@ -12,25 +12,107 @@ namespace Guitar {
 
 namespace {
 
-struct KnownAcousticShape {
-  PitchClass root;
-  ChordQuality quality;
-  std::array<int8_t, 6> frets;
-};
+using AcousticShape = std::array<int8_t, 6>;
 
-constexpr std::array<KnownAcousticShape, 11> kKnownAcousticShapes = {{
-    {PitchClass::G, ChordQuality::Major, {3, 2, 0, 0, 3, 3}},
-    {PitchClass::G, ChordQuality::Major, {3, 2, 0, 0, 0, 3}},
-    {PitchClass::E, ChordQuality::Minor, {0, 2, 2, 0, 0, 0}},
-    {PitchClass::E, ChordQuality::Minor7, {0, 2, 2, 0, 3, 3}},
-    {PitchClass::E, ChordQuality::Minor7, {0, 2, 2, 0, 3, 0}},
-    {PitchClass::C, ChordQuality::Major, {-1, 3, 2, 0, 1, 0}},
-    {PitchClass::C, ChordQuality::Add9, {-1, 3, 2, 0, 3, 3}},
-    {PitchClass::D, ChordQuality::Major, {-1, -1, 0, 2, 3, 2}},
-    {PitchClass::A, ChordQuality::Minor, {-1, 0, 2, 2, 1, 0}},
-    {PitchClass::D, ChordQuality::Minor, {-1, -1, 0, 2, 3, 1}},
-    {PitchClass::F, ChordQuality::Major, {1, 3, 3, 2, 1, 1}},
-}};
+int Pc(int midi) {
+  const int value = midi % 12;
+  return (value < 0) ? (value + 12) : value;
+}
+
+PitchClass TransposePitchClass(PitchClass root, int semitones) {
+  return static_cast<PitchClass>((static_cast<int>(root) + semitones) % 12);
+}
+
+void AppendVariants(std::vector<AcousticShape> &out,
+                    std::initializer_list<AcousticShape> variants) {
+  out.insert(out.end(), variants.begin(), variants.end());
+}
+
+std::vector<AcousticShape>
+GetAcousticShapeFamilyVariants(const ActiveChordContext &chord) {
+  std::vector<AcousticShape> variants;
+  if (!chord.isRootPosition()) {
+    return variants;
+  }
+
+  switch (chord.root) {
+  case PitchClass::G:
+    if (chord.quality == ChordQuality::Major) {
+      AppendVariants(variants, {
+                                  {3, 2, 0, 0, 3, 3},
+                                  {3, 2, 0, 0, 0, 3},
+                                  {3, 2, 0, 0, 3, 0},
+                              });
+    }
+    break;
+  case PitchClass::E:
+    if (chord.quality == ChordQuality::Minor) {
+      AppendVariants(variants, {
+                                  {0, 2, 2, 0, 0, 0},
+                                  {0, 2, 2, 0, 0, 3},
+                              });
+    } else if (chord.quality == ChordQuality::Minor7) {
+      AppendVariants(variants, {
+                                  {0, 2, 2, 0, 3, 3},
+                                  {0, 2, 2, 0, 3, 0},
+                                  {0, 2, 0, 0, 3, 0},
+                              });
+    }
+    break;
+  case PitchClass::C:
+    if (chord.quality == ChordQuality::Major) {
+      AppendVariants(variants, {
+                                  {-1, 3, 2, 0, 1, 0},
+                                  {-1, 3, 2, 0, 1, 3},
+                              });
+    } else if (chord.quality == ChordQuality::Add9) {
+      AppendVariants(variants, {
+                                  {-1, 3, 2, 0, 3, 3},
+                                  {-1, 3, 2, 0, 3, 0},
+                              });
+    }
+    break;
+  case PitchClass::D:
+    if (chord.quality == ChordQuality::Major) {
+      AppendVariants(variants, {
+                                  {-1, -1, 0, 2, 3, 2},
+                                  {-1, -1, 0, 2, 3, 0},
+                              });
+    } else if (chord.quality == ChordQuality::Minor) {
+      AppendVariants(variants, {
+                                  {-1, -1, 0, 2, 3, 1},
+                              });
+    } else if (chord.quality == ChordQuality::Sus2) {
+      AppendVariants(variants, {
+                                  {-1, -1, 0, 2, 3, 0},
+                              });
+    } else if (chord.quality == ChordQuality::Sus4) {
+      AppendVariants(variants, {
+                                  {-1, -1, 0, 2, 3, 3},
+                              });
+    }
+    break;
+  case PitchClass::A:
+    if (chord.quality == ChordQuality::Minor) {
+      AppendVariants(variants, {
+                                  {-1, 0, 2, 2, 1, 0},
+                              });
+    }
+    break;
+  case PitchClass::F:
+    if (chord.quality == ChordQuality::Major) {
+      AppendVariants(variants, {
+                                  {1, 3, 3, 2, 1, 1},
+                                  {1, 3, 3, 2, 1, 0},
+                              });
+    }
+    break;
+  default:
+    break;
+  }
+
+  return variants;
+}
 
 bool IsBasicAcousticChordQuality(ChordQuality quality) {
   switch (quality) {
@@ -46,46 +128,122 @@ bool IsBasicAcousticChordQuality(ChordQuality quality) {
   }
 }
 
-bool MatchesKnownAcousticShape(const GuitarVoicing &voicing,
-                               const ActiveChordContext &chord) {
-  if (!chord.isRootPosition()) {
+std::vector<PitchClass>
+GetRequiredPitches(const ActiveChordContext &chord) {
+  std::vector<PitchClass> pitches;
+  pitches.push_back(chord.root);
+
+  switch (chord.quality) {
+  case ChordQuality::Major:
+    pitches.push_back(TransposePitchClass(chord.root, 4));
+    pitches.push_back(TransposePitchClass(chord.root, 7));
+    break;
+  case ChordQuality::Minor:
+    pitches.push_back(TransposePitchClass(chord.root, 3));
+    pitches.push_back(TransposePitchClass(chord.root, 7));
+    break;
+  case ChordQuality::Minor7:
+    pitches.push_back(TransposePitchClass(chord.root, 3));
+    pitches.push_back(TransposePitchClass(chord.root, 7));
+    pitches.push_back(TransposePitchClass(chord.root, 10));
+    break;
+  case ChordQuality::Major7:
+    pitches.push_back(TransposePitchClass(chord.root, 4));
+    pitches.push_back(TransposePitchClass(chord.root, 7));
+    pitches.push_back(TransposePitchClass(chord.root, 11));
+    break;
+  case ChordQuality::Dominant7:
+    pitches.push_back(TransposePitchClass(chord.root, 4));
+    pitches.push_back(TransposePitchClass(chord.root, 7));
+    pitches.push_back(TransposePitchClass(chord.root, 10));
+    break;
+  case ChordQuality::Sus2:
+    pitches.push_back(TransposePitchClass(chord.root, 2));
+    pitches.push_back(TransposePitchClass(chord.root, 7));
+    break;
+  case ChordQuality::Sus4:
+    pitches.push_back(TransposePitchClass(chord.root, 5));
+    pitches.push_back(TransposePitchClass(chord.root, 7));
+    break;
+  case ChordQuality::Add9:
+    pitches.push_back(TransposePitchClass(chord.root, 4));
+    pitches.push_back(TransposePitchClass(chord.root, 7));
+    pitches.push_back(TransposePitchClass(chord.root, 2));
+    break;
+  default:
+    pitches.push_back(TransposePitchClass(chord.root, 4));
+    pitches.push_back(TransposePitchClass(chord.root, 7));
+    break;
+  }
+
+  std::sort(pitches.begin(), pitches.end(),
+            [](PitchClass a, PitchClass b) {
+              return static_cast<int>(a) < static_cast<int>(b);
+            });
+  pitches.erase(std::unique(pitches.begin(), pitches.end()),
+                pitches.end());
+  return pitches;
+}
+
+bool ContainsPitchClass(const GuitarVoicing &voicing, PitchClass pitchClass) {
+  for (int stringIndex = 0; stringIndex < 6; ++stringIndex) {
+    const int midi = voicing.GetMidiPitch(stringIndex);
+    if (midi != -1 && Pc(midi) == static_cast<int>(pitchClass)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool IsFamilyCandidateCompatible(const GuitarVoicing &candidate,
+                                 const ActiveChordContext &chord) {
+  if (candidate.GetNumSoundingStrings() < 3) {
     return false;
   }
 
-  return std::any_of(
-      kKnownAcousticShapes.begin(), kKnownAcousticShapes.end(),
-      [&](const KnownAcousticShape &shape) {
-        return shape.root == chord.root && shape.quality == chord.quality &&
-               shape.frets == voicing.frets;
-      });
-}
-
-bool HasKnownAcousticEquivalent(const ActiveChordContext &chord) {
-  if (!chord.isRootPosition()) {
+  const int lowestMidi = candidate.GetLowestMidiPitch();
+  if (lowestMidi == -1) {
     return false;
   }
 
-  return std::any_of(
-      kKnownAcousticShapes.begin(), kKnownAcousticShapes.end(),
-      [&](const KnownAcousticShape &shape) {
-        return shape.root == chord.root && shape.quality == chord.quality;
-      });
-}
-
-std::vector<std::array<int8_t, 6>>
-GetAcousticShapeFamilyVariants(const ActiveChordContext &chord) {
-  std::vector<std::array<int8_t, 6>> variants;
-  if (!chord.isRootPosition()) {
-    return variants;
+  const PitchClass expectedBass =
+      chord.isRootPosition() ? chord.root : chord.overBass;
+  if (Pc(lowestMidi) != static_cast<int>(expectedBass)) {
+    return false;
   }
 
-  for (const auto &shape : kKnownAcousticShapes) {
-    if (shape.root == chord.root && shape.quality == chord.quality) {
-      variants.push_back(shape.frets);
+  const auto requiredPitches = GetRequiredPitches(chord);
+  for (PitchClass requiredPitch : requiredPitches) {
+    if (!ContainsPitchClass(candidate, requiredPitch)) {
+      return false;
     }
   }
 
-  return variants;
+  return true;
+}
+
+bool HasAcousticShapeFamily(const ActiveChordContext &chord) {
+  return !GetAcousticShapeFamilyVariants(chord).empty();
+}
+
+bool MatchesAcousticShapeFamily(const GuitarVoicing &voicing,
+                                const ActiveChordContext &chord) {
+  const auto variants = GetAcousticShapeFamilyVariants(chord);
+  return std::any_of(variants.begin(), variants.end(),
+                     [&](const AcousticShape &variant) {
+                       return voicing.frets == variant;
+                     });
+}
+
+void AppendUniqueVoicing(std::vector<GuitarVoicing> &out,
+                         const GuitarVoicing &candidate) {
+  const bool exists =
+      std::any_of(out.begin(), out.end(), [&](const GuitarVoicing &existing) {
+        return existing.frets == candidate.frets;
+      });
+  if (!exists) {
+    out.push_back(candidate);
+  }
 }
 
 int ExpectedBassString(const ActiveChordContext &chord) {
@@ -215,7 +373,7 @@ float VoicingGraphSolver::EvaluateVoicingPreferenceCost(
   const int maxFret = voicing.GetMaxFret();
   const int openStrings = voicing.GetNumOpenStrings();
   const int soundingStrings = voicing.GetNumSoundingStrings();
-  const bool hasKnownOpenEquivalent = HasKnownAcousticEquivalent(chord);
+  const bool hasKnownOpenEquivalent = HasAcousticShapeFamily(chord);
 
   float cost = 0.0f;
   cost += averageFret * 1.5f;
@@ -257,7 +415,7 @@ float VoicingGraphSolver::EvaluateVoicingPreferenceCost(
     cost -= 4.0f;
   }
 
-  if (MatchesKnownAcousticShape(voicing, chord)) {
+  if (MatchesAcousticShapeFamily(voicing, chord)) {
     cost -= 30.0f;
   }
 
@@ -269,24 +427,21 @@ float VoicingGraphSolver::EvaluateVoicingPreferenceCost(
 }
 
 std::vector<GuitarVoicing> VoicingGraphSolver::ResolveAcousticShapeFamilyCandidates(
-    const ActiveChordContext &chord,
-    const std::vector<GuitarVoicing> &candidates) const {
+    const ActiveChordContext &chord) const {
   const auto familyVariants = GetAcousticShapeFamilyVariants(chord);
   if (familyVariants.empty()) {
     return {};
   }
 
   std::vector<GuitarVoicing> familyCandidates;
-  familyCandidates.reserve(candidates.size());
+  familyCandidates.reserve(familyVariants.size());
 
-  for (const auto &candidate : candidates) {
-    const bool inFamily = std::any_of(
-        familyVariants.begin(), familyVariants.end(),
-        [&](const std::array<int8_t, 6> &variantFrets) {
-          return candidate.frets == variantFrets;
-        });
-    if (inFamily) {
-      familyCandidates.push_back(candidate);
+  for (const auto &variant : familyVariants) {
+    GuitarVoicing candidate;
+    candidate.frets = variant;
+
+    if (IsFamilyCandidateCompatible(candidate, chord)) {
+      AppendUniqueVoicing(familyCandidates, candidate);
     }
   }
 
@@ -313,13 +468,17 @@ std::vector<GuitarVoicing> VoicingGraphSolver::SolveVoiceLeading(
   for (size_t t = 0; t < chords.size(); ++t) {
     auto generatedCandidates = fretboard_.GenerateValidVoicings(chords[t].chord);
     if (voicingMode == Sonatrix::Core::GuitarVoicingMode::AcousticOpen) {
-      auto familyCandidates =
-          ResolveAcousticShapeFamilyCandidates(chords[t].chord, generatedCandidates);
+      auto familyCandidates = ResolveAcousticShapeFamilyCandidates(chords[t].chord);
+      std::vector<GuitarVoicing> acousticCandidatePool = generatedCandidates;
+      for (const auto &familyCandidate : familyCandidates) {
+        AppendUniqueVoicing(acousticCandidatePool, familyCandidate);
+      }
+
       if (!familyCandidates.empty()) {
         states[t] = std::move(familyCandidates);
         usedFamilyRestrictedCandidates[t] = true;
       } else {
-        states[t] = std::move(generatedCandidates);
+        states[t] = std::move(acousticCandidatePool);
       }
     } else {
       states[t] = std::move(generatedCandidates);
