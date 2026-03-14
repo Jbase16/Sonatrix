@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.24)
 project(Sonatrix VERSION 0.1.0 LANGUAGES CXX OBJCXX Swift)
 
+set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum macOS deployment version" FORCE)
+
 # Require C++20 for lock-free concurrency and modern DSP features
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -23,8 +25,14 @@ file(GLOB_RECURSE SONATRIX_BUNDLE_ASSETS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" 
 list(FILTER SONATRIX_BUNDLE_ASSETS EXCLUDE REGEX "\\.DS_Store$")
 foreach(asset IN LISTS SONATRIX_BUNDLE_ASSETS)
     string(REGEX REPLACE "^assets/" "" asset_relative "${asset}")
+    get_filename_component(asset_dir "${asset_relative}" DIRECTORY)
+    if(asset_dir STREQUAL "")
+        set(asset_bundle_location "Resources/Assets")
+    else()
+        set(asset_bundle_location "Resources/Assets/${asset_dir}")
+    endif()
     set_source_files_properties("${asset}" PROPERTIES
-        MACOSX_PACKAGE_LOCATION "Resources/Assets/${asset_relative}"
+        MACOSX_PACKAGE_LOCATION "${asset_bundle_location}"
     )
 endforeach()
 
@@ -61,7 +69,9 @@ target_link_libraries(SonatrixStandalone PRIVATE
 
 set_target_properties(SonatrixStandalone PROPERTIES
     MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/resources/standalone/Info.plist
+    MACOSX_BUNDLE_GUI_IDENTIFIER "com.jason.Sonatrix"
     XCODE_ATTRIBUTE_SWIFT_OBJC_BRIDGING_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/src/standalone/Sonatrix-Bridging-Header.h"
+    XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.jason.Sonatrix"
 )
 target_compile_options(SonatrixStandalone PRIVATE "$<$<COMPILE_LANGUAGE:Swift>:-DSTANDALONE>")
 
@@ -92,6 +102,8 @@ target_link_libraries(SonatrixAUv3 PRIVATE
 
 set_target_properties(SonatrixAUv3 PROPERTIES
     BUNDLE True
+    MACOSX_BUNDLE_GUI_IDENTIFIER "com.jason.Sonatrix.AUv3"
     XCODE_ATTRIBUTE_WRAPPER_EXTENSION "appex"
     MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/resources/plugin/Info.plist
+    XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.jason.Sonatrix.AUv3"
 )
