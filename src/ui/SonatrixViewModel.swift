@@ -10,6 +10,75 @@ import SwiftUI
 // -----------------------------------------------------------------------------
 
 public class SonatrixViewModel: ObservableObject {
+    public struct RootOption: Identifiable, Hashable, Codable {
+        public let id: UInt8
+        public let displayName: String
+
+        public init(id: UInt8, displayName: String) {
+            self.id = id
+            self.displayName = displayName
+        }
+    }
+
+    public struct QualityOption: Identifiable, Hashable, Codable {
+        public let id: UInt8
+        public let storedName: String
+        public let displayLabel: String
+        public let suffix: String
+
+        public init(id: UInt8, storedName: String, displayLabel: String, suffix: String) {
+            self.id = id
+            self.storedName = storedName
+            self.displayLabel = displayLabel
+            self.suffix = suffix
+        }
+    }
+
+    public static let ticksPerBeat: UInt16 = 960
+    public static let defaultChordBeats: Int = 4
+    public static let minimumChordWidth: CGFloat = 84
+    public static let rootOptions: [RootOption] = [
+        RootOption(id: 0, displayName: "C"),
+        RootOption(id: 1, displayName: "C#"),
+        RootOption(id: 2, displayName: "D"),
+        RootOption(id: 3, displayName: "D#"),
+        RootOption(id: 4, displayName: "E"),
+        RootOption(id: 5, displayName: "F"),
+        RootOption(id: 6, displayName: "F#"),
+        RootOption(id: 7, displayName: "G"),
+        RootOption(id: 8, displayName: "G#"),
+        RootOption(id: 9, displayName: "A"),
+        RootOption(id: 10, displayName: "A#"),
+        RootOption(id: 11, displayName: "B")
+    ]
+    public static let circleOfFifthsRoots: [RootOption] = [
+        RootOption(id: 0, displayName: "C"),
+        RootOption(id: 7, displayName: "G"),
+        RootOption(id: 2, displayName: "D"),
+        RootOption(id: 9, displayName: "A"),
+        RootOption(id: 4, displayName: "E"),
+        RootOption(id: 11, displayName: "B"),
+        RootOption(id: 6, displayName: "F#"),
+        RootOption(id: 1, displayName: "Db"),
+        RootOption(id: 8, displayName: "Ab"),
+        RootOption(id: 3, displayName: "Eb"),
+        RootOption(id: 10, displayName: "Bb"),
+        RootOption(id: 5, displayName: "F")
+    ]
+    public static let qualityOptions: [QualityOption] = [
+        QualityOption(id: 0, storedName: "maj", displayLabel: "Major", suffix: ""),
+        QualityOption(id: 1, storedName: "min", displayLabel: "Minor", suffix: "m"),
+        QualityOption(id: 2, storedName: "dim", displayLabel: "Diminished", suffix: "dim"),
+        QualityOption(id: 3, storedName: "aug", displayLabel: "Augmented", suffix: "aug"),
+        QualityOption(id: 4, storedName: "dom7", displayLabel: "Dominant 7", suffix: "7"),
+        QualityOption(id: 5, storedName: "maj7", displayLabel: "Major 7", suffix: "maj7"),
+        QualityOption(id: 6, storedName: "min7", displayLabel: "Minor 7", suffix: "m7"),
+        QualityOption(id: 7, storedName: "hdim7", displayLabel: "Half-Diminished", suffix: "m7b5"),
+        QualityOption(id: 8, storedName: "sus2", displayLabel: "Sus 2", suffix: "sus2"),
+        QualityOption(id: 9, storedName: "sus4", displayLabel: "Sus 4", suffix: "sus4"),
+        QualityOption(id: 10, storedName: "add9", displayLabel: "Add 9", suffix: "add9"),
+        QualityOption(id: 11, storedName: "power", displayLabel: "Power", suffix: "5")
+    ]
 
     // The bridged Objective-C++ Engine orchestrator
     private var engineFacade: SonatrixEngineFacade
@@ -28,7 +97,16 @@ public class SonatrixViewModel: ObservableObject {
         // For C++ interop
         public var rootIndex: UInt8
         public var qualityIndex: UInt8
-        public var durationTicks: UInt16 = 1920  // 1 bar at 480 PPQ
+        public var durationTicks: UInt16 = UInt16(SonatrixViewModel.defaultChordBeats) * SonatrixViewModel.ticksPerBeat
+
+        public var durationBeats: Int {
+            max(1, Int(durationTicks) / Int(SonatrixViewModel.ticksPerBeat))
+        }
+
+        public var displayName: String {
+            let quality = SonatrixViewModel.qualityOption(for: qualityIndex)
+            return rootName + quality.suffix
+        }
     }
 
     // In a full implementation, this would hold an array of custom Swift structs
@@ -49,6 +127,51 @@ public class SonatrixViewModel: ObservableObject {
         self.engineFacade = SonatrixEngineFacade()
     }
 
+    private func bundledBassMockKitPath() throws -> String {
+        guard let resourcePath = Bundle.main.resourcePath else {
+            throw NSError(domain: "Sonatrix.AssetsNotFound", code: 1, userInfo: nil)
+        }
+
+        let kitPath = resourcePath + "/Assets/samples/bass_mock"
+        guard FileManager.default.fileExists(atPath: kitPath) else {
+            throw NSError(
+                domain: "Sonatrix.AssetsNotFound",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Missing bundled sample kit at \(kitPath)"])
+        }
+
+        return kitPath
+    }
+
+    public static func rootOption(for rootIndex: UInt8) -> RootOption {
+        rootOptions.first(where: { $0.id == rootIndex })
+            ?? circleOfFifthsRoots.first(where: { $0.id == rootIndex })
+            ?? rootOptions[0]
+    }
+
+    public static func qualityOption(for qualityIndex: UInt8) -> QualityOption {
+        qualityOptions.first(where: { $0.id == qualityIndex }) ?? qualityOptions[0]
+    }
+
+    public static func makeChord(rootIndex: UInt8,
+                                 qualityIndex: UInt8,
+                                 durationBeats: Int = defaultChordBeats) -> ChordItem {
+        let root = rootOption(for: rootIndex)
+        let quality = qualityOption(for: qualityIndex)
+        let clampedBeats = max(1, min(durationBeats, 32))
+        let durationTicks = UInt16(clampedBeats * Int(ticksPerBeat))
+        return ChordItem(
+            rootName: root.displayName,
+            qualityName: quality.storedName,
+            rootIndex: root.id,
+            qualityIndex: quality.id,
+            durationTicks: durationTicks)
+    }
+
+    public static func defaultChord() -> ChordItem {
+        makeChord(rootIndex: 0, qualityIndex: 0)
+    }
+
     // MARK: - Project File API
 
     public func saveProject(to url: URL) throws {
@@ -65,7 +188,7 @@ public class SonatrixViewModel: ObservableObject {
         let state = try decoder.decode(ProjectState.self, from: data)
 
         DispatchQueue.main.async {
-            self.arrangementChords = state.chords
+            self.arrangementChords = state.chords.map { self.normalized($0) }
             for (index, volume) in state.busVolumes.enumerated() {
                 if index < self.busVolumes.count {
                     self.setVolume(bus: index, volume: volume)
@@ -79,11 +202,7 @@ public class SonatrixViewModel: ObservableObject {
 
     public func bounceAudio(to url: URL) throws {
         let nsVolumes = busVolumes.map { NSNumber(value: $0) }
-
-        guard let resourcePath = Bundle.main.resourcePath else {
-            throw NSError(domain: "Sonatrix.AssetsNotFound", code: 1, userInfo: nil)
-        }
-        let assetsPath = resourcePath + "/Assets"
+        let assetsPath = try bundledBassMockKitPath()
 
         let success = engineFacade.bounceAudio(
             toPath: url.path,
@@ -107,9 +226,12 @@ public class SonatrixViewModel: ObservableObject {
         if isPlaying {
             engineFacade.stop()
             isPlaying = false
-        } else {
+        } else if !arrangementChords.isEmpty {
+            compileArrangement()
             engineFacade.play()
             isPlaying = true
+        } else {
+            isPlaying = false
         }
     }
 
@@ -127,10 +249,20 @@ public class SonatrixViewModel: ObservableObject {
     public func clearArrangement() {
         engineFacade.clearChords()
         arrangementChords.removeAll()
+        if isPlaying {
+            engineFacade.stop()
+            isPlaying = false
+        }
     }
 
     public func addChord(_ chord: ChordItem) {
-        arrangementChords.append(chord)
+        arrangementChords.append(normalized(chord))
+        compileArrangement()
+    }
+
+    public func insertChord(_ chord: ChordItem, at index: Int) {
+        let insertionIndex = max(0, min(index, arrangementChords.count))
+        arrangementChords.insert(normalized(chord), at: insertionIndex)
         compileArrangement()
     }
 
@@ -143,14 +275,61 @@ public class SonatrixViewModel: ObservableObject {
 
     public func updateChord(at index: Int, with newChord: ChordItem) {
         if index >= 0 && index < arrangementChords.count {
-            arrangementChords[index] = newChord
+            arrangementChords[index] = normalized(newChord)
             compileArrangement()
         }
     }
 
+    public func width(for chord: ChordItem, pixelsPerBeat: CGFloat) -> CGFloat {
+        max(CGFloat(chord.durationBeats) * pixelsPerBeat, Self.minimumChordWidth)
+    }
+
+    public func timelineWidth(pixelsPerBeat: CGFloat, blockSpacing: CGFloat) -> CGFloat {
+        let blockWidths = arrangementChords.reduce(CGFloat.zero) { partial, chord in
+            partial + width(for: chord, pixelsPerBeat: pixelsPerBeat)
+        }
+        let spacing = CGFloat(max(arrangementChords.count - 1, 0)) * blockSpacing
+        return max(520, blockWidths + spacing + 24)
+    }
+
+    public func insertionIndex(forTimelineX timelineX: CGFloat,
+                               pixelsPerBeat: CGFloat,
+                               blockSpacing: CGFloat) -> Int {
+        let clampedX = max(0, timelineX)
+        var cursor: CGFloat = 0
+
+        for (index, chord) in arrangementChords.enumerated() {
+            let blockWidth = width(for: chord, pixelsPerBeat: pixelsPerBeat)
+            let midpoint = cursor + (blockWidth / 2)
+            if clampedX < midpoint {
+                return index
+            }
+            cursor += blockWidth + blockSpacing
+        }
+
+        return arrangementChords.count
+    }
+
+    private func normalized(_ chord: ChordItem) -> ChordItem {
+        Self.makeChord(
+            rootIndex: chord.rootIndex,
+            qualityIndex: chord.qualityIndex,
+            durationBeats: chord.durationBeats)
+    }
+
     private func compileArrangement() {
         isCompiling = true
+        defer { isCompiling = false }
+
         engineFacade.clearChords()
+
+        if arrangementChords.isEmpty {
+            if isPlaying {
+                engineFacade.stop()
+                isPlaying = false
+            }
+            return
+        }
 
         // Push chords to C++ based on the dynamic SwiftUI array
         var currentTick: UInt64 = 0
@@ -164,13 +343,5 @@ public class SonatrixViewModel: ObservableObject {
 
         // Tell the C++ layer to run the Viterbi Graph Solvers and Neural latencies
         engineFacade.compileAndSchedule()
-
-        // Once scheduled, ensure playback is on
-        if !isPlaying {
-            engineFacade.play()
-            isPlaying = true
-        }
-
-        isCompiling = false
     }
 }

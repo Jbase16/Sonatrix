@@ -7,6 +7,32 @@
 #include "../core/audio/VoiceManager.h"
 #include "../core/midi/MIDIEvent.h"
 
+namespace {
+
+std::string ResolveBassMockKitPath(NSBundle *bundle) {
+  NSFileManager *fileManager = [NSFileManager defaultManager];
+
+  if (bundle != nil) {
+    NSString *resourcePath = [bundle resourcePath];
+    if (resourcePath != nil) {
+      NSString *bundledPath =
+          [resourcePath stringByAppendingPathComponent:@"Assets/samples/bass_mock"];
+      if ([fileManager fileExistsAtPath:bundledPath]) {
+        return std::string([bundledPath UTF8String]);
+      }
+    }
+  }
+
+  NSString *repoPath = @"/Users/jason/Developer/Sonatrix/assets/samples/bass_mock";
+  if ([fileManager fileExistsAtPath:repoPath]) {
+    return std::string([repoPath UTF8String]);
+  }
+
+  return {};
+}
+
+} // namespace
+
 @interface SonatrixAudioUnit ()
 @end
 
@@ -29,8 +55,14 @@
 
   // Initialize the C++ Core Engine
   _voiceManager = std::make_unique<Sonatrix::Core::Audio::VoiceManager>();
-  _voiceManager->LoadInstrumentKit(
-      "/Users/jason/Developer/Sonatrix/assets/samples/bass_mock");
+  const std::string kitPath =
+      ResolveBassMockKitPath([NSBundle bundleForClass:[SonatrixAudioUnit class]]);
+  if (!kitPath.empty()) {
+    _voiceManager->LoadInstrumentKit(kitPath);
+  } else {
+    os_log_error(OS_LOG_DEFAULT,
+                 "SonatrixAudioUnit: Failed to resolve bass_mock sample kit path.");
+  }
 
   // Setup Audio Busses (Stereo Output)
   AVAudioFormat *defaultFormat =

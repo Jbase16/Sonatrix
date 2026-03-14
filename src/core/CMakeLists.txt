@@ -15,6 +15,10 @@ add_library(SonatrixCore STATIC
     ml/DynamicGrooveVector.cpp
     ml/NeuralTimbreReshaper.h
     ml/NeuralTimbreReshaper.cpp
+    engines/guitar/FretboardModel.h
+    engines/guitar/FretboardModel.cpp
+    engines/guitar/VoicingGraphSolver.h
+    engines/guitar/VoicingGraphSolver.cpp
     engines/drums/DrumCompiler.h
     engines/drums/DrumCompiler.cpp
     engines/bass/BassCompiler.h

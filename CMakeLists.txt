@@ -19,6 +19,15 @@ find_library(FOUNDATION_FRAMEWORK Foundation)
 find_library(APPKIT_FRAMEWORK AppKit)
 find_library(SWIFTUI_FRAMEWORK SwiftUI)
 
+file(GLOB_RECURSE SONATRIX_BUNDLE_ASSETS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "assets/*")
+list(FILTER SONATRIX_BUNDLE_ASSETS EXCLUDE REGEX "\\.DS_Store$")
+foreach(asset IN LISTS SONATRIX_BUNDLE_ASSETS)
+    string(REGEX REPLACE "^assets/" "" asset_relative "${asset}")
+    set_source_files_properties("${asset}" PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources/Assets/${asset_relative}"
+    )
+endforeach()
+
 # ------------------------------------------------------------------------------
 # 1. The Core DSP and Event Engine (Static Library)
 # ------------------------------------------------------------------------------
@@ -38,6 +47,7 @@ add_executable(SonatrixStandalone MACOSX_BUNDLE
     src/ui/MixerView.swift
     src/ui/PatternBrowser.swift
     src/ui/DeltaGraphEditor.swift
+    ${SONATRIX_BUNDLE_ASSETS}
 )
 target_link_libraries(SonatrixStandalone PRIVATE 
     SonatrixCore
@@ -65,6 +75,7 @@ add_library(SonatrixAUv3 MODULE
     src/ui/MixerView.swift
     src/ui/PatternBrowser.swift
     src/ui/DeltaGraphEditor.swift
+    ${SONATRIX_BUNDLE_ASSETS}
 )
 target_link_libraries(SonatrixAUv3 PRIVATE
     SonatrixCore

@@ -725,16 +725,16 @@
             {
               "offsetBeats": 0.3333333,
               "lengthBeats": 0.33,
-              "velocityBase": 75,
+              "velocityBase": 72,
               "type": "GuitarPluck",
-              "targetRole": "InnerHigh"
+              "targetRole": "InnerLow"
             },
             {
               "offsetBeats": 0.6666667,
               "lengthBeats": 0.33,
-              "velocityBase": 80,
+              "velocityBase": 78,
               "type": "GuitarPluck",
-              "targetRole": "Treble"
+              "targetRole": "InnerHigh"
             },
             {
               "offsetBeats": 1.0,
@@ -769,16 +769,16 @@
             {
               "offsetBeats": 2.3333333,
               "lengthBeats": 0.33,
-              "velocityBase": 75,
+              "velocityBase": 72,
               "type": "GuitarPluck",
-              "targetRole": "InnerHigh"
+              "targetRole": "InnerLow"
             },
             {
               "offsetBeats": 2.6666667,
               "lengthBeats": 0.33,
-              "velocityBase": 80,
+              "velocityBase": 78,
               "type": "GuitarPluck",
-              "targetRole": "Treble"
+              "targetRole": "InnerHigh"
             },
             {
               "offsetBeats": 3.0,

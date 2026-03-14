@@ -13,6 +13,32 @@
 #include "../core/concurrency/SPSCQueue.h"
 #include "../core/midi/MIDIEvent.h"
 
+namespace {
+
+std::string ResolveBassMockKitPath(NSBundle *bundle) {
+  NSFileManager *fileManager = [NSFileManager defaultManager];
+
+  if (bundle != nil) {
+    NSString *resourcePath = [bundle resourcePath];
+    if (resourcePath != nil) {
+      NSString *bundledPath =
+          [resourcePath stringByAppendingPathComponent:@"Assets/samples/bass_mock"];
+      if ([fileManager fileExistsAtPath:bundledPath]) {
+        return std::string([bundledPath UTF8String]);
+      }
+    }
+  }
+
+  NSString *repoPath = @"/Users/jason/Developer/Sonatrix/assets/samples/bass_mock";
+  if ([fileManager fileExistsAtPath:repoPath]) {
+    return std::string([repoPath UTF8String]);
+  }
+
+  return {};
+}
+
+} // namespace
+
 @interface StandaloneAudioEngine ()
 @property(nonatomic, strong) AVAudioEngine *engine;
 - (Sonatrix::Core::Audio::VoiceManager *)getVoiceManager;
@@ -41,11 +67,19 @@
 - (void)pushMIDIEventStatus:(uint8_t)status
                       data1:(uint8_t)data1
                       data2:(uint8_t)data2 {
+  [self pushMIDIEventStatus:status data1:data1 data2:data2 channel:0];
+}
+
+- (void)pushMIDIEventStatus:(uint8_t)status
+                      data1:(uint8_t)data1
+                      data2:(uint8_t)data2
+                    channel:(uint8_t)channel {
   if (!_midiQueue)
     return;
   Sonatrix::Core::MIDI::MIDIEvent ev;
   ev.data1 = data1;
   ev.data2 = data2;
+  ev.channel = channel;
   if ((status & 0xF0) == 0x90 && data2 > 0) {
     ev.type = Sonatrix::Core::MIDI::MIDIEventType::NoteOn;
   } else if ((status & 0xF0) == 0x80 ||
@@ -67,8 +101,12 @@
   self = [super init];
   if (self) {
     _voiceManager = std::make_unique<Sonatrix::Core::Audio::VoiceManager>();
-    _voiceManager->LoadInstrumentKit(
-        "/Users/jason/Developer/Sonatrix/assets/samples/bass_mock");
+    const std::string kitPath = ResolveBassMockKitPath([NSBundle mainBundle]);
+    if (!kitPath.empty()) {
+      _voiceManager->LoadInstrumentKit(kitPath);
+    } else {
+      NSLog(@"StandaloneAudioEngine: Failed to resolve bass_mock sample kit path.");
+    }
     _midiQueue = std::make_unique<Sonatrix::Core::Concurrency::SPSCQueue<
         Sonatrix::Core::MIDI::MIDIEvent>>(1024);
 
@@ -162,6 +200,7 @@ static void MIDIInputCallback(const MIDIPacketList *pktlist,
           Sonatrix::Core::MIDI::MIDIEvent ev;
           ev.data1 = data1;
           ev.data2 = data2;
+          ev.channel = static_cast<uint8_t>((runningStatus & 0x0F) + 1);
           ev.type = (type == 0x90)
                         ? Sonatrix::Core::MIDI::MIDIEventType::NoteOn
                         : Sonatrix::Core::MIDI::MIDIEventType::NoteOff;

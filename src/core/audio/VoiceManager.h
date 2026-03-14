@@ -42,6 +42,12 @@ public:
   void RenderAudio(float **outputChannels, uint32_t numFrames,
                    uint32_t numChannels);
 
+  AudioMixer &GetMixer() { return mixer_; }
+  const AudioMixer &GetMixer() const { return mixer_; }
+  const InstrumentArticulation &GetKitArticulation() const {
+    return activeArticulation_;
+  }
+
 private:
   // Polyphony cap. Expanded to 32 to handle overlapping 6-string acoustic strums without aggressive choking.
   static constexpr size_t MAX_VOICES = 32;
