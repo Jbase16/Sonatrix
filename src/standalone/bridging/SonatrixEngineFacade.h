@@ -13,6 +13,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, readonly) BOOL isPlaying;
 @property(nonatomic, readonly) double currentPlayheadTick;
 @property(nonatomic, readonly) double tempoBPM;
+@property(nonatomic, readonly) BOOL arrangementLoopEnabled;
 
 - (instancetype)init;
 
@@ -22,6 +23,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)stop;
 - (void)seekToTick:(double)tickOffset;
 - (void)setTempoBPM:(double)tempoBPM;
+- (void)setArrangementLoopEnabled:(BOOL)enabled;
+- (void)setArrangementLengthTicks:(double)lengthTicks;
 
 // Arrangement Controls (Mocked for Phase 11)
 - (void)clearChords;
@@ -37,6 +40,15 @@ NS_ASSUME_NONNULL_BEGIN
 
 // Request the C++ backend to compile the current arrangement and schedule it
 - (void)compileAndSchedule;
+
+// Chord Preview
+- (void)previewChordWithRoot:(uint8_t)rootKey
+                     quality:(uint8_t)quality
+                durationTicks:(double)durationTicks
+                 guitarFrets:(nullable NSArray<NSNumber *> *)guitarFrets
+                   noteOrder:(nullable NSArray<NSNumber *> *)noteOrder
+              noteVelocities:(nullable NSArray<NSNumber *> *)noteVelocities
+                  shouldLoop:(BOOL)shouldLoop;
 
 // Pattern Selection
 - (void)setPatternTemplateId:(NSString *)patternTemplateId;

@@ -204,11 +204,27 @@ struct TransportRibbon: View {
 
             #if STANDALONE
                 Button(action: {
+                    viewModel.restartPlayback()
+                }) {
+                    Image(systemName: "backward.end.fill")
+                        .font(.title3)
+                        .foregroundColor(.white)
+                }.buttonStyle(PlainButtonStyle())
+
+                Button(action: {
                     viewModel.togglePlayback()
                 }) {
                     Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
                         .font(.title)
                         .foregroundColor(viewModel.isPlaying ? .green : .white)
+                }.buttonStyle(PlainButtonStyle())
+
+                Button(action: {
+                    viewModel.isLoopEnabled.toggle()
+                }) {
+                    Image(systemName: "repeat")
+                        .font(.title3)
+                        .foregroundColor(viewModel.isLoopEnabled ? .orange : .white)
                 }.buttonStyle(PlainButtonStyle())
 
                 Image(systemName: "square.and.arrow.down.fill")
@@ -359,6 +375,7 @@ struct ChordTrackRuler: View {
                             sectionInset: horizontalInset,
                             height: trackLaneHeight,
                             onSelect: { index in
+                                viewModel.stopPlayback()
                                 let chord = viewModel.arrangementChords[index]
                                 editingSession = ChordEditSession(index: index, chord: chord)
                             },
@@ -425,6 +442,10 @@ struct ChordTrackRuler: View {
                     chord: session.chord,
                     onSave: { updatedChord in
                         viewModel.updateChord(at: session.index, with: updatedChord)
+                        editingSession = nil
+                    },
+                    onDelete: {
+                        viewModel.removeChord(at: session.index)
                         editingSession = nil
                     },
                     onCancel: {
@@ -496,20 +517,29 @@ struct ChordTrackRuler: View {
 #if STANDALONE
     struct ChordEditorSheet: View {
         @ObservedObject var viewModel: SonatrixViewModel
+        let originalChord: SonatrixViewModel.ChordItem
         @State var chord: SonatrixViewModel.ChordItem
         @State private var guitarNotes: [SonatrixViewModel.ChordStringNote]
         @State private var draggedNoteID: Int?
+        @State private var rememberedFrets: [Int: Int]
+        @State private var previewShouldLoop: Bool = false
         var onSave: (SonatrixViewModel.ChordItem) -> Void
+        var onDelete: () -> Void
         var onCancel: () -> Void
 
         init(viewModel: SonatrixViewModel,
              chord: SonatrixViewModel.ChordItem,
              onSave: @escaping (SonatrixViewModel.ChordItem) -> Void,
+             onDelete: @escaping () -> Void,
              onCancel: @escaping () -> Void) {
+            let initialNotes = viewModel.editableGuitarNotes(for: chord)
             self.viewModel = viewModel
+            self.originalChord = chord
             self._chord = State(initialValue: chord)
-            self._guitarNotes = State(initialValue: viewModel.editableGuitarNotes(for: chord))
+            self._guitarNotes = State(initialValue: initialNotes)
+            self._rememberedFrets = State(initialValue: Self.makeRememberedFrets(notes: initialNotes, fallbackNotes: initialNotes))
             self.onSave = onSave
+            self.onDelete = onDelete
             self.onCancel = onCancel
         }
 
@@ -526,6 +556,8 @@ struct ChordTrackRuler: View {
                     }
                     .onChange(of: chord.rootIndex) { newValue in
                         chord.rootName = SonatrixViewModel.rootOption(for: newValue).displayName
+                        refreshRememberedFretsForCurrentChord()
+                        scheduleLoopPreviewRefreshIfNeeded()
                     }
 
                     Picker("Quality", selection: $chord.qualityIndex) {
@@ -535,13 +567,18 @@ struct ChordTrackRuler: View {
                     }
                     .onChange(of: chord.qualityIndex) { newValue in
                         chord.qualityName = SonatrixViewModel.qualityOption(for: newValue).storedName
+                        refreshRememberedFretsForCurrentChord()
+                        scheduleLoopPreviewRefreshIfNeeded()
                     }
 
                     Stepper(
                         "Duration (Beats): \(chord.durationBeats)",
                         value: Binding(
                             get: { chord.durationBeats },
-                            set: { chord.durationTicks = UInt16($0) * SonatrixViewModel.ticksPerBeat }
+                            set: {
+                                chord.durationTicks = UInt16($0) * SonatrixViewModel.ticksPerBeat
+                                scheduleLoopPreviewRefreshIfNeeded()
+                            }
                         ),
                         in: 1...32)
                 }
@@ -551,10 +588,31 @@ struct ChordTrackRuler: View {
                     Text("Chord Notes")
                         .font(.headline)
                     Spacer()
-                    Button("Suggest Acoustic Shape") {
-                        var resetChord = chord
-                        resetChord.guitarNotes = nil
-                        guitarNotes = viewModel.editableGuitarNotes(for: resetChord)
+                    Button(previewShouldLoop ? "Loop Preview" : "Preview") {
+                        let previewChord = currentPreviewChord()
+                        viewModel.previewChord(previewChord,
+                                               notes: guitarNotes,
+                                               looped: previewShouldLoop)
+                    }
+                    .buttonStyle(BorderedButtonStyle())
+                    .tint(.green)
+                    Button("Stop Preview") {
+                        viewModel.stopChordPreview()
+                    }
+                    .buttonStyle(BorderedButtonStyle())
+                    Button(action: {
+                        previewShouldLoop.toggle()
+                    }) {
+                        Image(systemName: "repeat")
+                            .foregroundColor(previewShouldLoop ? .orange : .white)
+                    }
+                    .buttonStyle(BorderedButtonStyle())
+                    Button("Reset Notes") {
+                        resetNotesToSuggestedShape()
+                    }
+                    .buttonStyle(BorderedButtonStyle())
+                    Button("Revert") {
+                        revertEditorState()
                     }
                     .buttonStyle(BorderedButtonStyle())
                 }
@@ -569,7 +627,13 @@ struct ChordTrackRuler: View {
                             ForEach($guitarNotes) { $note in
                                 ChordNoteRow(
                                     viewModel: viewModel,
-                                    note: $note
+                                    note: $note,
+                                    onMuteToggle: {
+                                        toggleMute(for: note.stringIndex)
+                                    },
+                                    onFretChange: { newFret in
+                                        rememberFret(newFret, for: note.stringIndex)
+                                    }
                                 )
                                 .onDrag {
                                     draggedNoteID = note.id
@@ -600,10 +664,20 @@ struct ChordTrackRuler: View {
                 }
 
                 HStack {
-                    Button("Cancel", action: onCancel)
+                    Button("Delete Chord") {
+                        viewModel.stopChordPreview()
+                        onDelete()
+                    }
+                        .buttonStyle(BorderedButtonStyle())
+                        .tint(.red)
+                    Button("Cancel") {
+                        viewModel.stopChordPreview()
+                        onCancel()
+                    }
                         .buttonStyle(PlainButtonStyle())
                     Spacer()
                     Button("Save") {
+                        viewModel.stopChordPreview()
                         chord.guitarNotes = guitarNotes.enumerated().map { index, note in
                             var updated = note
                             updated.order = index
@@ -617,6 +691,104 @@ struct ChordTrackRuler: View {
             }
             .padding()
             .frame(width: 620)
+            .onAppear {
+                viewModel.stopPlayback()
+            }
+            .onDisappear {
+                viewModel.stopChordPreview()
+            }
+            .onChange(of: guitarNotes) { _ in
+                scheduleLoopPreviewRefreshIfNeeded()
+            }
+        }
+
+        private static func makeRememberedFrets(
+            notes: [SonatrixViewModel.ChordStringNote],
+            fallbackNotes: [SonatrixViewModel.ChordStringNote]
+        ) -> [Int: Int] {
+            var remembered: [Int: Int] = [:]
+
+            for note in notes where note.fret >= 0 {
+                remembered[note.stringIndex] = note.fret
+            }
+
+            for note in fallbackNotes where note.fret >= 0 && remembered[note.stringIndex] == nil {
+                remembered[note.stringIndex] = note.fret
+            }
+
+            return remembered
+        }
+
+        private func suggestedNotes(for baseChord: SonatrixViewModel.ChordItem) -> [SonatrixViewModel.ChordStringNote] {
+            var suggestedChord = baseChord
+            suggestedChord.guitarNotes = nil
+            return viewModel.editableGuitarNotes(for: suggestedChord)
+        }
+
+        private func resetNotesToSuggestedShape() {
+            let suggested = suggestedNotes(for: chord)
+            guitarNotes = suggested
+            rememberedFrets = Self.makeRememberedFrets(notes: suggested, fallbackNotes: suggested)
+            scheduleLoopPreviewRefreshIfNeeded()
+        }
+
+        private func revertEditorState() {
+            chord = originalChord
+            let restoredNotes = viewModel.editableGuitarNotes(for: originalChord)
+            guitarNotes = restoredNotes
+            rememberedFrets = Self.makeRememberedFrets(notes: restoredNotes, fallbackNotes: restoredNotes)
+            scheduleLoopPreviewRefreshIfNeeded()
+        }
+
+        private func refreshRememberedFretsForCurrentChord() {
+            let fallbackNotes = suggestedNotes(for: chord)
+            rememberedFrets = Self.makeRememberedFrets(notes: guitarNotes, fallbackNotes: fallbackNotes)
+        }
+
+        private func toggleMute(for stringIndex: Int) {
+            guard let noteIndex = guitarNotes.firstIndex(where: { $0.stringIndex == stringIndex }) else {
+                return
+            }
+
+            if guitarNotes[noteIndex].fret >= 0 {
+                rememberedFrets[stringIndex] = guitarNotes[noteIndex].fret
+                guitarNotes[noteIndex].fret = -1
+                return
+            }
+
+            let fallbackNotes = suggestedNotes(for: chord)
+            let fallbackFret = rememberedFrets[stringIndex]
+                ?? fallbackNotes.first(where: { $0.stringIndex == stringIndex })?.fret
+                ?? 0
+            guitarNotes[noteIndex].fret = max(0, fallbackFret)
+            rememberedFrets[stringIndex] = guitarNotes[noteIndex].fret
+        }
+
+        private func rememberFret(_ fret: Int, for stringIndex: Int) {
+            rememberedFrets[stringIndex] = fret
+        }
+
+        private func currentPreviewChord() -> SonatrixViewModel.ChordItem {
+            var previewChord = chord
+            previewChord.guitarNotes = guitarNotes.enumerated().map { index, note in
+                var updated = note
+                updated.order = index
+                return updated
+            }
+            return previewChord
+        }
+
+        private func scheduleLoopPreviewRefreshIfNeeded() {
+            guard previewShouldLoop, viewModel.isLoopPreviewingChord else {
+                return
+            }
+
+            let previewChord = currentPreviewChord()
+            DispatchQueue.main.async {
+                viewModel.previewChord(previewChord,
+                                       notes: guitarNotes,
+                                       looped: true)
+            }
         }
     }
 #endif
@@ -933,13 +1105,28 @@ private struct TimelineChordLane: View {
         ZStack(alignment: .leading) {
             ForEach(sectionFrames, id: \.index) { frame in
                 if frame.index < chords.count {
-                    ChordBlock(
-                        title: chords[frame.index].displayName,
-                        subtitle: "\(chords[frame.index].durationBeats) beats",
-                        width: frame.width,
-                        height: height - 8,
-                        sectionIndex: frame.index
-                    )
+                    ZStack(alignment: .topTrailing) {
+                        ChordBlock(
+                            title: chords[frame.index].displayName,
+                            subtitle: "\(chords[frame.index].durationBeats) beats",
+                            width: frame.width,
+                            height: height - 8,
+                            sectionIndex: frame.index
+                        )
+                        .onTapGesture {
+                            onSelect(frame.index)
+                        }
+
+                        Button(action: {
+                            onRemove(frame.index)
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.white.opacity(0.92))
+                                .background(Circle().fill(Color.red.opacity(0.82)))
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .padding(6)
+                    }
                     .position(
                         x: sectionInset + frame.x + (frame.width / 2),
                         y: height / 2
@@ -949,9 +1136,6 @@ private struct TimelineChordLane: View {
                         Button("Remove") {
                             onRemove(frame.index)
                         }
-                    }
-                    .onTapGesture {
-                        onSelect(frame.index)
                     }
                 }
             }
@@ -1018,6 +1202,8 @@ struct ChordBlock: View {
     private struct ChordNoteRow: View {
         @ObservedObject var viewModel: SonatrixViewModel
         @Binding var note: SonatrixViewModel.ChordStringNote
+        let onMuteToggle: () -> Void
+        let onFretChange: (Int) -> Void
 
         var body: some View {
             VStack(alignment: .leading, spacing: 8) {
@@ -1035,7 +1221,7 @@ struct ChordBlock: View {
 
                 HStack(spacing: 12) {
                     Button(note.fret < 0 ? "Unmute" : "Mute") {
-                        note.fret = note.fret < 0 ? 0 : -1
+                        onMuteToggle()
                     }
                     .buttonStyle(BorderedButtonStyle())
 
@@ -1043,7 +1229,10 @@ struct ChordBlock: View {
                         "Fret \(note.fret < 0 ? "Muted" : "\(note.fret)")",
                         value: Binding(
                             get: { max(note.fret, 0) },
-                            set: { note.fret = $0 }
+                            set: {
+                                note.fret = $0
+                                onFretChange($0)
+                            }
                         ),
                         in: 0...15
                     )

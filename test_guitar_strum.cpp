@@ -10,8 +10,10 @@
 #include <CoreFoundation/CoreFoundation.h>
 
 #include <algorithm>
+#include <cstdlib>
 #include <iostream>
 #include <memory>
+#include <string>
 #include <vector>
 
 using namespace Sonatrix::Core;
@@ -83,6 +85,22 @@ static inline int64_t TicksToSample(double ticks, double sampleRate) {
 }
 
 int main() {
+  const std::string patternId =
+      (std::getenv("SONATRIX_PATTERN_ID") != nullptr &&
+       std::string(std::getenv("SONATRIX_PATTERN_ID")).size() > 0)
+          ? std::string(std::getenv("SONATRIX_PATTERN_ID"))
+          : "acoustic_island_soft";
+  const float outputGain =
+      (std::getenv("SONATRIX_OUTPUT_GAIN") != nullptr &&
+       std::string(std::getenv("SONATRIX_OUTPUT_GAIN")).size() > 0)
+          ? std::strtof(std::getenv("SONATRIX_OUTPUT_GAIN"), nullptr)
+          : 0.15f;
+  const std::string outputPath =
+      (std::getenv("SONATRIX_OUTPUT_PATH") != nullptr &&
+       std::string(std::getenv("SONATRIX_OUTPUT_PATH")).size() > 0)
+          ? std::string(std::getenv("SONATRIX_OUTPUT_PATH"))
+          : ("reference_" + patternId + ".wav");
+
   const double sampleRate = 44100.0;
   const size_t blockSize = 256;
   const double totalSeconds = 8.0; // 16 beats @ 120 BPM
@@ -137,9 +155,9 @@ int main() {
       return 1;
   }
 
-  auto templatePtr = PatternLibrary::GetInstance().GetTemplate("acoustic_12_8_arpeggiated");
+  auto templatePtr = PatternLibrary::GetInstance().GetTemplate(patternId);
   if (!templatePtr) {
-      std::cerr << "Failed to find template acoustic_12_8_arpeggiated." << std::endl;
+      std::cerr << "Failed to find template " << patternId << "." << std::endl;
       return 1;
   }
   
@@ -152,6 +170,8 @@ int main() {
       if (!pattern) continue;
 
       std::cout << "\n=== Rendering Pattern: " << patternId << " ===" << std::endl;
+      std::cout << "Output gain: " << outputGain << std::endl;
+      std::cout << "Output path: " << outputPath << std::endl;
       
       Audio::VoiceManager voiceManager;
 
@@ -270,15 +290,15 @@ int main() {
                                    static_cast<uint32_t>(remainingFrames), 2);
         }
 
-        // Interleave into final output buffer with -16dB Gain Reduction!
+        // Interleave into final output buffer with a configurable offline trim.
         for (size_t i = 0; i < framesInBlock; ++i) {
-          outputData[(blockStartFrame + i) * 2] = leftBuffer[i] * 0.15f;
-          outputData[(blockStartFrame + i) * 2 + 1] = rightBuffer[i] * 0.15f;
+          outputData[(blockStartFrame + i) * 2] = leftBuffer[i] * outputGain;
+          outputData[(blockStartFrame + i) * 2 + 1] = rightBuffer[i] * outputGain;
         }
       }
 
-      std::cout << "6. Saving test_" << patternId << ".wav..." << std::endl;
-      if (!SaveWav("test_" + patternId + ".wav", outputData, sampleRate)) {
+      std::cout << "6. Saving " << outputPath << "..." << std::endl;
+      if (!SaveWav(outputPath, outputData, sampleRate)) {
         std::cerr << "Failed to save WAV." << std::endl;
       }
   }

@@ -173,6 +173,13 @@ public class SonatrixViewModel: ObservableObject {
     @Published public private(set) var selectedPatternID: String = SonatrixViewModel.defaultPatternTemplateID
     @Published public var tempoBPM: Double = SonatrixViewModel.defaultTempoBPM
     @Published public var playheadTick: Double = 0
+    @Published public var isLoopEnabled: Bool = false {
+        didSet {
+            engineFacade.setArrangementLoopEnabled(isLoopEnabled)
+        }
+    }
+    @Published public private(set) var isPreviewingChord: Bool = false
+    @Published public private(set) var isLoopPreviewingChord: Bool = false
 
     // -----------------------------------------------------------------------------
     // Shared Data Models
@@ -211,6 +218,7 @@ public class SonatrixViewModel: ObservableObject {
         public let busVolumes: [Float]
         public let selectedPatternID: String?
         public let tempoBPM: Double?
+        public let isLoopEnabled: Bool?
     }
 
     public init() {
@@ -223,12 +231,14 @@ public class SonatrixViewModel: ObservableObject {
         self.selectedPatternID = initialPatternID
         self.engineFacade.setPatternTemplateId(initialPatternID)
         self.engineFacade.setTempoBPM(Self.defaultTempoBPM)
+        self.engineFacade.setArrangementLoopEnabled(false)
         self.tempoBPM = Self.defaultTempoBPM
         self.playheadTick = 0
     }
 
     deinit {
         stopPlayheadTimer()
+        stopChordPreview()
         engineFacade.stop()
     }
 
@@ -307,7 +317,8 @@ public class SonatrixViewModel: ObservableObject {
             chords: arrangementChords,
             busVolumes: busVolumes,
             selectedPatternID: selectedPatternID,
-            tempoBPM: tempoBPM)
+            tempoBPM: tempoBPM,
+            isLoopEnabled: isLoopEnabled)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
         let data = try encoder.encode(state)
@@ -328,6 +339,7 @@ public class SonatrixViewModel: ObservableObject {
             self.engineFacade.setPatternTemplateId(restoredPatternID)
             let restoredTempo = state.tempoBPM ?? Self.defaultTempoBPM
             self.setTempo(restoredTempo)
+            self.isLoopEnabled = state.isLoopEnabled ?? false
             for (index, volume) in state.busVolumes.enumerated() {
                 if index < self.busVolumes.count {
                     self.setVolume(bus: index, volume: volume)
@@ -377,15 +389,57 @@ public class SonatrixViewModel: ObservableObject {
         }
 
         compileArrangement()
-        engineFacade.play(fromTick: playheadTick)
-        isPlaying = true
-        startPlayheadTimer()
+        startPlaybackFromScheduledArrangement(at: playheadTick)
     }
 
     public func stopPlayback() {
+        isPreviewingChord = false
+        isLoopPreviewingChord = false
         engineFacade.stop()
         isPlaying = false
         stopPlayheadTimer()
+    }
+
+    public func restartPlayback() {
+        guard !arrangementChords.isEmpty else {
+            return
+        }
+
+        playheadTick = 0
+        startPlaybackFromScheduledArrangement(at: 0)
+    }
+
+    public func previewChord(_ chord: ChordItem,
+                             notes: [ChordStringNote],
+                             looped: Bool) {
+        let shouldReuseLoopPreview = looped && isLoopPreviewingChord
+        if !shouldReuseLoopPreview {
+            stopPlayback()
+        }
+
+        let normalizedNotes = normalizedGuitarNotes(notes)
+        let guitarFrets = normalizedNotes.map { NSNumber(value: $0.fret) }
+        let noteOrder = normalizedNotes.map { NSNumber(value: $0.order) }
+        let noteVelocities = normalizedNotes.map { NSNumber(value: Int($0.velocity)) }
+
+        engineFacade.previewChord(
+            withRoot: chord.rootIndex,
+            quality: chord.qualityIndex,
+            durationTicks: Double(chord.durationTicks),
+            guitarFrets: guitarFrets,
+            noteOrder: noteOrder,
+            noteVelocities: noteVelocities,
+            shouldLoop: looped)
+        isPreviewingChord = true
+        isLoopPreviewingChord = looped
+    }
+
+    public func stopChordPreview() {
+        if isPreviewingChord {
+            engineFacade.stop()
+        }
+        isPreviewingChord = false
+        isLoopPreviewingChord = false
     }
 
     public func setTempo(_ bpm: Double) {
@@ -765,8 +819,22 @@ public class SonatrixViewModel: ObservableObject {
                            playheadTick + (deltaSeconds * ticksPerSecond))
 
         if playheadTick >= arrangementDurationTicks {
-            stopPlayback()
+            if isLoopEnabled && !arrangementChords.isEmpty {
+                playheadTick.formTruncatingRemainder(dividingBy: arrangementDurationTicks)
+            } else {
+                stopPlayback()
+            }
         }
+    }
+
+    private func startPlaybackFromScheduledArrangement(at tick: Double) {
+        let clampedTick = min(max(0.0, tick), arrangementDurationTicks)
+        stopChordPreview()
+        engineFacade.stop()
+        playheadTick = clampedTick
+        engineFacade.play(fromTick: clampedTick)
+        isPlaying = true
+        startPlayheadTimer()
     }
 
     private func compileArrangement() {
@@ -803,6 +871,7 @@ public class SonatrixViewModel: ObservableObject {
         }
 
         // Tell the C++ layer to run the Viterbi Graph Solvers and Neural latencies
+        engineFacade.setArrangementLengthTicks(arrangementDurationTicks)
         engineFacade.compileAndSchedule()
         playheadTick = min(playheadTick, arrangementDurationTicks)
         engineFacade.seek(toTick: playheadTick)

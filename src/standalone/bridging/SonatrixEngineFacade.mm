@@ -19,6 +19,8 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <mutex>
+#include <queue>
 #include <thread>
 #include <vector>
 
@@ -219,6 +221,12 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
 @property(nonatomic, assign) BOOL internalIsPlaying;
 - (void)restartPlaybackThread;
 - (void)restartPlaybackThreadFromTick:(int64_t)startTick;
+- (void)restartPlaybackThreadWithStream:
+            (const Sonatrix::Core::MIDI::MIDIStream &)stream
+                             startTick:(int64_t)startTick
+                            loopWindow:(int64_t)loopWindowTicks
+                            shouldLoop:(BOOL)shouldLoop
+                 allowLoopBoundarySwap:(BOOL)allowLoopBoundarySwap;
 - (void)stopPlaybackThread;
 @end
 
@@ -230,6 +238,14 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
   std::atomic<bool> _shouldStopPlayback;
   std::atomic<int64_t> _currentPlayheadTick;
   double _tempoBPM;
+  int64_t _arrangementLengthTicks;
+  BOOL _arrangementLoopEnabled;
+  BOOL _previewPlaybackActive;
+  BOOL _previewLoopEnabled;
+  BOOL _hasPendingPreviewLoopUpdate;
+  int64_t _pendingPreviewLoopWindowTicks;
+  Sonatrix::Core::MIDI::MIDIStream _pendingPreviewLoopStream;
+  std::mutex _pendingPreviewLoopMutex;
 }
 
 - (instancetype)init {
@@ -241,6 +257,12 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
     _shouldStopPlayback.store(false);
     _currentPlayheadTick.store(0);
     _tempoBPM = kDefaultTempoBPM;
+    _arrangementLengthTicks = Sonatrix::Core::BeatsToTime(4.0).ticks;
+    _arrangementLoopEnabled = NO;
+    _previewPlaybackActive = NO;
+    _previewLoopEnabled = NO;
+    _hasPendingPreviewLoopUpdate = NO;
+    _pendingPreviewLoopWindowTicks = 1;
 
     const std::string patternLibraryPath =
         ResolvePatternLibraryPath([NSBundle mainBundle]);
@@ -269,6 +291,10 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
   return _tempoBPM;
 }
 
+- (BOOL)arrangementLoopEnabled {
+  return _arrangementLoopEnabled;
+}
+
 - (void)play {
   [self playFromTick:[self currentPlayheadTick]];
 }
@@ -280,12 +306,24 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
 
   _currentPlayheadTick.store(
       std::max<int64_t>(0, static_cast<int64_t>(tickOffset)));
+  _previewPlaybackActive = NO;
+  _previewLoopEnabled = NO;
+  {
+    std::lock_guard<std::mutex> lock(_pendingPreviewLoopMutex);
+    _hasPendingPreviewLoopUpdate = NO;
+  }
   [_audioEngine start];
   _internalIsPlaying = YES;
   [self restartPlaybackThreadFromTick:_currentPlayheadTick.load()];
 }
 
 - (void)stop {
+  _previewPlaybackActive = NO;
+  _previewLoopEnabled = NO;
+  {
+    std::lock_guard<std::mutex> lock(_pendingPreviewLoopMutex);
+    _hasPendingPreviewLoopUpdate = NO;
+  }
   [self stopPlaybackThread];
   [_audioEngine stop];
   _internalIsPlaying = NO;
@@ -309,10 +347,29 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
   }
 }
 
+- (void)setArrangementLoopEnabled:(BOOL)enabled {
+  _arrangementLoopEnabled = enabled;
+
+  if (_internalIsPlaying) {
+    [self restartPlaybackThreadFromTick:_currentPlayheadTick.load()];
+  }
+}
+
+- (void)setArrangementLengthTicks:(double)lengthTicks {
+  _arrangementLengthTicks =
+      std::max<int64_t>(1, static_cast<int64_t>(lengthTicks));
+}
+
 - (void)clearChords {
   _chordTrack.clear();
   _scheduledStream.events.clear();
   _currentPlayheadTick.store(0);
+  _previewPlaybackActive = NO;
+  _previewLoopEnabled = NO;
+  {
+    std::lock_guard<std::mutex> lock(_pendingPreviewLoopMutex);
+    _hasPendingPreviewLoopUpdate = NO;
+  }
   [self stopPlaybackThread];
 }
 
@@ -391,39 +448,39 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
 }
 
 - (void)restartPlaybackThreadFromTick:(int64_t)startTick {
+  const int64_t clampedStartTick = std::max<int64_t>(0, startTick);
+  const int64_t loopWindowTicks = std::max<int64_t>(1, _arrangementLengthTicks);
+  [self restartPlaybackThreadWithStream:_scheduledStream
+                              startTick:clampedStartTick
+                             loopWindow:loopWindowTicks
+                             shouldLoop:_arrangementLoopEnabled
+                  allowLoopBoundarySwap:NO];
+}
+
+- (void)restartPlaybackThreadWithStream:
+            (const Sonatrix::Core::MIDI::MIDIStream &)stream
+                             startTick:(int64_t)startTick
+                            loopWindow:(int64_t)loopWindowTicks
+                            shouldLoop:(BOOL)shouldLoop
+                 allowLoopBoundarySwap:(BOOL)allowLoopBoundarySwap {
   [self stopPlaybackThread];
 
-  if (_scheduledStream.events.empty()) {
+  if (stream.events.empty()) {
     return;
   }
 
-  const Sonatrix::Core::MIDI::MIDIStream stream = _scheduledStream;
+  const Sonatrix::Core::MIDI::MIDIStream playbackStream = stream;
   const int64_t clampedStartTick = std::max<int64_t>(0, startTick);
   const double tempoBPM = _tempoBPM;
+  const int64_t safeLoopWindowTicks = std::max<int64_t>(1, loopWindowTicks);
+  const BOOL enableLoopBoundarySwap = allowLoopBoundarySwap && shouldLoop;
   _shouldStopPlayback.store(false);
   _currentPlayheadTick.store(clampedStartTick);
 
-  _playbackThread =
-      std::make_unique<std::thread>([self, stream, clampedStartTick, tempoBPM]() {
-        int64_t currentTick = clampedStartTick;
-
-        for (const auto &event : stream.events) {
-          if (self->_shouldStopPlayback.load()) {
-            break;
-          }
-
-          if (event.timelinePosition.ticks < clampedStartTick) {
-            continue;
-          }
-
-          const int64_t sleepTicks = event.timelinePosition.ticks - currentTick;
-          if (sleepTicks > 0) {
-            std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(
-                sleepTicks * MillisecondsPerTick(tempoBPM)));
-          }
-          currentTick = event.timelinePosition.ticks;
-          self->_currentPlayheadTick.store(currentTick);
-
+  _playbackThread = std::make_unique<std::thread>(
+      [self, playbackStream, clampedStartTick, tempoBPM, safeLoopWindowTicks,
+       shouldLoop, enableLoopBoundarySwap]() {
+        auto emitEvent = [&](const Sonatrix::Core::MIDI::MIDIEvent &event) {
           uint8_t status = 0;
           switch (event.type) {
           case Sonatrix::Core::MIDI::MIDIEventType::NoteOn:
@@ -444,10 +501,129 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
                                           data1:event.data1
                                           data2:event.data2
                                         channel:event.channel];
+        };
+
+        if (!shouldLoop) {
+          int64_t currentTick = clampedStartTick;
+          for (const auto &event : playbackStream.events) {
+            if (self->_shouldStopPlayback.load()) {
+              break;
+            }
+
+            if (event.timelinePosition.ticks < clampedStartTick) {
+              continue;
+            }
+
+            const int64_t sleepTicks = event.timelinePosition.ticks - currentTick;
+            if (sleepTicks > 0) {
+              std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(
+                  sleepTicks * MillisecondsPerTick(tempoBPM)));
+            }
+
+            currentTick = event.timelinePosition.ticks;
+            self->_currentPlayheadTick.store(currentTick);
+            emitEvent(event);
+          }
+
+          if (!self->_shouldStopPlayback.load()) {
+            self->_internalIsPlaying = NO;
+          }
+          return;
         }
 
-        if (!self->_shouldStopPlayback.load()) {
+        struct LoopEventCursor {
+          int64_t absoluteTick;
+          size_t eventIndex;
+        };
+
+        struct LoopEventCursorCompare {
+          bool operator()(const LoopEventCursor &lhs,
+                          const LoopEventCursor &rhs) const {
+            if (lhs.absoluteTick == rhs.absoluteTick) {
+              return lhs.eventIndex > rhs.eventIndex;
+            }
+            return lhs.absoluteTick > rhs.absoluteTick;
+          }
+        };
+
+        Sonatrix::Core::MIDI::MIDIStream activeStream = playbackStream;
+        int64_t currentLoopWindowTicks = safeLoopWindowTicks;
+        std::priority_queue<LoopEventCursor, std::vector<LoopEventCursor>,
+                            LoopEventCursorCompare>
+            cursorHeap;
+
+        auto seedCurrentCycle = [&](int64_t cycleStartTick) {
+          cursorHeap = decltype(cursorHeap)();
+          for (size_t index = 0; index < activeStream.events.size(); ++index) {
+            const int64_t eventTick = activeStream.events[index].timelinePosition.ticks;
+            cursorHeap.push({cycleStartTick + eventTick, index});
+          }
+        };
+
+        for (size_t index = 0; index < activeStream.events.size(); ++index) {
+          const int64_t eventTick =
+              activeStream.events[index].timelinePosition.ticks;
+          const int64_t initialAbsoluteTick =
+              (eventTick >= clampedStartTick) ? eventTick
+                                              : (eventTick + currentLoopWindowTicks);
+          cursorHeap.push({initialAbsoluteTick, index});
+        }
+
+        if (cursorHeap.empty()) {
           self->_internalIsPlaying = NO;
+          return;
+        }
+
+        int64_t currentTick = clampedStartTick;
+        int64_t nextCycleBoundaryTick =
+            ((clampedStartTick / currentLoopWindowTicks) + 1) *
+            currentLoopWindowTicks;
+        while (!self->_shouldStopPlayback.load() && !cursorHeap.empty()) {
+          if (enableLoopBoundarySwap) {
+            while (!cursorHeap.empty() &&
+                   cursorHeap.top().absoluteTick >= nextCycleBoundaryTick) {
+              Sonatrix::Core::MIDI::MIDIStream pendingStream;
+              int64_t pendingLoopWindowTicks = currentLoopWindowTicks;
+              bool hasPendingUpdate = false;
+              {
+                std::lock_guard<std::mutex> lock(self->_pendingPreviewLoopMutex);
+                if (self->_hasPendingPreviewLoopUpdate) {
+                  pendingStream = self->_pendingPreviewLoopStream;
+                  pendingLoopWindowTicks =
+                      std::max<int64_t>(1, self->_pendingPreviewLoopWindowTicks);
+                  self->_hasPendingPreviewLoopUpdate = NO;
+                  hasPendingUpdate = true;
+                }
+              }
+
+              if (hasPendingUpdate) {
+                activeStream = pendingStream;
+                currentLoopWindowTicks = pendingLoopWindowTicks;
+                seedCurrentCycle(nextCycleBoundaryTick);
+              }
+
+              nextCycleBoundaryTick += currentLoopWindowTicks;
+            }
+          }
+
+          const LoopEventCursor nextEvent = cursorHeap.top();
+          cursorHeap.pop();
+
+          const int64_t sleepTicks = nextEvent.absoluteTick - currentTick;
+          if (sleepTicks > 0) {
+            std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(
+                sleepTicks * MillisecondsPerTick(tempoBPM)));
+          }
+
+          currentTick = nextEvent.absoluteTick;
+          const int64_t wrappedTick =
+              nextEvent.absoluteTick % currentLoopWindowTicks;
+          self->_currentPlayheadTick.store(wrappedTick);
+
+          emitEvent(activeStream.events[nextEvent.eventIndex]);
+          cursorHeap.push(
+              {nextEvent.absoluteTick + currentLoopWindowTicks,
+               nextEvent.eventIndex});
         }
       });
 }
@@ -470,6 +646,78 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
   } else {
     _selectedPatternTemplateId = kDefaultPatternTemplateId;
   }
+}
+
+- (void)previewChordWithRoot:(uint8_t)rootKey
+                     quality:(uint8_t)quality
+                durationTicks:(double)durationTicks
+                 guitarFrets:(NSArray<NSNumber *> *)guitarFrets
+                   noteOrder:(NSArray<NSNumber *> *)noteOrder
+              noteVelocities:(NSArray<NSNumber *> *)noteVelocities
+                  shouldLoop:(BOOL)shouldLoop {
+  Sonatrix::Core::ChordTrackEvent previewEvent =
+      MakeChordEvent(rootKey, quality, 0.0);
+
+  auto applyEditArray = [&](NSArray<NSNumber *> *source,
+                            auto &targetArray,
+                            auto converter) {
+    if (source == nil || [source count] != 6) {
+      return false;
+    }
+
+    for (NSUInteger index = 0; index < 6; ++index) {
+      targetArray[index] = converter(source[index]);
+    }
+    return true;
+  };
+
+  const bool hasFrets = applyEditArray(
+      guitarFrets, previewEvent.guitarEditData.frets,
+      [](NSNumber *value) { return static_cast<int8_t>([value intValue]); });
+  if (hasFrets) {
+    previewEvent.guitarEditData.hasCustomVoicing = true;
+    applyEditArray(noteOrder, previewEvent.guitarEditData.noteOrder,
+                   [](NSNumber *value) {
+                     return static_cast<int8_t>([value intValue]);
+                   });
+    applyEditArray(noteVelocities, previewEvent.guitarEditData.noteVelocity,
+                   [](NSNumber *value) {
+                     return static_cast<uint8_t>(
+                         std::clamp([value intValue], 1, 127));
+                   });
+  }
+
+  Sonatrix::Core::MIDI::MIDIStream previewStream =
+      CompileInteractiveArrangement({previewEvent}, _selectedPatternTemplateId);
+  if (previewStream.events.empty()) {
+    return;
+  }
+
+  const int64_t previewWindowTicks =
+      std::max<int64_t>(1, static_cast<int64_t>(durationTicks));
+  if (shouldLoop && _previewPlaybackActive && _previewLoopEnabled &&
+      _internalIsPlaying) {
+    std::lock_guard<std::mutex> lock(_pendingPreviewLoopMutex);
+    _pendingPreviewLoopStream = previewStream;
+    _pendingPreviewLoopWindowTicks = previewWindowTicks;
+    _hasPendingPreviewLoopUpdate = YES;
+    return;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(_pendingPreviewLoopMutex);
+    _hasPendingPreviewLoopUpdate = NO;
+  }
+
+  [_audioEngine start];
+  _internalIsPlaying = YES;
+  _previewPlaybackActive = YES;
+  _previewLoopEnabled = shouldLoop;
+  [self restartPlaybackThreadWithStream:previewStream
+                              startTick:0
+                             loopWindow:previewWindowTicks
+                             shouldLoop:shouldLoop
+                  allowLoopBoundarySwap:shouldLoop];
 }
 
 - (BOOL)bounceAudioToPath:(NSString *)path

@@ -470,12 +470,10 @@ std::vector<GuitarVoicing> VoicingGraphSolver::SolveVoiceLeading(
       GuitarVoicing editedVoicing;
       editedVoicing.frets = chords[t].guitarEditData.frets;
 
-      if (editedVoicing.GetNumSoundingStrings() > 0) {
-        states[t] = {editedVoicing};
-        usedFamilyRestrictedCandidates[t] = true;
-        trellis[t].resize(states[t].size());
-        continue;
-      }
+      states[t] = {editedVoicing};
+      usedFamilyRestrictedCandidates[t] = true;
+      trellis[t].resize(states[t].size());
+      continue;
     }
 
     auto generatedCandidates = fretboard_.GenerateValidVoicings(chords[t].chord);
