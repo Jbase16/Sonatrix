@@ -44,7 +44,8 @@ private:
                  ArticulationType direction, uint8_t baseVelocity,
                  MusicalTime duration,
                  const std::vector<NoteTarget> &stringTargets,
-                 const ChordTrackEvent *activeChordEvent = nullptr) const;
+                 const ChordTrackEvent *activeChordEvent,
+                 MusicalTime nextChordTime) const;
 
   std::vector<NoteTarget>
   ResolveTargetsForEvent(const MIREvent &event,

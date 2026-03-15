@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <iterator>
+#include <limits>
 
 namespace Sonatrix {
 namespace Core {
@@ -13,6 +14,7 @@ namespace MIDI {
 namespace {
 
 constexpr int kLowestStringFlag = 64;
+constexpr int64_t kStrumBoundaryGraceTicks = 120;
 
 bool ContainsInt(const std::vector<int> &values, int value) {
   return std::find(values.begin(), values.end(), value) != values.end();
@@ -93,10 +95,17 @@ MIDIStream GuitarCompiler::CompileClip(
     Sonatrix::Core::Engines::Guitar::GuitarVoicing activeVoicing =
         fallbackVoicing;
     const ChordTrackEvent *activeChordEvent = nullptr;
+    MusicalTime nextChordTime(
+        std::numeric_limits<int64_t>::max() / 4);
     if (currentChordIndex >= 0 &&
         currentChordIndex < static_cast<int>(optimalVoicings.size())) {
       activeVoicing = optimalVoicings[currentChordIndex];
       activeChordEvent = &chordTimeline[static_cast<size_t>(currentChordIndex)];
+      const int nextChordIndex = currentChordIndex + 1;
+      if (nextChordIndex < static_cast<int>(chordTimeline.size())) {
+        nextChordTime =
+            chordTimeline[static_cast<size_t>(nextChordIndex)].position;
+      }
     }
 
     if (currentChordIndex != previousChordIndex) {
@@ -134,7 +143,7 @@ MIDIStream GuitarCompiler::CompileClip(
                               activeVoicing, resolvedTargets);
       EmitStrum(stream, lockedTime, mir.type, mir.velocityBase,
                 BeatsToTime(mir.lengthBeats), resolvedTargets,
-                activeChordEvent);
+                activeChordEvent, nextChordTime);
 
       if (isPickingEvent) {
         for (const auto &target : resolvedTargets) {
@@ -157,7 +166,8 @@ void GuitarCompiler::EmitStrum(
     MIDIStream &outStream, MusicalTime baseTime, ArticulationType direction,
     uint8_t baseVelocity, MusicalTime duration,
     const std::vector<NoteTarget> &resolvedTargets,
-    const ChordTrackEvent *activeChordEvent) const {
+    const ChordTrackEvent *activeChordEvent,
+    MusicalTime nextChordTime) const {
 
   // 40 ticks at 960 PPQ = ~20ms per string. This creates a beautiful, natural glide.
   int64_t dispersionTicks = 40;
@@ -169,6 +179,13 @@ void GuitarCompiler::EmitStrum(
   if (direction == ArticulationType::GuitarUpstroke) {
     std::reverse(stringTargets.begin(), stringTargets.end());
   }
+
+  const MusicalTime minStrumDuration = BeatsToTime(0.20);
+  const MusicalTime minPickDuration = BeatsToTime(0.35);
+  const bool isStrum =
+      direction == ArticulationType::GuitarDownstroke ||
+      direction == ArticulationType::GuitarUpstroke;
+  const MusicalTime minDuration = isStrum ? minStrumDuration : minPickDuration;
 
   int64_t accumulatedOffset = 0;
   for (const auto &target : stringTargets) {
@@ -182,11 +199,21 @@ void GuitarCompiler::EmitStrum(
                                 static_cast<uint8_t>(target.pitch),
                                 noteVelocity});
 
-    // Make the note ring out for the duration specified by the MIR Event, OR at least 
-    // 2.0 beats to ensure open acoustic chords don't cut off prematurely before the choke.
-    // FIXED: Using explicit constructor for MusicalTime to handle int64_t return from std::max.
-    MusicalTime actualDuration(std::max(duration.ticks, BeatsToTime(2.0).ticks));
-    MusicalTime endTime = triggerTime + actualDuration;
+    MusicalTime desiredDuration(
+        std::max(duration.ticks, minDuration.ticks));
+    MusicalTime unclampedEnd = triggerTime + desiredDuration;
+    MusicalTime endTime = unclampedEnd;
+
+    if (nextChordTime.ticks > triggerTime.ticks) {
+      const int64_t clampTick =
+          isStrum ? (nextChordTime.ticks + kStrumBoundaryGraceTicks)
+                  : nextChordTime.ticks;
+      endTime = MusicalTime(std::min(unclampedEnd.ticks, clampTick));
+    }
+
+    if (endTime.ticks <= triggerTime.ticks) {
+      endTime = triggerTime + MusicalTime(1);
+    }
 
     outStream.events.push_back({endTime, MIDIEventType::NoteOff, strChannel,
                                 static_cast<uint8_t>(target.pitch), 0});

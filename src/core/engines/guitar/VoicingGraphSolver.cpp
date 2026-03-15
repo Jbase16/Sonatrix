@@ -67,7 +67,6 @@ GetAcousticShapeFamilyVariants(const ActiveChordContext &chord) {
                               });
     } else if (chord.quality == ChordQuality::Add9) {
       AppendVariants(variants, {
-                                  {0, 3, 2, 0, 3, 3},
                                   {-1, 3, 2, 0, 3, 3},
                                   {-1, 3, 2, 0, 3, 0},
                               });
@@ -210,10 +209,7 @@ bool IsFamilyCandidateCompatible(const GuitarVoicing &candidate,
   const PitchClass expectedBass =
       chord.isRootPosition() ? chord.root : chord.overBass;
   const PitchClass actualBass = static_cast<PitchClass>(Pc(lowestMidi));
-  const bool allowsAcousticAlternateBass =
-      chord.isRootPosition() && chord.quality == ChordQuality::Add9 &&
-      actualBass == TransposePitchClass(chord.root, 4);
-  if (actualBass != expectedBass && !allowsAcousticAlternateBass) {
+  if (actualBass != expectedBass) {
     return false;
   }
 
@@ -273,11 +269,8 @@ float EvaluateAcousticFamilyVariantPreference(const GuitarVoicing &voicing,
     break;
   case PitchClass::C:
     if (chord.quality == ChordQuality::Add9) {
-      if (frets == AcousticShape{0, 3, 2, 0, 3, 3}) {
-        return -14.0f;
-      }
       if (frets == AcousticShape{-1, 3, 2, 0, 3, 3}) {
-        return -8.0f;
+        return -14.0f;
       }
       if (frets == AcousticShape{-1, 3, 2, 0, 3, 0}) {
         return 5.0f;
