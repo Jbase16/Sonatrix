@@ -114,7 +114,7 @@ int main() {
   auto &articulation =
       Audio::AssetManager::GetInstance().GetAcousticGuitarArticulation();
 
-  std::cout << "2. Creating Chord Timeline (G -> Em7 -> Cadd9 -> D)..." << std::endl;
+  std::cout << "2. Creating Chord Timeline (G -> D -> Em -> C)..." << std::endl;
   std::vector<ChordTrackEvent> chordTimeline;
 
   // G Major (Beats 0-4)
@@ -125,29 +125,29 @@ int main() {
   gMajor.chord.overBass = PitchClass::G;
   chordTimeline.push_back(gMajor);
 
-  // E Minor 7 (Beats 4-8)
-  ChordTrackEvent eMinor7;
-  eMinor7.position = BeatsToTime(4.0);
-  eMinor7.chord.root = PitchClass::E;
-  eMinor7.chord.quality = ChordQuality::Minor7;
-  eMinor7.chord.overBass = PitchClass::E;
-  chordTimeline.push_back(eMinor7);
-
-  // C Add9  (Beats 8-12) -- Using Major + ExtensionsMask placeholder if needed, or just Major for now
-  ChordTrackEvent cAdd9;
-  cAdd9.position = BeatsToTime(8.0);
-  cAdd9.chord.root = PitchClass::C;
-  cAdd9.chord.quality = ChordQuality::Add9;
-  cAdd9.chord.overBass = PitchClass::C;
-  chordTimeline.push_back(cAdd9);
-
-  // D Major (Beats 12-16)
+  // D Major (Beats 4-8)
   ChordTrackEvent dMajor;
-  dMajor.position = BeatsToTime(12.0);
+  dMajor.position = BeatsToTime(4.0);
   dMajor.chord.root = PitchClass::D;
   dMajor.chord.quality = ChordQuality::Major;
   dMajor.chord.overBass = PitchClass::D;
   chordTimeline.push_back(dMajor);
+
+  // E Minor (Beats 8-12)
+  ChordTrackEvent eMinor;
+  eMinor.position = BeatsToTime(8.0);
+  eMinor.chord.root = PitchClass::E;
+  eMinor.chord.quality = ChordQuality::Minor;
+  eMinor.chord.overBass = PitchClass::E;
+  chordTimeline.push_back(eMinor);
+
+  // C Major (Beats 12-16)
+  ChordTrackEvent cMajor;
+  cMajor.position = BeatsToTime(12.0);
+  cMajor.chord.root = PitchClass::C;
+  cMajor.chord.quality = ChordQuality::Major;
+  cMajor.chord.overBass = PitchClass::C;
+  chordTimeline.push_back(cMajor);
 
   std::cout << "3. Loading MIR Patterns from JSON library..." << std::endl;
   if (!PatternLibrary::GetInstance().LoadFromJSON("assets/Patterns/default_library.json")) {
