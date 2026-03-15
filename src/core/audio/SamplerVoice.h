@@ -16,7 +16,11 @@ public:
   void Start(const SampleZone *zone, uint8_t targetPitch, double pitchRatio,
              float velocity, int stringId = -1);
 
+  // Musical release for normal NoteOff behavior.
   void Stop();
+
+  // Fast restrike choke for same-string re-articulation.
+  void Choke();
 
   void RenderNextBlock(float **outputChannels, uint32_t numFrames,
                        uint32_t numChannels);
@@ -45,16 +49,21 @@ private:
   double directReadPos_{0.0};
   double pitchRatio_{1.0};
 
-  // Envelope / Release
+  // Envelope
   float envelopeLevel_{0.0f};
+
+  // Short startup ramp to avoid hard re-trigger gulp/click artifacts.
+  double attackPos_{0.0};
+  double attackSamples_{44100.0 * 0.003}; // ~3 ms
+
+  // Release state
   double releasePos_{0.0};
-  
-  // A slightly longer release tail (150ms) to simulate natural string damping 
-  // when a real pick strikes a ringing string, rather than an abrupt electronic cut.
-  double releaseSamples_{44100.0 * 0.15}; 
+  double releaseSamples_{44100.0 * 0.5};         // normal musical release ~500 ms
+  double chokeReleaseSamples_{44100.0 * 0.008}; // restrike choke ~8 ms
+  double activeReleaseSamples_{44100.0 * 0.5};
   float releaseStartAmp_{1.0f};
 
-  // The only DSP math we need now: smooth fractional playhead reading
+  // Smooth fractional playhead reading
   StereoSample ReadInterpolated(double readPos) const;
 };
 

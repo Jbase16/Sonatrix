@@ -180,7 +180,7 @@ void GuitarCompiler::EmitStrum(
     std::reverse(stringTargets.begin(), stringTargets.end());
   }
 
-  const MusicalTime minStrumDuration = BeatsToTime(0.20);
+  const MusicalTime minStrumDuration = BeatsToTime(2.0);
   const MusicalTime minPickDuration = BeatsToTime(0.35);
   const bool isStrum =
       direction == ArticulationType::GuitarDownstroke ||

@@ -1,6 +1,7 @@
 #include "VoiceManager.h"
 #include "AssetManager.h"
 #include "AudioFileReader.h"
+
 #include <cmath>
 #include <cstring>
 #include <fstream>
@@ -17,8 +18,7 @@ bool FileExists(const std::string &path) {
   return file.good();
 }
 
-bool LoadZoneIfPresent(const std::string &directoryPath,
-                       const char *fileName,
+bool LoadZoneIfPresent(const std::string &directoryPath, const char *fileName,
                        uint8_t rootKey,
                        InstrumentArticulation &articulation) {
   const std::string filePath = directoryPath + "/" + fileName;
@@ -56,55 +56,61 @@ bool LooksLikeAcousticGuitarKit(const std::string &directoryPath) {
 
 } // namespace
 
-// Added 'const' to articulation to fix the compiler error
 void VoiceManager::ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
                                const InstrumentArticulation &articulation) {
   for (const auto &ev : events) {
-    
-    // 1. Determine physical string context (if transmitted by GuitarCompiler on channels 1-6)
-    int stringId = (ev.channel >= 1 && ev.channel <= 6) ? static_cast<int>(ev.channel) - 1 : -1;
+    const int stringId =
+        (ev.channel >= 1 && ev.channel <= 6) ? static_cast<int>(ev.channel) - 1
+                                             : -1;
 
     if (ev.type == MIDI::MIDIEventType::NoteOn && ev.data2 > 0) {
+      // Physical string restrike handling:
+      // choke any existing voice on the same physical string quickly, instead
+      // of letting it linger like a sad ghost.
+      if (stringId >= 0 && stringId < 6) {
+        stringActiveNotes_[stringId]++;
 
-      // PHYSICAL STRING CHOKING
-     if (stringId >= 0 && stringId < 6) {
-  stringActiveNotes_[stringId]++;
-}
-      
+        for (auto &v : voices_) {
+          if (!v.IsFree() && v.GetStringId() == stringId) {
+            v.Choke();
+          }
+        }
+      }
 
-      // Determine which physical acoustic zone to load via string-aware sparse routing
       const SampleZone *zone = articulation.FindZone(ev.data1, ev.data2, stringId);
-      if (!zone)
-        continue; // No matching sample found
+      if (!zone) {
+        continue;
+      }
 
-      // 2. Allocate a voice (stealing if necessary)
       SamplerVoice *v = GetBestAvailableVoice();
       if (v) {
-        // Calculate the pitch shift ratio in real-time
-        double pitchRatio = std::pow(
-            2.0, (static_cast<double>(ev.data1) - zone->rootKey) / 12.0);
-        float velocity = ev.data2 / 127.0f;
-
-        // Start the voice and tell it which physical string it belongs to
+        const double pitchRatio =
+            std::pow(2.0, (static_cast<double>(ev.data1) - zone->rootKey) / 12.0);
+        const float velocity = ev.data2 / 127.0f;
         v->Start(zone, ev.data1, pitchRatio, velocity, stringId);
       }
 
     } else if (ev.type == MIDI::MIDIEventType::NoteOff ||
                (ev.type == MIDI::MIDIEventType::NoteOn && ev.data2 == 0)) {
-      
-      // STRICT NOTEOFF LOGIC WITH ORPHAN PROTECTION
+      // Strict NoteOff matching with orphan protection for same-string restrikes.
       if (stringId >= 0 && stringId < 6) {
         stringActiveNotes_[stringId]--;
+
         if (stringActiveNotes_[stringId] > 0) {
-          continue; // Ignore this NoteOff, the string was struck again and is ringing the new note
+          // A newer strike is already active on this string.
+          continue;
         }
-        stringActiveNotes_[stringId] = 0; // Prevent underflow
+
+        if (stringActiveNotes_[stringId] < 0) {
+          stringActiveNotes_[stringId] = 0;
+        }
       }
 
       for (auto &v : voices_) {
-        if (!v.IsFree() && v.GetCurrentPitch() == ev.data1 && v.GetStringId() == stringId) {
+        if (!v.IsFree() && v.GetCurrentPitch() == ev.data1 &&
+            v.GetStringId() == stringId) {
           v.Stop();
-          break; // Stop looking after we find the exact match
+          break;
         }
       }
     }
@@ -117,10 +123,10 @@ SamplerVoice *VoiceManager::GetBestAvailableVoice() {
 
   for (auto &v : voices_) {
     if (v.IsFree()) {
-      return &v; // Immediate success
+      return &v;
     }
 
-    float p = v.GetStealingPriority();
+    const float p = v.GetStealingPriority();
     if (p < lowestPriority) {
       lowestPriority = p;
       worstVoice = &v;
@@ -153,16 +159,17 @@ void VoiceManager::LoadInstrumentKit(const std::string &assetsAbsolutePath) {
 
 void VoiceManager::RenderAudio(float **outputChannels, uint32_t numFrames,
                                uint32_t numChannels) {
-
   AudioMixer::ClearBuffers(outputChannels, numFrames, numChannels);
 
   static thread_local std::vector<float> tempL;
   static thread_local std::vector<float> tempR;
 
-  if (tempL.size() < numFrames)
+  if (tempL.size() < numFrames) {
     tempL.resize(numFrames);
-  if (tempR.size() < numFrames)
+  }
+  if (tempR.size() < numFrames) {
     tempR.resize(numFrames);
+  }
 
   std::memset(tempL.data(), 0, numFrames * sizeof(float));
   std::memset(tempR.data(), 0, numFrames * sizeof(float));

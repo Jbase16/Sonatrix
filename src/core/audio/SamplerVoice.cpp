@@ -16,11 +16,15 @@ inline float ClampFloat(float x, float lo, float hi) {
 } // namespace
 
 void SamplerVoice::Start(const SampleZone *zone, uint8_t targetPitch,
-                          double pitchRatio, float velocity, int stringId) {
+                         double pitchRatio, float velocity, int stringId) {
   if (!zone || zone->audioData.empty() || zone->numChannels == 0 ||
       zone->sampleRate <= 0.0) {
     state_ = State::Free;
     activeZone_ = nullptr;
+    currentPitch_ = 0;
+    currentStringId_ = -1;
+    currentVelocity_ = 0.0f;
+    envelopeLevel_ = 0.0f;
     return;
   }
 
@@ -30,12 +34,15 @@ void SamplerVoice::Start(const SampleZone *zone, uint8_t targetPitch,
   pitchRatio_ = std::max(0.01, pitchRatio);
   currentVelocity_ = ClampFloat(velocity, 0.0f, 1.0f);
 
-  // Sampler logic only needs ONE playhead
+  // Reset sampler playhead
   directReadPos_ = 0.0;
-  
-  envelopeLevel_ = currentVelocity_;
+
+  // Reset attack / release state
+  attackPos_ = 0.0;
+  envelopeLevel_ = 0.0f;
   releasePos_ = 0.0;
-  releaseStartAmp_ = envelopeLevel_;
+  releaseStartAmp_ = currentVelocity_;
+  activeReleaseSamples_ = releaseSamples_;
 
   state_ = State::Active;
 }
@@ -45,24 +52,39 @@ void SamplerVoice::Stop() {
     state_ = State::Releasing;
     releasePos_ = 0.0;
     releaseStartAmp_ = envelopeLevel_;
+    activeReleaseSamples_ = releaseSamples_;
   }
 }
 
-// This is the core "Sampler" function. It reads fractional samples to pitch shift smoothly.
+void SamplerVoice::Choke() {
+  if (state_ == State::Active || state_ == State::Releasing) {
+    state_ = State::Releasing;
+    releasePos_ = 0.0;
+    releaseStartAmp_ = envelopeLevel_;
+    activeReleaseSamples_ = chokeReleaseSamples_;
+  }
+}
+
 SamplerVoice::StereoSample
 SamplerVoice::ReadInterpolated(double readPos) const {
   StereoSample out{};
 
   if (!activeZone_ || activeZone_->audioData.empty() ||
-      activeZone_->numChannels == 0)
+      activeZone_->numChannels == 0) {
     return out;
+  }
 
   const auto &data = activeZone_->audioData;
   const size_t channels = activeZone_->numChannels;
   const size_t maxFrames = data.size() / channels;
 
-  if (readPos < 0.0 || readPos >= static_cast<double>(maxFrames - 1))
+  if (maxFrames < 2) {
     return out;
+  }
+
+  if (readPos < 0.0 || readPos >= static_cast<double>(maxFrames - 1)) {
+    return out;
+  }
 
   const size_t idx = static_cast<size_t>(readPos);
   const float frac = static_cast<float>(readPos - static_cast<double>(idx));
@@ -83,54 +105,72 @@ SamplerVoice::ReadInterpolated(double readPos) const {
 }
 
 void SamplerVoice::RenderNextBlock(float **outputChannels, uint32_t numFrames,
-                                    uint32_t numChannels) {
+                                   uint32_t numChannels) {
   if (state_ == State::Free || !activeZone_ || !outputChannels ||
-      numChannels == 0)
+      numChannels == 0) {
     return;
+  }
 
   const size_t maxSourceFrames =
       activeZone_->audioData.size() / activeZone_->numChannels;
 
   if (maxSourceFrames < 2) {
     state_ = State::Free;
+    envelopeLevel_ = 0.0f;
     return;
   }
 
   for (uint32_t f = 0; f < numFrames; ++f) {
-    if (state_ == State::Free)
+    if (state_ == State::Free) {
       return;
+    }
 
-    // 1. Release envelope
-    if (state_ == State::Releasing) {
+    // Envelope handling
+    if (state_ == State::Active) {
+      if (attackPos_ < attackSamples_) {
+        const float attackGain =
+            static_cast<float>(attackPos_ / attackSamples_);
+        envelopeLevel_ = currentVelocity_ * attackGain;
+        attackPos_ += 1.0;
+      } else {
+        envelopeLevel_ = currentVelocity_;
+      }
+    } else if (state_ == State::Releasing) {
+      if (activeReleaseSamples_ <= 1.0) {
+        state_ = State::Free;
+        envelopeLevel_ = 0.0f;
+        return;
+      }
+
       const float rel =
-          1.0f - static_cast<float>(releasePos_ / releaseSamples_);
+          1.0f - static_cast<float>(releasePos_ / activeReleaseSamples_);
       if (rel <= 0.0f) {
         state_ = State::Free;
         envelopeLevel_ = 0.0f;
         return;
       }
-      envelopeLevel_ = rel * releaseStartAmp_;
+
+      envelopeLevel_ = (rel * rel) * releaseStartAmp_;
       releasePos_ += 1.0;
     }
 
-    // 2. PURE DIRECT PLAYBACK: No grains, no overlap math.
     StereoSample direct = ReadInterpolated(directReadPos_);
 
-    // 3. Apply the envelope and write to the output buffers
     const float outL = direct.left * envelopeLevel_;
     const float outR = direct.right * envelopeLevel_;
 
-    if (numChannels >= 1)
+    if (numChannels >= 1) {
       outputChannels[0][f] += outL;
-    if (numChannels >= 2)
+    }
+    if (numChannels >= 2) {
       outputChannels[1][f] += outR;
+    }
 
-    // 4. Advance the playhead by the exact pitch ratio (THIS is the sampler logic)
     directReadPos_ += pitchRatio_;
 
-    // 5. Stop the voice when we hit the end of the physical sample
     if (directReadPos_ >= static_cast<double>(maxSourceFrames - 1)) {
       state_ = State::Free;
+      envelopeLevel_ = 0.0f;
       return;
     }
   }

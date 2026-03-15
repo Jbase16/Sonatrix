@@ -204,8 +204,12 @@ int main() {
         if (ev.type == MIDI::MIDIEventType::NoteOn && ev.data2 > 0) {
             std::cout << "Tick: " << ev.timelinePosition.ticks
                       << " | StringIndex: " << (static_cast<int>(ev.channel) - 1)
-                      << " | Pitch: " << static_cast<int>(ev.data1)
+                      << " | pitch: " << static_cast<int>(ev.data1)
                       << " | Vel: " << (int)ev.data2 << std::endl;
+        } else if (ev.type == MIDI::MIDIEventType::NoteOff || (ev.type == MIDI::MIDIEventType::NoteOn && ev.data2 == 0)) {
+            std::cout << "Tick: " << ev.timelinePosition.ticks
+                      << " | OFF | StringIndex: " << (static_cast<int>(ev.channel) - 1)
+                      << " | pitch: " << static_cast<int>(ev.data1) << std::endl;
         }
       }
 

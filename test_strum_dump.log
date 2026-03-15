@@ -1,0 +1,266 @@
+1. Initializing Audio Engines...
+2. Creating Chord Timeline (G -> D -> Em -> C)...
+3. Loading MIR Patterns from JSON library...
+Sonatrix: Loaded 15 GrooveTemplates from JSON.
+
+=== Rendering Pattern: acoustic_island_soft ===
+Output gain: 0.15
+Output path: reference_acoustic_island_soft.wav
+4. Compiling via GuitarCompiler...
+Generated 252 total MIDI Events over 16 beats.
+5. Rendering Progression Audio...
+--- MIDI EVENTS DUMP ---
+Tick: 0 | StringIndex: 0 | pitch: 43 | Vel: 108
+Tick: 40 | StringIndex: 1 | pitch: 47 | Vel: 108
+Tick: 80 | StringIndex: 2 | pitch: 50 | Vel: 108
+Tick: 120 | StringIndex: 3 | pitch: 55 | Vel: 108
+Tick: 160 | StringIndex: 4 | pitch: 62 | Vel: 108
+Tick: 200 | StringIndex: 5 | pitch: 67 | Vel: 108
+Tick: 960 | StringIndex: 0 | pitch: 43 | Vel: 88
+Tick: 1000 | StringIndex: 1 | pitch: 47 | Vel: 88
+Tick: 1040 | StringIndex: 2 | pitch: 50 | Vel: 88
+Tick: 1080 | StringIndex: 3 | pitch: 55 | Vel: 88
+Tick: 1120 | StringIndex: 4 | pitch: 62 | Vel: 88
+Tick: 1160 | StringIndex: 5 | pitch: 67 | Vel: 88
+Tick: 1440 | StringIndex: 5 | pitch: 67 | Vel: 76
+Tick: 1480 | StringIndex: 4 | pitch: 62 | Vel: 76
+Tick: 1520 | StringIndex: 3 | pitch: 55 | Vel: 76
+Tick: 1560 | StringIndex: 2 | pitch: 50 | Vel: 76
+Tick: 1600 | StringIndex: 1 | pitch: 47 | Vel: 76
+Tick: 1640 | StringIndex: 0 | pitch: 43 | Vel: 76
+Tick: 1920 | OFF | StringIndex: 0 | pitch: 43
+Tick: 1960 | OFF | StringIndex: 1 | pitch: 47
+Tick: 2000 | OFF | StringIndex: 2 | pitch: 50
+Tick: 2040 | OFF | StringIndex: 3 | pitch: 55
+Tick: 2080 | OFF | StringIndex: 4 | pitch: 62
+Tick: 2120 | OFF | StringIndex: 5 | pitch: 67
+Tick: 2400 | StringIndex: 5 | pitch: 67 | Vel: 84
+Tick: 2440 | StringIndex: 4 | pitch: 62 | Vel: 84
+Tick: 2480 | StringIndex: 3 | pitch: 55 | Vel: 84
+Tick: 2520 | StringIndex: 2 | pitch: 50 | Vel: 84
+Tick: 2560 | StringIndex: 1 | pitch: 47 | Vel: 84
+Tick: 2600 | StringIndex: 0 | pitch: 43 | Vel: 84
+Tick: 2880 | OFF | StringIndex: 0 | pitch: 43
+Tick: 2880 | StringIndex: 0 | pitch: 43 | Vel: 90
+Tick: 2920 | OFF | StringIndex: 1 | pitch: 47
+Tick: 2920 | StringIndex: 1 | pitch: 47 | Vel: 90
+Tick: 2960 | OFF | StringIndex: 2 | pitch: 50
+Tick: 2960 | StringIndex: 2 | pitch: 50 | Vel: 90
+Tick: 3000 | OFF | StringIndex: 3 | pitch: 55
+Tick: 3000 | StringIndex: 3 | pitch: 55 | Vel: 90
+Tick: 3040 | OFF | StringIndex: 4 | pitch: 62
+Tick: 3040 | StringIndex: 4 | pitch: 62 | Vel: 90
+Tick: 3080 | OFF | StringIndex: 5 | pitch: 67
+Tick: 3080 | StringIndex: 5 | pitch: 67 | Vel: 90
+Tick: 3360 | OFF | StringIndex: 5 | pitch: 67
+Tick: 3360 | StringIndex: 5 | pitch: 67 | Vel: 72
+Tick: 3400 | StringIndex: 4 | pitch: 62 | Vel: 72
+Tick: 3400 | OFF | StringIndex: 4 | pitch: 62
+Tick: 3440 | StringIndex: 3 | pitch: 55 | Vel: 72
+Tick: 3440 | OFF | StringIndex: 3 | pitch: 55
+Tick: 3480 | OFF | StringIndex: 2 | pitch: 50
+Tick: 3480 | StringIndex: 2 | pitch: 50 | Vel: 72
+Tick: 3520 | StringIndex: 1 | pitch: 47 | Vel: 72
+Tick: 3520 | OFF | StringIndex: 1 | pitch: 47
+Tick: 3560 | StringIndex: 0 | pitch: 43 | Vel: 72
+Tick: 3560 | OFF | StringIndex: 0 | pitch: 43
+Tick: 3840 | StringIndex: 2 | pitch: 50 | Vel: 108
+Tick: 3880 | StringIndex: 3 | pitch: 57 | Vel: 108
+Tick: 3920 | StringIndex: 4 | pitch: 62 | Vel: 108
+Tick: 3960 | OFF | StringIndex: 2 | pitch: 50
+Tick: 3960 | OFF | StringIndex: 3 | pitch: 55
+Tick: 3960 | OFF | StringIndex: 2 | pitch: 50
+Tick: 3960 | OFF | StringIndex: 4 | pitch: 62
+Tick: 3960 | OFF | StringIndex: 1 | pitch: 47
+Tick: 3960 | OFF | StringIndex: 5 | pitch: 67
+Tick: 3960 | OFF | StringIndex: 0 | pitch: 43
+Tick: 3960 | OFF | StringIndex: 5 | pitch: 67
+Tick: 3960 | OFF | StringIndex: 5 | pitch: 67
+Tick: 3960 | OFF | StringIndex: 4 | pitch: 62
+Tick: 3960 | OFF | StringIndex: 0 | pitch: 43
+Tick: 3960 | OFF | StringIndex: 3 | pitch: 55
+Tick: 3960 | OFF | StringIndex: 4 | pitch: 62
+Tick: 3960 | OFF | StringIndex: 2 | pitch: 50
+Tick: 3960 | OFF | StringIndex: 1 | pitch: 47
+Tick: 3960 | OFF | StringIndex: 1 | pitch: 47
+Tick: 3960 | OFF | StringIndex: 3 | pitch: 55
+Tick: 3960 | OFF | StringIndex: 0 | pitch: 43
+Tick: 3960 | StringIndex: 5 | pitch: 66 | Vel: 108
+Tick: 4800 | StringIndex: 2 | pitch: 50 | Vel: 88
+Tick: 4840 | StringIndex: 3 | pitch: 57 | Vel: 88
+Tick: 4880 | StringIndex: 4 | pitch: 62 | Vel: 88
+Tick: 4920 | StringIndex: 5 | pitch: 66 | Vel: 88
+Tick: 5280 | StringIndex: 5 | pitch: 66 | Vel: 76
+Tick: 5320 | StringIndex: 4 | pitch: 62 | Vel: 76
+Tick: 5360 | StringIndex: 3 | pitch: 57 | Vel: 76
+Tick: 5400 | StringIndex: 2 | pitch: 50 | Vel: 76
+Tick: 5760 | OFF | StringIndex: 2 | pitch: 50
+Tick: 5800 | OFF | StringIndex: 3 | pitch: 57
+Tick: 5840 | OFF | StringIndex: 4 | pitch: 62
+Tick: 5880 | OFF | StringIndex: 5 | pitch: 66
+Tick: 6240 | StringIndex: 5 | pitch: 66 | Vel: 84
+Tick: 6280 | StringIndex: 4 | pitch: 62 | Vel: 84
+Tick: 6320 | StringIndex: 3 | pitch: 57 | Vel: 84
+Tick: 6360 | StringIndex: 2 | pitch: 50 | Vel: 84
+Tick: 6720 | OFF | StringIndex: 2 | pitch: 50
+Tick: 6720 | StringIndex: 2 | pitch: 50 | Vel: 90
+Tick: 6760 | OFF | StringIndex: 3 | pitch: 57
+Tick: 6760 | StringIndex: 3 | pitch: 57 | Vel: 90
+Tick: 6800 | OFF | StringIndex: 4 | pitch: 62
+Tick: 6800 | StringIndex: 4 | pitch: 62 | Vel: 90
+Tick: 6840 | OFF | StringIndex: 5 | pitch: 66
+Tick: 6840 | StringIndex: 5 | pitch: 66 | Vel: 90
+Tick: 7200 | OFF | StringIndex: 5 | pitch: 66
+Tick: 7200 | StringIndex: 5 | pitch: 66 | Vel: 72
+Tick: 7240 | OFF | StringIndex: 4 | pitch: 62
+Tick: 7240 | StringIndex: 4 | pitch: 62 | Vel: 72
+Tick: 7280 | OFF | StringIndex: 3 | pitch: 57
+Tick: 7280 | StringIndex: 3 | pitch: 57 | Vel: 72
+Tick: 7320 | OFF | StringIndex: 2 | pitch: 50
+Tick: 7320 | StringIndex: 2 | pitch: 50 | Vel: 72
+Tick: 7680 | StringIndex: 0 | pitch: 40 | Vel: 108
+Tick: 7720 | StringIndex: 1 | pitch: 47 | Vel: 108
+Tick: 7760 | StringIndex: 2 | pitch: 52 | Vel: 108
+Tick: 7800 | OFF | StringIndex: 3 | pitch: 57
+Tick: 7800 | OFF | StringIndex: 4 | pitch: 62
+Tick: 7800 | OFF | StringIndex: 2 | pitch: 50
+Tick: 7800 | OFF | StringIndex: 5 | pitch: 66
+Tick: 7800 | OFF | StringIndex: 2 | pitch: 50
+Tick: 7800 | OFF | StringIndex: 3 | pitch: 57
+Tick: 7800 | OFF | StringIndex: 4 | pitch: 62
+Tick: 7800 | OFF | StringIndex: 5 | pitch: 66
+Tick: 7800 | OFF | StringIndex: 5 | pitch: 66
+Tick: 7800 | OFF | StringIndex: 4 | pitch: 62
+Tick: 7800 | OFF | StringIndex: 3 | pitch: 57
+Tick: 7800 | OFF | StringIndex: 2 | pitch: 50
+Tick: 7800 | StringIndex: 3 | pitch: 55 | Vel: 108
+Tick: 7840 | StringIndex: 4 | pitch: 59 | Vel: 108
+Tick: 7880 | StringIndex: 5 | pitch: 64 | Vel: 108
+Tick: 8640 | StringIndex: 0 | pitch: 40 | Vel: 88
+Tick: 8680 | StringIndex: 1 | pitch: 47 | Vel: 88
+Tick: 8720 | StringIndex: 2 | pitch: 52 | Vel: 88
+Tick: 8760 | StringIndex: 3 | pitch: 55 | Vel: 88
+Tick: 8800 | StringIndex: 4 | pitch: 59 | Vel: 88
+Tick: 8840 | StringIndex: 5 | pitch: 64 | Vel: 88
+Tick: 9120 | StringIndex: 5 | pitch: 64 | Vel: 76
+Tick: 9160 | StringIndex: 4 | pitch: 59 | Vel: 76
+Tick: 9200 | StringIndex: 3 | pitch: 55 | Vel: 76
+Tick: 9240 | StringIndex: 2 | pitch: 52 | Vel: 76
+Tick: 9280 | StringIndex: 1 | pitch: 47 | Vel: 76
+Tick: 9320 | StringIndex: 0 | pitch: 40 | Vel: 76
+Tick: 9600 | OFF | StringIndex: 0 | pitch: 40
+Tick: 9640 | OFF | StringIndex: 1 | pitch: 47
+Tick: 9680 | OFF | StringIndex: 2 | pitch: 52
+Tick: 9720 | OFF | StringIndex: 3 | pitch: 55
+Tick: 9760 | OFF | StringIndex: 4 | pitch: 59
+Tick: 9800 | OFF | StringIndex: 5 | pitch: 64
+Tick: 10080 | StringIndex: 5 | pitch: 64 | Vel: 84
+Tick: 10120 | StringIndex: 4 | pitch: 59 | Vel: 84
+Tick: 10160 | StringIndex: 3 | pitch: 55 | Vel: 84
+Tick: 10200 | StringIndex: 2 | pitch: 52 | Vel: 84
+Tick: 10240 | StringIndex: 1 | pitch: 47 | Vel: 84
+Tick: 10280 | StringIndex: 0 | pitch: 40 | Vel: 84
+Tick: 10560 | OFF | StringIndex: 0 | pitch: 40
+Tick: 10560 | StringIndex: 0 | pitch: 40 | Vel: 90
+Tick: 10600 | OFF | StringIndex: 1 | pitch: 47
+Tick: 10600 | StringIndex: 1 | pitch: 47 | Vel: 90
+Tick: 10640 | OFF | StringIndex: 2 | pitch: 52
+Tick: 10640 | StringIndex: 2 | pitch: 52 | Vel: 90
+Tick: 10680 | OFF | StringIndex: 3 | pitch: 55
+Tick: 10680 | StringIndex: 3 | pitch: 55 | Vel: 90
+Tick: 10720 | OFF | StringIndex: 4 | pitch: 59
+Tick: 10720 | StringIndex: 4 | pitch: 59 | Vel: 90
+Tick: 10760 | OFF | StringIndex: 5 | pitch: 64
+Tick: 10760 | StringIndex: 5 | pitch: 64 | Vel: 90
+Tick: 11040 | OFF | StringIndex: 5 | pitch: 64
+Tick: 11040 | StringIndex: 5 | pitch: 64 | Vel: 72
+Tick: 11080 | StringIndex: 4 | pitch: 59 | Vel: 72
+Tick: 11080 | OFF | StringIndex: 4 | pitch: 59
+Tick: 11120 | StringIndex: 3 | pitch: 55 | Vel: 72
+Tick: 11120 | OFF | StringIndex: 3 | pitch: 55
+Tick: 11160 | OFF | StringIndex: 2 | pitch: 52
+Tick: 11160 | StringIndex: 2 | pitch: 52 | Vel: 72
+Tick: 11200 | StringIndex: 1 | pitch: 47 | Vel: 72
+Tick: 11200 | OFF | StringIndex: 1 | pitch: 47
+Tick: 11240 | StringIndex: 0 | pitch: 40 | Vel: 72
+Tick: 11240 | OFF | StringIndex: 0 | pitch: 40
+Tick: 11520 | StringIndex: 1 | pitch: 48 | Vel: 108
+Tick: 11560 | StringIndex: 2 | pitch: 52 | Vel: 108
+Tick: 11600 | StringIndex: 3 | pitch: 55 | Vel: 108
+Tick: 11640 | OFF | StringIndex: 2 | pitch: 52
+Tick: 11640 | OFF | StringIndex: 3 | pitch: 55
+Tick: 11640 | OFF | StringIndex: 2 | pitch: 52
+Tick: 11640 | OFF | StringIndex: 4 | pitch: 59
+Tick: 11640 | OFF | StringIndex: 1 | pitch: 47
+Tick: 11640 | OFF | StringIndex: 5 | pitch: 64
+Tick: 11640 | OFF | StringIndex: 0 | pitch: 40
+Tick: 11640 | OFF | StringIndex: 5 | pitch: 64
+Tick: 11640 | OFF | StringIndex: 5 | pitch: 64
+Tick: 11640 | OFF | StringIndex: 4 | pitch: 59
+Tick: 11640 | OFF | StringIndex: 0 | pitch: 40
+Tick: 11640 | OFF | StringIndex: 3 | pitch: 55
+Tick: 11640 | OFF | StringIndex: 4 | pitch: 59
+Tick: 11640 | OFF | StringIndex: 2 | pitch: 52
+Tick: 11640 | OFF | StringIndex: 1 | pitch: 47
+Tick: 11640 | OFF | StringIndex: 1 | pitch: 47
+Tick: 11640 | OFF | StringIndex: 3 | pitch: 55
+Tick: 11640 | OFF | StringIndex: 0 | pitch: 40
+Tick: 11640 | StringIndex: 4 | pitch: 60 | Vel: 108
+Tick: 11680 | StringIndex: 5 | pitch: 64 | Vel: 108
+Tick: 12480 | StringIndex: 1 | pitch: 48 | Vel: 88
+Tick: 12520 | StringIndex: 2 | pitch: 52 | Vel: 88
+Tick: 12560 | StringIndex: 3 | pitch: 55 | Vel: 88
+Tick: 12600 | StringIndex: 4 | pitch: 60 | Vel: 88
+Tick: 12640 | StringIndex: 5 | pitch: 64 | Vel: 88
+Tick: 12960 | StringIndex: 5 | pitch: 64 | Vel: 76
+Tick: 13000 | StringIndex: 4 | pitch: 60 | Vel: 76
+Tick: 13040 | StringIndex: 3 | pitch: 55 | Vel: 76
+Tick: 13080 | StringIndex: 2 | pitch: 52 | Vel: 76
+Tick: 13120 | StringIndex: 1 | pitch: 48 | Vel: 76
+Tick: 13440 | OFF | StringIndex: 1 | pitch: 48
+Tick: 13480 | OFF | StringIndex: 2 | pitch: 52
+Tick: 13520 | OFF | StringIndex: 3 | pitch: 55
+Tick: 13560 | OFF | StringIndex: 4 | pitch: 60
+Tick: 13600 | OFF | StringIndex: 5 | pitch: 64
+Tick: 13920 | StringIndex: 5 | pitch: 64 | Vel: 84
+Tick: 13960 | StringIndex: 4 | pitch: 60 | Vel: 84
+Tick: 14000 | StringIndex: 3 | pitch: 55 | Vel: 84
+Tick: 14040 | StringIndex: 2 | pitch: 52 | Vel: 84
+Tick: 14080 | StringIndex: 1 | pitch: 48 | Vel: 84
+Tick: 14400 | OFF | StringIndex: 1 | pitch: 48
+Tick: 14400 | StringIndex: 1 | pitch: 48 | Vel: 90
+Tick: 14440 | OFF | StringIndex: 2 | pitch: 52
+Tick: 14440 | StringIndex: 2 | pitch: 52 | Vel: 90
+Tick: 14480 | OFF | StringIndex: 3 | pitch: 55
+Tick: 14480 | StringIndex: 3 | pitch: 55 | Vel: 90
+Tick: 14520 | OFF | StringIndex: 4 | pitch: 60
+Tick: 14520 | StringIndex: 4 | pitch: 60 | Vel: 90
+Tick: 14560 | OFF | StringIndex: 5 | pitch: 64
+Tick: 14560 | StringIndex: 5 | pitch: 64 | Vel: 90
+Tick: 14880 | OFF | StringIndex: 5 | pitch: 64
+Tick: 14880 | StringIndex: 5 | pitch: 64 | Vel: 72
+Tick: 14920 | OFF | StringIndex: 4 | pitch: 60
+Tick: 14920 | StringIndex: 4 | pitch: 60 | Vel: 72
+Tick: 14960 | StringIndex: 3 | pitch: 55 | Vel: 72
+Tick: 14960 | OFF | StringIndex: 3 | pitch: 55
+Tick: 15000 | StringIndex: 2 | pitch: 52 | Vel: 72
+Tick: 15000 | OFF | StringIndex: 2 | pitch: 52
+Tick: 15040 | StringIndex: 1 | pitch: 48 | Vel: 72
+Tick: 15040 | OFF | StringIndex: 1 | pitch: 48
+Tick: 15840 | OFF | StringIndex: 5 | pitch: 64
+Tick: 15880 | OFF | StringIndex: 4 | pitch: 60
+Tick: 15920 | OFF | StringIndex: 3 | pitch: 55
+Tick: 15960 | OFF | StringIndex: 2 | pitch: 52
+Tick: 16000 | OFF | StringIndex: 1 | pitch: 48
+Tick: 16320 | OFF | StringIndex: 1 | pitch: 48
+Tick: 16360 | OFF | StringIndex: 2 | pitch: 52
+Tick: 16400 | OFF | StringIndex: 3 | pitch: 55
+Tick: 16440 | OFF | StringIndex: 4 | pitch: 60
+Tick: 16480 | OFF | StringIndex: 5 | pitch: 64
+Tick: 16800 | OFF | StringIndex: 5 | pitch: 64
+Tick: 16840 | OFF | StringIndex: 4 | pitch: 60
+Tick: 16880 | OFF | StringIndex: 3 | pitch: 55
+Tick: 16920 | OFF | StringIndex: 2 | pitch: 52
+Tick: 16960 | OFF | StringIndex: 1 | pitch: 48
+6. Saving reference_acoustic_island_soft.wav...
+Done.

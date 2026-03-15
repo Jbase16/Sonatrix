@@ -31,8 +31,8 @@ public:
   void LoadInstrumentKit(const std::string &assetsAbsolutePath);
 
   // Receives a stream of timestamped MIDI events.
-  // In real-time use, this should only receive events meant for the *current*
-  // audio block. Note the 'const' added here for C++ const-correctness!
+  // In real-time use, this should only receive events meant for the current
+  // audio block.
   void ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
                    const InstrumentArticulation &articulation);
 
@@ -49,7 +49,8 @@ public:
   }
 
 private:
-  // Polyphony cap. Expanded to 32 to handle overlapping 6-string acoustic strums without aggressive choking.
+  // Expanded to handle overlapping acoustic guitar strums without needless
+  // stealing.
   static constexpr size_t MAX_VOICES = 32;
 
   std::array<SamplerVoice, MAX_VOICES> voices_;
@@ -57,12 +58,12 @@ private:
   AudioMixer mixer_;
   MixerBus activeMixerBus_{MixerBus::Bass};
 
-  // Tracks how many active NoteOns exist per physical string (0-5)
-  // Used to prevent orphaned NoteOffs from silencing re-struck strings.
+  // Tracks active note-ons per physical string (0-5) to avoid orphan note-offs
+  // killing a freshly restruck string.
   std::array<int, 6> stringActiveNotes_{0, 0, 0, 0, 0, 0};
 
   // Finds a free voice slot. If all slots are full, returns the active
-  // voice with the lowest amplitude (stealing).
+  // voice with the lowest amplitude (voice stealing).
   SamplerVoice *GetBestAvailableVoice();
 };
 
