@@ -19,7 +19,12 @@ struct SonatrixApp: App {
     var body: some Scene {
         WindowGroup {
             ArrangementView(viewModel: viewModel)
-                .frame(minWidth: 1000, minHeight: 700)
+                .frame(minWidth: 1180,
+                       idealWidth: 1360,
+                       maxWidth: .infinity,
+                       minHeight: 820,
+                       idealHeight: 900,
+                       maxHeight: .infinity)
                 .background(Color.black)
         }
         .windowStyle(HiddenTitleBarWindowStyle())

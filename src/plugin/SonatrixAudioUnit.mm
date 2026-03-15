@@ -9,23 +9,34 @@
 
 namespace {
 
-std::string ResolveBassMockKitPath(NSBundle *bundle) {
+std::string ResolvePlaybackKitPath(NSBundle *bundle) {
   NSFileManager *fileManager = [NSFileManager defaultManager];
 
   if (bundle != nil) {
     NSString *resourcePath = [bundle resourcePath];
     if (resourcePath != nil) {
-      NSString *bundledPath =
+      NSString *bundledGuitarPath =
+          [resourcePath stringByAppendingPathComponent:@"Assets/Exciters/FS_Guitars"];
+      if ([fileManager fileExistsAtPath:bundledGuitarPath]) {
+        return std::string([bundledGuitarPath UTF8String]);
+      }
+
+      NSString *bundledBassPath =
           [resourcePath stringByAppendingPathComponent:@"Assets/samples/bass_mock"];
-      if ([fileManager fileExistsAtPath:bundledPath]) {
-        return std::string([bundledPath UTF8String]);
+      if ([fileManager fileExistsAtPath:bundledBassPath]) {
+        return std::string([bundledBassPath UTF8String]);
       }
     }
   }
 
-  NSString *repoPath = @"/Users/jason/Developer/Sonatrix/assets/samples/bass_mock";
-  if ([fileManager fileExistsAtPath:repoPath]) {
-    return std::string([repoPath UTF8String]);
+  NSString *repoGuitarPath = @"/Users/jason/Developer/Sonatrix/assets/Exciters/FS_Guitars";
+  if ([fileManager fileExistsAtPath:repoGuitarPath]) {
+    return std::string([repoGuitarPath UTF8String]);
+  }
+
+  NSString *repoBassPath = @"/Users/jason/Developer/Sonatrix/assets/samples/bass_mock";
+  if ([fileManager fileExistsAtPath:repoBassPath]) {
+    return std::string([repoBassPath UTF8String]);
   }
 
   return {};
@@ -56,12 +67,12 @@ std::string ResolveBassMockKitPath(NSBundle *bundle) {
   // Initialize the C++ Core Engine
   _voiceManager = std::make_unique<Sonatrix::Core::Audio::VoiceManager>();
   const std::string kitPath =
-      ResolveBassMockKitPath([NSBundle bundleForClass:[SonatrixAudioUnit class]]);
+      ResolvePlaybackKitPath([NSBundle bundleForClass:[SonatrixAudioUnit class]]);
   if (!kitPath.empty()) {
     _voiceManager->LoadInstrumentKit(kitPath);
   } else {
     os_log_error(OS_LOG_DEFAULT,
-                 "SonatrixAudioUnit: Failed to resolve bass_mock sample kit path.");
+                 "SonatrixAudioUnit: Failed to resolve playback instrument kit path.");
   }
 
   // Setup Audio Busses (Stereo Output)

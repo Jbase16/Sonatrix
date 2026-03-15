@@ -2,6 +2,7 @@
 #include "../engines/guitar/VoicingGraphSolver.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <iostream>
 #include <iterator>
 
@@ -15,6 +16,14 @@ constexpr int kLowestStringFlag = 64;
 
 bool ContainsInt(const std::vector<int> &values, int value) {
   return std::find(values.begin(), values.end(), value) != values.end();
+}
+
+bool GuitarCompilerDebugEnabled() {
+  static const bool enabled = []() {
+    const char *env = std::getenv("SONATRIX_GUITAR_DEBUG");
+    return env != nullptr && env[0] != '\0' && env[0] != '0';
+  }();
+  return enabled;
 }
 
 } // namespace
@@ -36,20 +45,21 @@ MIDIStream GuitarCompiler::CompileClip(
     optimalVoicings = solver.SolveVoiceLeading(
         chordTimeline, clip.basePattern->guitarVoicingMode);
     
-    // Debug output to verify what frets the solver actually chose
-    std::cout << "--- CHOSEN VOICINGS ---" << std::endl;
-    for (size_t i = 0; i < optimalVoicings.size(); ++i) {
-       std::cout << "Chord " << i << ": ";
-       for(int s = 0; s < 6; ++s) {
-          int f = optimalVoicings[i].frets[s];
-          if (f == -1) std::cout << "X ";
-          else std::cout << f << " ";
-       }
-       std::cout << "| avg=" << optimalVoicings[i].GetAverageFret()
-                 << " span=" << optimalVoicings[i].GetFretSpan()
-                 << " open=" << optimalVoicings[i].GetNumOpenStrings()
-                 << " sounding=" << optimalVoicings[i].GetNumSoundingStrings()
-                 << std::endl;
+    if (GuitarCompilerDebugEnabled()) {
+      std::cout << "--- CHOSEN VOICINGS ---" << std::endl;
+      for (size_t i = 0; i < optimalVoicings.size(); ++i) {
+         std::cout << "Chord " << i << ": ";
+         for(int s = 0; s < 6; ++s) {
+            int f = optimalVoicings[i].frets[s];
+            if (f == -1) std::cout << "X ";
+            else std::cout << f << " ";
+         }
+         std::cout << "| avg=" << optimalVoicings[i].GetAverageFret()
+                   << " span=" << optimalVoicings[i].GetFretSpan()
+                   << " open=" << optimalVoicings[i].GetNumOpenStrings()
+                   << " sounding=" << optimalVoicings[i].GetNumSoundingStrings()
+                   << std::endl;
+      }
     }
   }
 
@@ -82,9 +92,11 @@ MIDIStream GuitarCompiler::CompileClip(
 
     Sonatrix::Core::Engines::Guitar::GuitarVoicing activeVoicing =
         fallbackVoicing;
+    const ChordTrackEvent *activeChordEvent = nullptr;
     if (currentChordIndex >= 0 &&
         currentChordIndex < static_cast<int>(optimalVoicings.size())) {
       activeVoicing = optimalVoicings[currentChordIndex];
+      activeChordEvent = &chordTimeline[static_cast<size_t>(currentChordIndex)];
     }
 
     if (currentChordIndex != previousChordIndex) {
@@ -121,7 +133,8 @@ MIDIStream GuitarCompiler::CompileClip(
       DebugPrintResolvedEvent(eventAbsoluteTime, currentChordIndex, mir,
                               activeVoicing, resolvedTargets);
       EmitStrum(stream, lockedTime, mir.type, mir.velocityBase,
-                BeatsToTime(mir.lengthBeats), resolvedTargets);
+                BeatsToTime(mir.lengthBeats), resolvedTargets,
+                activeChordEvent);
 
       if (isPickingEvent) {
         for (const auto &target : resolvedTargets) {
@@ -143,11 +156,13 @@ MIDIStream GuitarCompiler::CompileClip(
 void GuitarCompiler::EmitStrum(
     MIDIStream &outStream, MusicalTime baseTime, ArticulationType direction,
     uint8_t baseVelocity, MusicalTime duration,
-    const std::vector<NoteTarget> &resolvedTargets) const {
+    const std::vector<NoteTarget> &resolvedTargets,
+    const ChordTrackEvent *activeChordEvent) const {
 
   // 40 ticks at 960 PPQ = ~20ms per string. This creates a beautiful, natural glide.
   int64_t dispersionTicks = 40;
-  std::vector<NoteTarget> stringTargets = resolvedTargets;
+  std::vector<NoteTarget> stringTargets =
+      SortTargetsForChordEvent(resolvedTargets, activeChordEvent);
 
   // To play an upstroke, simply reverse the physical string order.
   // The time offset will remain positive, so the high strings are plucked FIRST.
@@ -159,11 +174,13 @@ void GuitarCompiler::EmitStrum(
   for (const auto &target : stringTargets) {
     MusicalTime triggerTime = baseTime + MusicalTime(accumulatedOffset);
     uint8_t strChannel = static_cast<uint8_t>(target.stringIndex + 1);
+    const uint8_t noteVelocity =
+        ResolveTargetVelocity(baseVelocity, target, activeChordEvent);
 
     // Note On
     outStream.events.push_back({triggerTime, MIDIEventType::NoteOn, strChannel,
                                 static_cast<uint8_t>(target.pitch),
-                                baseVelocity});
+                                noteVelocity});
 
     // Make the note ring out for the duration specified by the MIR Event, OR at least 
     // 2.0 beats to ensure open acoustic chords don't cut off prematurely before the choke.
@@ -560,11 +577,47 @@ GuitarCompiler::ResolveTargetsForEvent(
   return stringTargets;
 }
 
+std::vector<GuitarCompiler::NoteTarget> GuitarCompiler::SortTargetsForChordEvent(
+    std::vector<NoteTarget> targets, const ChordTrackEvent *activeChordEvent) const {
+  if (targets.size() <= 1 || activeChordEvent == nullptr ||
+      !activeChordEvent->guitarEditData.hasCustomVoicing) {
+    return targets;
+  }
+
+  const auto &order = activeChordEvent->guitarEditData.noteOrder;
+  std::stable_sort(
+      targets.begin(), targets.end(),
+      [&](const NoteTarget &lhs, const NoteTarget &rhs) {
+        return order[static_cast<size_t>(lhs.stringIndex)] <
+               order[static_cast<size_t>(rhs.stringIndex)];
+      });
+  return targets;
+}
+
+uint8_t GuitarCompiler::ResolveTargetVelocity(
+    uint8_t baseVelocity, const NoteTarget &target,
+    const ChordTrackEvent *activeChordEvent) const {
+  if (activeChordEvent == nullptr || !activeChordEvent->guitarEditData.hasCustomVoicing ||
+      target.stringIndex < 0 || target.stringIndex >= 6) {
+    return baseVelocity;
+  }
+
+  const uint8_t storedVelocity =
+      activeChordEvent->guitarEditData.noteVelocity[static_cast<size_t>(target.stringIndex)];
+  const int scaledVelocity =
+      static_cast<int>(baseVelocity) * static_cast<int>(storedVelocity) / 100;
+  return static_cast<uint8_t>(std::clamp(scaledVelocity, 1, 127));
+}
+
 void GuitarCompiler::DebugPrintResolvedEvent(
     MusicalTime absoluteTime, int chordIndex, const MIREvent &event,
     const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing,
     const std::vector<NoteTarget> &resolvedTargets) const {
   if (!event.UsesGuitarTargetRoles()) {
+    return;
+  }
+
+  if (!GuitarCompilerDebugEnabled()) {
     return;
   }
 

@@ -55,6 +55,7 @@ private:
   std::array<SamplerVoice, MAX_VOICES> voices_;
   InstrumentArticulation activeArticulation_;
   AudioMixer mixer_;
+  MixerBus activeMixerBus_{MixerBus::Bass};
 
   // Tracks how many active NoteOns exist per physical string (0-5)
   // Used to prevent orphaned NoteOffs from silencing re-struck strings.

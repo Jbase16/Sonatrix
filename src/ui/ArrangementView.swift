@@ -72,6 +72,10 @@ private func makeChordItemProvider(for payload: DragChordPayload) -> NSItemProvi
 // -----------------------------------------------------------------------------
 
 public struct ArrangementView: View {
+    private let transportHeight: CGFloat = 60
+    private let chordTrackHeight: CGFloat = 118
+    private let mixerHeight: CGFloat = 220
+
     #if STANDALONE
         @ObservedObject var viewModel: SonatrixViewModel
 
@@ -83,69 +87,92 @@ public struct ArrangementView: View {
     #endif
 
     public var body: some View {
-        VStack(spacing: 0) {
-            #if STANDALONE
-                TransportRibbon(viewModel: viewModel)
-                    .frame(height: 60)
-                    .background(Color.black)
-            #else
-                TransportRibbon()
-                    .frame(height: 60)
-                    .background(Color.black)
-            #endif
+        GeometryReader { geometry in
+            let middleHeight = max(0, geometry.size.height - transportHeight - chordTrackHeight - mixerHeight)
 
-            #if STANDALONE
-                ChordTrackRuler(viewModel: viewModel)
-                    .frame(height: 118)
-                    .background(Color(white: 0.15))
-            #else
-                ChordTrackRuler()
-                    .frame(height: 118)
-                    .background(Color(white: 0.15))
-            #endif
-
-            HStack(spacing: 0) {
+            VStack(spacing: 0) {
                 #if STANDALONE
-                    ChordPaletteView(viewModel: viewModel)
-                        .frame(width: 320)
-                        .background(
-                            LinearGradient(
-                                colors: [Color(red: 0.11, green: 0.12, blue: 0.15),
-                                         Color(red: 0.08, green: 0.08, blue: 0.1)],
-                                startPoint: .top,
-                                endPoint: .bottom)
-                        )
-                        .border(Color.white.opacity(0.08), width: 1)
+                    TransportRibbon(viewModel: viewModel)
+                        .frame(height: transportHeight)
+                        .background(Color.black)
                 #else
-                    ChordPaletteView()
-                        .frame(width: 320)
-                        .background(Color(white: 0.1))
-                        .border(Color.white.opacity(0.08), width: 1)
+                    TransportRibbon()
+                        .frame(height: transportHeight)
+                        .background(Color.black)
                 #endif
 
-                ScrollView(.vertical) {
-                    VStack(spacing: 2) {
-                        InstrumentLane(name: "Drums", color: .purple)
-                        InstrumentLane(name: "Bass", color: .blue)
-                        InstrumentLane(name: "Guitar", color: .orange)
-                        InstrumentLane(name: "Piano", color: .green)
-                        InstrumentLane(name: "Strings", color: .cyan)
-                    }
-                    .padding(.top, 4)
-                }
-                .background(Color(white: 0.05))
-            }
+                #if STANDALONE
+                    ChordTrackRuler(viewModel: viewModel)
+                        .frame(height: chordTrackHeight)
+                        .background(Color(white: 0.15))
+                #else
+                    ChordTrackRuler()
+                        .frame(height: chordTrackHeight)
+                        .background(Color(white: 0.15))
+                #endif
 
-            #if STANDALONE
-                MixerView(viewModel: viewModel)
-                    .frame(height: 200)
-                    .background(Color.black)
-            #else
-                Text("Mixer Not Available in AUv3 Mock")
-                    .frame(height: 200)
-                    .background(Color.black)
-            #endif
+                HStack(spacing: 0) {
+                    #if STANDALONE
+                        ScrollView(.vertical, showsIndicators: true) {
+                            ChordPaletteView(viewModel: viewModel)
+                                .frame(width: 320)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                            .frame(width: 320, height: middleHeight)
+                            .background(
+                                LinearGradient(
+                                    colors: [Color(red: 0.11, green: 0.12, blue: 0.15),
+                                             Color(red: 0.08, green: 0.08, blue: 0.1)],
+                                    startPoint: .top,
+                                    endPoint: .bottom)
+                            )
+                            .border(Color.white.opacity(0.08), width: 1)
+                    #else
+                        ScrollView(.vertical, showsIndicators: true) {
+                            ChordPaletteView()
+                                .frame(width: 320)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                            .frame(width: 320, height: middleHeight)
+                            .background(Color(white: 0.1))
+                            .border(Color.white.opacity(0.08), width: 1)
+                    #endif
+
+                    #if STANDALONE
+                        PatternBrowserView(viewModel: viewModel)
+                            .frame(maxWidth: .infinity,
+                                   minHeight: middleHeight,
+                                   maxHeight: middleHeight,
+                                   alignment: .topLeading)
+                            .border(Color.white.opacity(0.08), width: 1)
+                    #else
+                        PatternBrowserView()
+                            .frame(maxWidth: .infinity,
+                                   minHeight: middleHeight,
+                                   maxHeight: middleHeight,
+                                   alignment: .topLeading)
+                    #endif
+                }
+                .frame(maxWidth: .infinity,
+                       minHeight: middleHeight,
+                       maxHeight: middleHeight,
+                       alignment: .topLeading)
+
+                #if STANDALONE
+                    MixerView(viewModel: viewModel)
+                        .frame(height: mixerHeight)
+                        .background(Color.black)
+                        .clipped()
+                #else
+                    Text("Mixer Not Available in AUv3 Mock")
+                        .frame(height: mixerHeight)
+                        .background(Color.black)
+                #endif
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
+            .background(Color.black)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .preferredColorScheme(.dark)
     }
 }
@@ -159,7 +186,20 @@ struct TransportRibbon: View {
 
     var body: some View {
         HStack {
-            Text("SONATRIX").font(.headline).fontWeight(.black).foregroundColor(.white).padding()
+            VStack(alignment: .leading, spacing: 2) {
+                Text("SONATRIX")
+                    .font(.headline)
+                    .fontWeight(.black)
+                    .foregroundColor(.white)
+
+                #if STANDALONE
+                    Text(viewModel.selectedPattern?.name ?? "Acoustic 12/8 Arpeggiated")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                #endif
+            }
+            .padding()
+
             Spacer()
 
             #if STANDALONE
@@ -195,6 +235,18 @@ struct TransportRibbon: View {
             #endif
 
             Spacer()
+
+            #if STANDALONE
+                if let selectedPattern = viewModel.selectedPattern {
+                    Text("\(selectedPattern.category.displayName) • \(selectedPattern.timeSignature)")
+                        .font(.caption)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.orange.opacity(0.18))
+                        .cornerRadius(8)
+                }
+            #endif
+
             Text("SYNC: HOST").font(.caption).padding().background(Color.green.opacity(0.3))
                 .cornerRadius(4)
         }
@@ -204,10 +256,20 @@ struct TransportRibbon: View {
 
 struct ChordTrackRuler: View {
     #if STANDALONE
+        private struct ChordEditSession: Identifiable {
+            let id: UUID
+            let index: Int
+            let chord: SonatrixViewModel.ChordItem
+
+            init(index: Int, chord: SonatrixViewModel.ChordItem) {
+                self.id = chord.id
+                self.index = index
+                self.chord = chord
+            }
+        }
+
         @ObservedObject var viewModel: SonatrixViewModel
-        @State private var isShowingEditor = false
-        @State private var editingChord: SonatrixViewModel.ChordItem?
-        @State private var editingIndex: Int?
+        @State private var editingSession: ChordEditSession?
         @State private var isDropTargeted = false
     #endif
 
@@ -292,9 +354,7 @@ struct ChordTrackRuler: View {
                                         }
                                     }
                                     .onTapGesture {
-                                        editingIndex = index
-                                        editingChord = chord
-                                        isShowingEditor = true
+                                        editingSession = ChordEditSession(index: index, chord: chord)
                                     }
                                 }
                             }
@@ -325,19 +385,17 @@ struct ChordTrackRuler: View {
         }
         .padding(.horizontal)
         #if STANDALONE
-            .sheet(isPresented: $isShowingEditor) {
-                if let chord = editingChord, let index = editingIndex {
-                    ChordEditorSheet(
-                        chord: chord,
-                        onSave: { updatedChord in
-                            viewModel.updateChord(at: index, with: updatedChord)
-                            isShowingEditor = false
-                        },
-                        onCancel: {
-                            isShowingEditor = false
-                        }
-                    )
-                }
+            .sheet(item: $editingSession) { session in
+                ChordEditorSheet(
+                    chord: session.chord,
+                    onSave: { updatedChord in
+                        viewModel.updateChord(at: session.index, with: updatedChord)
+                        editingSession = nil
+                    },
+                    onCancel: {
+                        editingSession = nil
+                    }
+                )
             }
         #endif
     }
@@ -391,7 +449,7 @@ struct ChordTrackRuler: View {
                             Text(option.displayName).tag(option.id)
                         }
                     }
-                    .onChange(of: chord.rootIndex) { _, newValue in
+                    .onChange(of: chord.rootIndex) { newValue in
                         chord.rootName = SonatrixViewModel.rootOption(for: newValue).displayName
                     }
 
@@ -400,7 +458,7 @@ struct ChordTrackRuler: View {
                             Text(option.displayLabel).tag(option.id)
                         }
                     }
-                    .onChange(of: chord.qualityIndex) { _, newValue in
+                    .onChange(of: chord.qualityIndex) { newValue in
                         chord.qualityName = SonatrixViewModel.qualityOption(for: newValue).storedName
                     }
 
@@ -776,38 +834,5 @@ struct ChordBlock: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.blue.opacity(0.85), lineWidth: 1)
         )
-    }
-}
-
-struct InstrumentLane: View {
-    let name: String
-    let color: Color
-
-    var body: some View {
-        HStack {
-            VStack {
-                Text(name).font(.subheadline).bold()
-            }
-            .frame(width: 80, height: 80)
-            .background(Color(white: 0.2))
-
-            ZStack(alignment: .leading) {
-                Rectangle().fill(Color(white: 0.1)).frame(height: 80)
-
-                HStack {
-                    Text("Pattern Clip")
-                        .font(.caption)
-                        .padding(4)
-                        .frame(width: 150, height: 60)
-                        .background(color.opacity(0.3))
-                        .cornerRadius(6)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(color, style: StrokeStyle(lineWidth: 1, dash: [4]))
-                        )
-                }
-                .padding(.leading, 50)
-            }
-        }
     }
 }

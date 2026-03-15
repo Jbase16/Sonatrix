@@ -3,6 +3,9 @@ add_library(SonatrixCore STATIC
     mir/MusicalTime.h
     mir/MIRPattern.h
     mir/DeltaGraph.h
+    mir/GrooveTemplate.h
+    mir/PatternLibrary.h
+    mir/PatternLibrary.cpp
     arrangement/ChordTrack.h
     midi/MIDIEvent.h
     midi/MIDIEvent.cpp

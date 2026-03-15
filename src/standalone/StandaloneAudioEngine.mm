@@ -15,23 +15,34 @@
 
 namespace {
 
-std::string ResolveBassMockKitPath(NSBundle *bundle) {
+std::string ResolvePlaybackKitPath(NSBundle *bundle) {
   NSFileManager *fileManager = [NSFileManager defaultManager];
 
   if (bundle != nil) {
     NSString *resourcePath = [bundle resourcePath];
     if (resourcePath != nil) {
-      NSString *bundledPath =
+      NSString *bundledGuitarPath =
+          [resourcePath stringByAppendingPathComponent:@"Assets/Exciters/FS_Guitars"];
+      if ([fileManager fileExistsAtPath:bundledGuitarPath]) {
+        return std::string([bundledGuitarPath UTF8String]);
+      }
+
+      NSString *bundledBassPath =
           [resourcePath stringByAppendingPathComponent:@"Assets/samples/bass_mock"];
-      if ([fileManager fileExistsAtPath:bundledPath]) {
-        return std::string([bundledPath UTF8String]);
+      if ([fileManager fileExistsAtPath:bundledBassPath]) {
+        return std::string([bundledBassPath UTF8String]);
       }
     }
   }
 
-  NSString *repoPath = @"/Users/jason/Developer/Sonatrix/assets/samples/bass_mock";
-  if ([fileManager fileExistsAtPath:repoPath]) {
-    return std::string([repoPath UTF8String]);
+  NSString *repoGuitarPath = @"/Users/jason/Developer/Sonatrix/assets/Exciters/FS_Guitars";
+  if ([fileManager fileExistsAtPath:repoGuitarPath]) {
+    return std::string([repoGuitarPath UTF8String]);
+  }
+
+  NSString *repoBassPath = @"/Users/jason/Developer/Sonatrix/assets/samples/bass_mock";
+  if ([fileManager fileExistsAtPath:repoBassPath]) {
+    return std::string([repoBassPath UTF8String]);
   }
 
   return {};
@@ -101,11 +112,11 @@ std::string ResolveBassMockKitPath(NSBundle *bundle) {
   self = [super init];
   if (self) {
     _voiceManager = std::make_unique<Sonatrix::Core::Audio::VoiceManager>();
-    const std::string kitPath = ResolveBassMockKitPath([NSBundle mainBundle]);
+    const std::string kitPath = ResolvePlaybackKitPath([NSBundle mainBundle]);
     if (!kitPath.empty()) {
       _voiceManager->LoadInstrumentKit(kitPath);
     } else {
-      NSLog(@"StandaloneAudioEngine: Failed to resolve bass_mock sample kit path.");
+      NSLog(@"StandaloneAudioEngine: Failed to resolve playback instrument kit path.");
     }
     _midiQueue = std::make_unique<Sonatrix::Core::Concurrency::SPSCQueue<
         Sonatrix::Core::MIDI::MIDIEvent>>(1024);

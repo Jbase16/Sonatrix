@@ -8,12 +8,15 @@
 
 #include "../../core/arrangement/ChordTrack.h"
 #include "../../core/audio/AudioExporter.h"
+#include "../../core/engines/guitar/VoicingGraphSolver.h"
 #include "../../core/midi/GuitarCompiler.h"
 #include "../../core/midi/MIDIExporter.h"
 #include "../../core/mir/DeltaGraph.h"
 #include "../../core/mir/MIRPattern.h"
+#include "../../core/mir/PatternLibrary.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <memory>
 #include <thread>
@@ -22,10 +25,61 @@
 namespace {
 
 constexpr double kDefaultTempoBPM = 120.0;
+constexpr const char *kDefaultPatternTemplateId = "acoustic_12_8_arpeggiated";
 
-double MillisecondsPerTick() {
-  return (60000.0 / kDefaultTempoBPM) /
+double MillisecondsPerTick(double tempoBPM) {
+  const double safeTempoBPM = tempoBPM > 0.0 ? tempoBPM : kDefaultTempoBPM;
+  return (60000.0 / safeTempoBPM) /
          static_cast<double>(Sonatrix::Core::STANDARD_PPQN);
+}
+
+Sonatrix::Core::ChordTrackEvent MakeChordEvent(uint8_t rootKey, uint8_t quality,
+                                               double offset) {
+  Sonatrix::Core::ChordTrackEvent ev;
+  ev.position = Sonatrix::Core::MusicalTime(static_cast<int64_t>(offset));
+  ev.chord.root = static_cast<Sonatrix::Core::PitchClass>(rootKey % 12);
+  ev.chord.quality = static_cast<Sonatrix::Core::ChordQuality>(quality);
+  ev.chord.overBass = ev.chord.root;
+  return ev;
+}
+
+std::array<int8_t, 6> SuggestAcousticVoicingFrets(
+    const Sonatrix::Core::ActiveChordContext &chord) {
+  Sonatrix::Core::ChordTrackEvent event;
+  event.position = Sonatrix::Core::MusicalTime(0);
+  event.chord = chord;
+
+  Sonatrix::Core::Engines::Guitar::VoicingGraphSolver solver;
+  const auto voicings = solver.SolveVoiceLeading(
+      {event}, Sonatrix::Core::GuitarVoicingMode::AcousticOpen);
+  if (!voicings.empty()) {
+    return voicings.front().frets;
+  }
+
+  return {-1, -1, -1, -1, -1, -1};
+}
+
+std::string ResolvePatternLibraryPath(NSBundle *bundle) {
+  NSFileManager *fileManager = [NSFileManager defaultManager];
+
+  if (bundle != nil) {
+    NSString *resourcePath = [bundle resourcePath];
+    if (resourcePath != nil) {
+      NSString *bundledPath =
+          [resourcePath stringByAppendingPathComponent:@"Assets/Patterns/default_library.json"];
+      if ([fileManager fileExistsAtPath:bundledPath]) {
+        return std::string([bundledPath UTF8String]);
+      }
+    }
+  }
+
+  NSString *repoPath =
+      @"/Users/jason/Developer/Sonatrix/assets/Patterns/default_library.json";
+  if ([fileManager fileExistsAtPath:repoPath]) {
+    return std::string([repoPath UTF8String]);
+  }
+
+  return {};
 }
 
 void AddInteractiveGuitarEvent(
@@ -95,15 +149,54 @@ std::shared_ptr<Sonatrix::Core::MIRPattern> BuildInteractiveChordPattern() {
   return pattern;
 }
 
+std::shared_ptr<const Sonatrix::Core::MIRPattern> ResolveSelectedPattern(
+    const std::string &selectedTemplateId) {
+  auto &library = Sonatrix::Core::PatternLibrary::GetInstance();
+
+  auto resolveFromTemplate = [&](const std::string &templateId)
+      -> std::shared_ptr<const Sonatrix::Core::MIRPattern> {
+    if (templateId.empty()) {
+      return nullptr;
+    }
+
+    const auto tmpl = library.GetTemplate(templateId);
+    if (!tmpl) {
+      return nullptr;
+    }
+
+    const auto it =
+        tmpl->patterns.find(Sonatrix::Core::MIRPattern::TargetEngine::Guitar);
+    if (it == tmpl->patterns.end()) {
+      return nullptr;
+    }
+
+    return it->second;
+  };
+
+  if (auto selectedPattern = resolveFromTemplate(selectedTemplateId)) {
+    return selectedPattern;
+  }
+
+  if (auto defaultPattern = resolveFromTemplate(kDefaultPatternTemplateId)) {
+    return defaultPattern;
+  }
+
+  return BuildInteractiveChordPattern();
+}
+
 Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
-    const std::vector<Sonatrix::Core::ChordTrackEvent> &chordTrack) {
+    const std::vector<Sonatrix::Core::ChordTrackEvent> &chordTrack,
+    const std::string &selectedTemplateId) {
   Sonatrix::Core::MIDI::MIDIStream arrangementStream;
   if (chordTrack.empty()) {
     return arrangementStream;
   }
 
   Sonatrix::Core::MIDI::GuitarCompiler guitarEngine;
-  auto pattern = BuildInteractiveChordPattern();
+  auto pattern = ResolveSelectedPattern(selectedTemplateId);
+  if (!pattern) {
+    return arrangementStream;
+  }
 
   for (const auto &chordEvent : chordTrack) {
     Sonatrix::Core::EditorClip clip(pattern);
@@ -125,6 +218,7 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
 @property(nonatomic, strong) StandaloneAudioEngine *audioEngine;
 @property(nonatomic, assign) BOOL internalIsPlaying;
 - (void)restartPlaybackThread;
+- (void)restartPlaybackThreadFromTick:(int64_t)startTick;
 - (void)stopPlaybackThread;
 @end
 
@@ -132,15 +226,28 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
   std::vector<Sonatrix::Core::ChordTrackEvent> _chordTrack;
   Sonatrix::Core::MIDI::MIDIStream _scheduledStream;
   std::unique_ptr<std::thread> _playbackThread;
-  BOOL _shouldStopPlayback;
+  std::string _selectedPatternTemplateId;
+  std::atomic<bool> _shouldStopPlayback;
+  std::atomic<int64_t> _currentPlayheadTick;
+  double _tempoBPM;
 }
 
 - (instancetype)init {
   self = [super init];
   if (self) {
     _audioEngine = [[StandaloneAudioEngine alloc] init];
+    _selectedPatternTemplateId = kDefaultPatternTemplateId;
     _internalIsPlaying = NO;
-    _shouldStopPlayback = NO;
+    _shouldStopPlayback.store(false);
+    _currentPlayheadTick.store(0);
+    _tempoBPM = kDefaultTempoBPM;
+
+    const std::string patternLibraryPath =
+        ResolvePatternLibraryPath([NSBundle mainBundle]);
+    if (!patternLibraryPath.empty()) {
+      Sonatrix::Core::PatternLibrary::GetInstance().LoadFromJSON(
+          patternLibraryPath);
+    }
   }
   return self;
 }
@@ -154,20 +261,52 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
   return _internalIsPlaying;
 }
 
+- (double)currentPlayheadTick {
+  return static_cast<double>(_currentPlayheadTick.load());
+}
+
+- (double)tempoBPM {
+  return _tempoBPM;
+}
+
 - (void)play {
+  [self playFromTick:[self currentPlayheadTick]];
+}
+
+- (void)playFromTick:(double)tickOffset {
   if (_internalIsPlaying) {
     return;
   }
 
+  _currentPlayheadTick.store(
+      std::max<int64_t>(0, static_cast<int64_t>(tickOffset)));
   [_audioEngine start];
   _internalIsPlaying = YES;
-  [self restartPlaybackThread];
+  [self restartPlaybackThreadFromTick:_currentPlayheadTick.load()];
 }
 
 - (void)stop {
   [self stopPlaybackThread];
   [_audioEngine stop];
   _internalIsPlaying = NO;
+}
+
+- (void)seekToTick:(double)tickOffset {
+  const int64_t targetTick =
+      std::max<int64_t>(0, static_cast<int64_t>(tickOffset));
+  _currentPlayheadTick.store(targetTick);
+
+  if (_internalIsPlaying) {
+    [self restartPlaybackThreadFromTick:targetTick];
+  }
+}
+
+- (void)setTempoBPM:(double)tempoBPM {
+  _tempoBPM = std::clamp(tempoBPM, 40.0, 240.0);
+
+  if (_internalIsPlaying) {
+    [self restartPlaybackThreadFromTick:_currentPlayheadTick.load()];
+  }
 }
 
 - (void)clearChords {
@@ -183,6 +322,7 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
   ev.position = Sonatrix::Core::MusicalTime(static_cast<int64_t>(offset));
   ev.chord.root = static_cast<Sonatrix::Core::PitchClass>(rootKey % 12);
   ev.chord.quality = static_cast<Sonatrix::Core::ChordQuality>(quality);
+  ev.chord.overBass = ev.chord.root;
   _chordTrack.push_back(ev);
 
   std::stable_sort(
@@ -194,7 +334,8 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
 }
 
 - (void)compileAndSchedule {
-  _scheduledStream = CompileInteractiveArrangement(_chordTrack);
+  _scheduledStream =
+      CompileInteractiveArrangement(_chordTrack, _selectedPatternTemplateId);
 
   if (_internalIsPlaying) {
     [self restartPlaybackThread];
@@ -265,11 +406,19 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
   [_audioEngine setVolume:volume forBus:busIndex];
 }
 
+- (void)setPatternTemplateId:(NSString *)patternTemplateId {
+  if (patternTemplateId != nil && [patternTemplateId length] > 0) {
+    _selectedPatternTemplateId = std::string([patternTemplateId UTF8String]);
+  } else {
+    _selectedPatternTemplateId = kDefaultPatternTemplateId;
+  }
+}
+
 - (BOOL)bounceAudioToPath:(NSString *)path
                assetsPath:(NSString *)assetsPath
                   volumes:(NSArray<NSNumber *> *)volumes {
   const Sonatrix::Core::MIDI::MIDIStream masterStream =
-      CompileInteractiveArrangement(_chordTrack);
+      CompileInteractiveArrangement(_chordTrack, _selectedPatternTemplateId);
 
   std::vector<float> cVols;
   for (NSNumber *vol in volumes) {
@@ -285,7 +434,7 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
 
 - (BOOL)exportMIDIToPath:(NSString *)path {
   const Sonatrix::Core::MIDI::MIDIStream masterStream =
-      CompileInteractiveArrangement(_chordTrack);
+      CompileInteractiveArrangement(_chordTrack, _selectedPatternTemplateId);
 
   std::string cppOutputPath = [path UTF8String];
   return Sonatrix::Core::MIDI::MIDIExporter::ExportToSMF(cppOutputPath,

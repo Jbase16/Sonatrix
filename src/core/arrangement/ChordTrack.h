@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../mir/MusicalTime.h"
+#include <array>
 #include <cstdint>
 #include <string_view>
 
@@ -38,9 +39,17 @@ struct ActiveChordContext {
 };
 
 // An event on the global Chord Track
+struct GuitarChordEditData {
+    bool hasCustomVoicing{false};
+    std::array<int8_t, 6> frets{-1, -1, -1, -1, -1, -1};
+    std::array<int8_t, 6> noteOrder{0, 1, 2, 3, 4, 5};
+    std::array<uint8_t, 6> noteVelocity{100, 100, 100, 100, 100, 100};
+};
+
 struct ChordTrackEvent {
     MusicalTime position;
     ActiveChordContext chord;
+    GuitarChordEditData guitarEditData;
 };
 
 } // namespace Core

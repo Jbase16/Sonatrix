@@ -37,8 +37,6 @@ bool AssetManager::LoadAcousticGuitarAnchors(const std::string &directoryPath) {
                 << "\n";
       // Don't fail completely, keep trying others
     } else {
-      std::cout << "Sonatrix: Loaded Granular Anchor: " << zone.filePath << " ("
-                << zone.audioData.size() / 2 << " frames)\n";
       acousticGuitar_.zones.push_back(zone);
     }
   }

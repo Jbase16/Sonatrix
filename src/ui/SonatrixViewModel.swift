@@ -10,6 +10,42 @@ import SwiftUI
 // -----------------------------------------------------------------------------
 
 public class SonatrixViewModel: ObservableObject {
+    public enum PatternCategory: String, CaseIterable, Identifiable, Codable {
+        case strum
+        case picking
+
+        public var id: String { rawValue }
+
+        public var displayName: String {
+            switch self {
+            case .strum:
+                return "Strum"
+            case .picking:
+                return "Picking"
+            }
+        }
+    }
+
+    public struct PatternDescriptor: Identifiable, Hashable, Codable {
+        public let id: String
+        public let name: String
+        public let genre: String
+        public let timeSignature: String
+        public let category: PatternCategory
+        public let eventCount: Int
+    }
+
+    public struct ProgressionPreset: Identifiable, Hashable {
+        public let id: String
+        public let title: String
+        public let subtitle: String
+        public let chords: [ChordItem]
+
+        public var chordSummary: String {
+            chords.map(\.displayName).joined(separator: "  ")
+        }
+    }
+
     public struct RootOption: Identifiable, Hashable, Codable {
         public let id: UInt8
         public let displayName: String
@@ -36,6 +72,7 @@ public class SonatrixViewModel: ObservableObject {
 
     public static let ticksPerBeat: UInt16 = 960
     public static let defaultChordBeats: Int = 4
+    public static let defaultPatternTemplateID: String = "acoustic_12_8_arpeggiated"
     public static let minimumChordWidth: CGFloat = 84
     public static let rootOptions: [RootOption] = [
         RootOption(id: 0, displayName: "C"),
@@ -79,6 +116,38 @@ public class SonatrixViewModel: ObservableObject {
         QualityOption(id: 10, storedName: "add9", displayLabel: "Add 9", suffix: "add9"),
         QualityOption(id: 11, storedName: "power", displayLabel: "Power", suffix: "5")
     ]
+    public static let progressionPresets: [ProgressionPreset] = [
+        ProgressionPreset(
+            id: "singer_songwriter",
+            title: "Singer-Songwriter",
+            subtitle: "Open-chord acoustic lift",
+            chords: [
+                makeChord(rootIndex: 7, qualityIndex: 0),
+                makeChord(rootIndex: 4, qualityIndex: 6),
+                makeChord(rootIndex: 0, qualityIndex: 10),
+                makeChord(rootIndex: 2, qualityIndex: 0)
+            ]),
+        ProgressionPreset(
+            id: "pop_cycle",
+            title: "Pop Cycle",
+            subtitle: "Familiar I-V-vi-IV motion",
+            chords: [
+                makeChord(rootIndex: 0, qualityIndex: 0),
+                makeChord(rootIndex: 7, qualityIndex: 0),
+                makeChord(rootIndex: 9, qualityIndex: 1),
+                makeChord(rootIndex: 5, qualityIndex: 0)
+            ]),
+        ProgressionPreset(
+            id: "minor_lift",
+            title: "Minor Lift",
+            subtitle: "Melancholy verse contour",
+            chords: [
+                makeChord(rootIndex: 9, qualityIndex: 1),
+                makeChord(rootIndex: 5, qualityIndex: 0),
+                makeChord(rootIndex: 0, qualityIndex: 0),
+                makeChord(rootIndex: 7, qualityIndex: 0)
+            ])
+    ]
 
     // The bridged Objective-C++ Engine orchestrator
     private var engineFacade: SonatrixEngineFacade
@@ -86,11 +155,13 @@ public class SonatrixViewModel: ObservableObject {
     // Expose basic UI state
     @Published public var isPlaying: Bool = false
     @Published public var isCompiling: Bool = false
+    @Published public private(set) var availablePatterns: [PatternDescriptor] = []
+    @Published public private(set) var selectedPatternID: String = SonatrixViewModel.defaultPatternTemplateID
 
     // -----------------------------------------------------------------------------
     // Shared Data Models
     // -----------------------------------------------------------------------------
-    public struct ChordItem: Identifiable, Equatable, Codable {
+    public struct ChordItem: Identifiable, Equatable, Hashable, Codable {
         public var id = UUID()
         public var rootName: String
         public var qualityName: String
@@ -121,26 +192,38 @@ public class SonatrixViewModel: ObservableObject {
     public struct ProjectState: Codable {
         public let chords: [ChordItem]
         public let busVolumes: [Float]
+        public let selectedPatternID: String?
     }
 
     public init() {
         self.engineFacade = SonatrixEngineFacade()
+        self.availablePatterns = Self.loadPatternCatalog()
+
+        let initialPatternID = Self.resolvedPatternID(
+            requestedID: Self.defaultPatternTemplateID,
+            availablePatterns: availablePatterns)
+        self.selectedPatternID = initialPatternID
+        self.engineFacade.setPatternTemplateId(initialPatternID)
     }
 
-    private func bundledBassMockKitPath() throws -> String {
+    private func bundledPlaybackKitPath() throws -> String {
         guard let resourcePath = Bundle.main.resourcePath else {
             throw NSError(domain: "Sonatrix.AssetsNotFound", code: 1, userInfo: nil)
         }
 
-        let kitPath = resourcePath + "/Assets/samples/bass_mock"
-        guard FileManager.default.fileExists(atPath: kitPath) else {
-            throw NSError(
-                domain: "Sonatrix.AssetsNotFound",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "Missing bundled sample kit at \(kitPath)"])
+        let candidatePaths = [
+            resourcePath + "/Assets/Exciters/FS_Guitars",
+            resourcePath + "/Assets/samples/bass_mock"
+        ]
+
+        if let kitPath = candidatePaths.first(where: { FileManager.default.fileExists(atPath: $0) }) {
+            return kitPath
         }
 
-        return kitPath
+        throw NSError(
+            domain: "Sonatrix.AssetsNotFound",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "Missing bundled playback kit in Assets/Exciters/FS_Guitars or Assets/samples/bass_mock"])
     }
 
     public static func rootOption(for rootIndex: UInt8) -> RootOption {
@@ -172,10 +255,21 @@ public class SonatrixViewModel: ObservableObject {
         makeChord(rootIndex: 0, qualityIndex: 0)
     }
 
+    public var selectedPattern: PatternDescriptor? {
+        availablePatterns.first(where: { $0.id == selectedPatternID })
+    }
+
+    public var patternGenres: [String] {
+        Array(Set(availablePatterns.map(\.genre))).sorted()
+    }
+
     // MARK: - Project File API
 
     public func saveProject(to url: URL) throws {
-        let state = ProjectState(chords: arrangementChords, busVolumes: busVolumes)
+        let state = ProjectState(
+            chords: arrangementChords,
+            busVolumes: busVolumes,
+            selectedPatternID: selectedPatternID)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
         let data = try encoder.encode(state)
@@ -189,6 +283,11 @@ public class SonatrixViewModel: ObservableObject {
 
         DispatchQueue.main.async {
             self.arrangementChords = state.chords.map { self.normalized($0) }
+            let restoredPatternID = Self.resolvedPatternID(
+                requestedID: state.selectedPatternID,
+                availablePatterns: self.availablePatterns)
+            self.selectedPatternID = restoredPatternID
+            self.engineFacade.setPatternTemplateId(restoredPatternID)
             for (index, volume) in state.busVolumes.enumerated() {
                 if index < self.busVolumes.count {
                     self.setVolume(bus: index, volume: volume)
@@ -202,7 +301,7 @@ public class SonatrixViewModel: ObservableObject {
 
     public func bounceAudio(to url: URL) throws {
         let nsVolumes = busVolumes.map { NSNumber(value: $0) }
-        let assetsPath = try bundledBassMockKitPath()
+        let assetsPath = try bundledPlaybackKitPath()
 
         let success = engineFacade.bounceAudio(
             toPath: url.path,
@@ -242,6 +341,28 @@ public class SonatrixViewModel: ObservableObject {
             busVolumes[bus] = volume
             engineFacade.setVolume(volume, forBus: UInt8(bus))
         }
+    }
+
+    public func selectPattern(id: String) {
+        let resolvedID = Self.resolvedPatternID(
+            requestedID: id,
+            availablePatterns: availablePatterns)
+
+        if resolvedID == selectedPatternID {
+            return
+        }
+
+        selectedPatternID = resolvedID
+        engineFacade.setPatternTemplateId(resolvedID)
+
+        if !arrangementChords.isEmpty {
+            compileArrangement()
+        }
+    }
+
+    public func applyProgressionPreset(_ preset: ProgressionPreset) {
+        arrangementChords = preset.chords.map { normalized($0) }
+        compileArrangement()
     }
 
     // MARK: - Arrangement API
@@ -315,6 +436,108 @@ public class SonatrixViewModel: ObservableObject {
             rootIndex: chord.rootIndex,
             qualityIndex: chord.qualityIndex,
             durationBeats: chord.durationBeats)
+    }
+
+    private struct PatternLibraryDocument: Decodable {
+        let templates: [PatternTemplate]
+    }
+
+    private struct PatternTemplate: Decodable {
+        let id: String
+        let name: String
+        let genre: String
+        let timeSignature: String
+        let patterns: [String: PatternEngine]
+    }
+
+    private struct PatternEngine: Decodable {
+        let events: [PatternEvent]
+    }
+
+    private struct PatternEvent: Decodable {
+        let type: String?
+    }
+
+    private static func loadPatternCatalog() -> [PatternDescriptor] {
+        guard let libraryURL = resolvePatternLibraryURL(),
+              let data = try? Data(contentsOf: libraryURL),
+              let document = try? JSONDecoder().decode(PatternLibraryDocument.self, from: data)
+        else {
+            return [
+                PatternDescriptor(
+                    id: defaultPatternTemplateID,
+                    name: "Acoustic 12/8 Arpeggiated",
+                    genre: "Acoustic Pop",
+                    timeSignature: "4/4",
+                    category: .picking,
+                    eventCount: 12)
+            ]
+        }
+
+        let guitarTemplates = document.templates.compactMap { template -> PatternDescriptor? in
+            guard let guitarPattern = template.patterns["Guitar"] else {
+                return nil
+            }
+
+            return PatternDescriptor(
+                id: template.id,
+                name: template.name,
+                genre: template.genre,
+                timeSignature: template.timeSignature,
+                category: classifyPattern(events: guitarPattern.events),
+                eventCount: guitarPattern.events.count)
+        }
+
+        return guitarTemplates.isEmpty ? [
+            PatternDescriptor(
+                id: defaultPatternTemplateID,
+                name: "Acoustic 12/8 Arpeggiated",
+                genre: "Acoustic Pop",
+                timeSignature: "4/4",
+                category: .picking,
+                eventCount: 12)
+        ] : guitarTemplates
+    }
+
+    private static func classifyPattern(events: [PatternEvent]) -> PatternCategory {
+        let eventTypes = Set(events.compactMap(\.type))
+        if eventTypes.contains("GuitarPluck") || eventTypes.contains("GuitarPinch") {
+            return .picking
+        }
+        return .strum
+    }
+
+    private static func resolvePatternLibraryURL() -> URL? {
+        let fileManager = FileManager.default
+
+        if let resourcePath = Bundle.main.resourcePath {
+            let bundledURL = URL(fileURLWithPath: resourcePath)
+                .appendingPathComponent("Assets/Patterns/default_library.json")
+            if fileManager.fileExists(atPath: bundledURL.path) {
+                return bundledURL
+            }
+        }
+
+        let repoURL = URL(fileURLWithPath: "/Users/jason/Developer/Sonatrix/assets/Patterns/default_library.json")
+        if fileManager.fileExists(atPath: repoURL.path) {
+            return repoURL
+        }
+
+        return nil
+    }
+
+    private static func resolvedPatternID(requestedID: String?,
+                                          availablePatterns: [PatternDescriptor]) -> String {
+        if let requestedID,
+           availablePatterns.contains(where: { $0.id == requestedID }) {
+            return requestedID
+        }
+
+        if availablePatterns.contains(where: { $0.id == defaultPatternTemplateID }) {
+            return defaultPatternTemplateID
+        }
+
+        return availablePatterns.first?.id ?? defaultPatternTemplateID
     }
 
     private func compileArrangement() {

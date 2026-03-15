@@ -466,6 +466,18 @@ std::vector<GuitarVoicing> VoicingGraphSolver::SolveVoiceLeading(
 
   // 1. Generate valid voicing states for each chord
   for (size_t t = 0; t < chords.size(); ++t) {
+    if (chords[t].guitarEditData.hasCustomVoicing) {
+      GuitarVoicing editedVoicing;
+      editedVoicing.frets = chords[t].guitarEditData.frets;
+
+      if (editedVoicing.GetNumSoundingStrings() > 0) {
+        states[t] = {editedVoicing};
+        usedFamilyRestrictedCandidates[t] = true;
+        trellis[t].resize(states[t].size());
+        continue;
+      }
+    }
+
     auto generatedCandidates = fretboard_.GenerateValidVoicings(chords[t].chord);
     if (voicingMode == Sonatrix::Core::GuitarVoicingMode::AcousticOpen) {
       auto familyCandidates = ResolveAcousticShapeFamilyCandidates(chords[t].chord);

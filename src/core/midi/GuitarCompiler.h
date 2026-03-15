@@ -43,7 +43,8 @@ private:
   void EmitStrum(MIDIStream &outStream, MusicalTime baseTime,
                  ArticulationType direction, uint8_t baseVelocity,
                  MusicalTime duration,
-                 const std::vector<NoteTarget> &stringTargets) const;
+                 const std::vector<NoteTarget> &stringTargets,
+                 const ChordTrackEvent *activeChordEvent = nullptr) const;
 
   std::vector<NoteTarget>
   ResolveTargetsForEvent(const MIREvent &event,
@@ -103,6 +104,11 @@ private:
       MusicalTime absoluteTime, int chordIndex, const MIREvent &event,
       const Sonatrix::Core::Engines::Guitar::GuitarVoicing &voicing,
       const std::vector<NoteTarget> &resolvedTargets) const;
+  std::vector<NoteTarget> SortTargetsForChordEvent(
+      std::vector<NoteTarget> targets,
+      const ChordTrackEvent *activeChordEvent) const;
+  uint8_t ResolveTargetVelocity(uint8_t baseVelocity, const NoteTarget &target,
+                                const ChordTrackEvent *activeChordEvent) const;
 };
 
 // Provides instantiation without exposing the class externally

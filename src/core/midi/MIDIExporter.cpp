@@ -34,7 +34,8 @@ static void WriteVLQ(std::vector<uint8_t> &buf, uint32_t val) {
 
 bool MIDIExporter::ExportToSMF(const std::string &outputPath,
                                const std::vector<MIDIEvent> &midiStream,
-                               uint16_t ppq) {
+                               uint16_t ppq,
+                               double tempoBPM) {
   std::vector<uint8_t> data;
 
   // 1. Header Chunk
@@ -50,14 +51,17 @@ bool MIDIExporter::ExportToSMF(const std::string &outputPath,
   // 2. Track Chunk
   std::vector<uint8_t> trackData;
 
-  // Set Tempo Meta Event (120 BPM = 500000 microseconds per quarter note)
+  // Set Tempo Meta Event.
+  const double safeTempoBPM = (tempoBPM > 0.0) ? tempoBPM : 120.0;
+  const uint32_t microsPerQuarter =
+      static_cast<uint32_t>(60000000.0 / safeTempoBPM);
   WriteVLQ(trackData, 0);
   trackData.push_back(0xFF);
   trackData.push_back(0x51);
   trackData.push_back(0x03);
-  trackData.push_back(0x07);
-  trackData.push_back(0xA1);
-  trackData.push_back(0x20);
+  trackData.push_back((microsPerQuarter >> 16) & 0xFF);
+  trackData.push_back((microsPerQuarter >> 8) & 0xFF);
+  trackData.push_back(microsPerQuarter & 0xFF);
 
   uint32_t lastTick = 0;
   for (const auto &ev : midiStream) {

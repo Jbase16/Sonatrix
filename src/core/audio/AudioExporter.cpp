@@ -10,7 +10,8 @@ bool AudioExporter::BounceOffline(
     const std::string &outputPath,
     const std::vector<Sonatrix::Core::MIDI::MIDIEvent> &midiStream,
     const std::string &assetsPath, const std::vector<float> &busVolumes,
-    double sampleRate) {
+    double sampleRate,
+    double tempoBPM) {
 
   // 1. Setup VoiceManager
   VoiceManager voiceManager;
@@ -94,7 +95,8 @@ bool AudioExporter::BounceOffline(
     double totalTicks =
         static_cast<double>(midiStream.back().timelinePosition.ticks);
     double msPerTick =
-        (60000.0 / 120.0) / static_cast<double>(Sonatrix::Core::STANDARD_PPQN);
+        (60000.0 / safeTempoBPM) /
+        static_cast<double>(Sonatrix::Core::STANDARD_PPQN);
     double totalSeconds = (totalTicks * msPerTick) / 1000.0;
     totalFrames = static_cast<int64_t>(totalSeconds * sampleRate) +
                   static_cast<int64_t>(2.0 * sampleRate);
@@ -115,7 +117,7 @@ bool AudioExporter::BounceOffline(
     std::vector<MIDI::MIDIEvent> blockEvents;
     while (midiEventIndex < midiStream.size()) {
       const auto &event = midiStream[midiEventIndex];
-      double msPerTick = (60000.0 / 120.0) /
+      double msPerTick = (60000.0 / safeTempoBPM) /
                          static_cast<double>(Sonatrix::Core::STANDARD_PPQN);
       double eventSecs = (event.timelinePosition.ticks * msPerTick) / 1000.0;
       if (eventSecs < blockEndSecs) {
@@ -153,3 +155,4 @@ bool AudioExporter::BounceOffline(
 } // namespace Audio
 } // namespace Core
 } // namespace Sonatrix
+  const double safeTempoBPM = (tempoBPM > 0.0) ? tempoBPM : 120.0;

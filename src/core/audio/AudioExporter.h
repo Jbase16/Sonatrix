@@ -16,7 +16,8 @@ public:
                 const std::vector<Sonatrix::Core::MIDI::MIDIEvent> &midiStream,
                 const std::string &assetsPath,
                 const std::vector<float> &busVolumes,
-                double sampleRate = 44100.0);
+                double sampleRate = 44100.0,
+                double tempoBPM = 120.0);
 };
 
 } // namespace Audio

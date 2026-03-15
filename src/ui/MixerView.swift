@@ -17,36 +17,38 @@ public struct MixerView: View {
     #endif
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Mixer")
                 .font(.headline)
                 .padding(.horizontal)
 
-            HStack(spacing: 24) {
-                ForEach(0..<busNames.count, id: \.self) { index in
-                    #if STANDALONE
-                        ChannelStrip(
-                            name: busNames[index],
-                            color: busColors[index],
-                            volume: Binding(
-                                get: { viewModel.busVolumes[index] },
-                                set: { newValue in
-                                    viewModel.setVolume(bus: index, volume: newValue)
-                                }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 20) {
+                    ForEach(0..<busNames.count, id: \.self) { index in
+                        #if STANDALONE
+                            ChannelStrip(
+                                name: busNames[index],
+                                color: busColors[index],
+                                volume: Binding(
+                                    get: { viewModel.busVolumes[index] },
+                                    set: { newValue in
+                                        viewModel.setVolume(bus: index, volume: newValue)
+                                    }
+                                )
                             )
-                        )
-                    #else
-                        ChannelStrip(
-                            name: busNames[index],
-                            color: busColors[index],
-                            volume: .constant(0.8)
-                        )
-                    #endif
+                        #else
+                            ChannelStrip(
+                                name: busNames[index],
+                                color: busColors[index],
+                                volume: .constant(0.8)
+                            )
+                        #endif
+                    }
                 }
+                .padding(.horizontal)
             }
-            .padding(.horizontal)
         }
-        .padding(.vertical)
+        .padding(.vertical, 12)
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(8)
     }
@@ -58,7 +60,7 @@ public struct ChannelStrip: View {
     @Binding public var volume: Float
 
     public var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             // Fader (Vertical Slider using a custom geometry or rotated native slider)
             // macOS standard Slider doesn't support vertical natively, so we create a simple custom one
             GeometryReader { geometry in
@@ -88,7 +90,7 @@ public struct ChannelStrip: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            .frame(width: 40, height: 150)
+            .frame(width: 40, height: 112)
 
             Text(String(format: "%.1f", volume))
                 .font(.caption2)

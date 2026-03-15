@@ -14,7 +14,8 @@ public:
   // compilers
   static bool ExportToSMF(const std::string &outputPath,
                           const std::vector<MIDIEvent> &midiStream,
-                          uint16_t ppq = static_cast<uint16_t>(STANDARD_PPQN));
+                          uint16_t ppq = static_cast<uint16_t>(STANDARD_PPQN),
+                          double tempoBPM = 120.0);
 };
 
 } // namespace MIDI

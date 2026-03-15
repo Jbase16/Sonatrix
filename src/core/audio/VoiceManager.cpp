@@ -1,12 +1,60 @@
 #include "VoiceManager.h"
+#include "AssetManager.h"
 #include "AudioFileReader.h"
-#include <limits>
 #include <cmath>
 #include <cstring>
+#include <fstream>
+#include <limits>
 
 namespace Sonatrix {
 namespace Core {
 namespace Audio {
+
+namespace {
+
+bool FileExists(const std::string &path) {
+  std::ifstream file(path);
+  return file.good();
+}
+
+bool LoadZoneIfPresent(const std::string &directoryPath,
+                       const char *fileName,
+                       uint8_t rootKey,
+                       InstrumentArticulation &articulation) {
+  const std::string filePath = directoryPath + "/" + fileName;
+  if (!FileExists(filePath)) {
+    return false;
+  }
+
+  SampleZone zone;
+  zone.filePath = filePath;
+  zone.rootKey = rootKey;
+  zone.lowVelocity = 0;
+  zone.highVelocity = 127;
+  zone.isLoaded =
+      AudioFileReader::LoadFile(zone.filePath, zone.audioData, zone.sampleRate);
+  if (!zone.isLoaded) {
+    return false;
+  }
+
+  articulation.zones.push_back(std::move(zone));
+  return true;
+}
+
+bool LooksLikeAcousticGuitarKit(const std::string &directoryPath) {
+  static constexpr const char *kRequiredFiles[] = {
+      "E2.wav", "A2.wav", "D3.wav", "G3.wav", "B3.wav", "E4.wav"};
+
+  for (const char *fileName : kRequiredFiles) {
+    if (!FileExists(directoryPath + "/" + fileName)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+} // namespace
 
 // Added 'const' to articulation to fix the compiler error
 void VoiceManager::ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
@@ -90,35 +138,24 @@ SamplerVoice *VoiceManager::GetBestAvailableVoice() {
 }
 
 void VoiceManager::LoadInstrumentKit(const std::string &assetsAbsolutePath) {
-  activeArticulation_.name = "Bass_Sawtooth_Mock";
   activeArticulation_.zones.clear();
+  activeArticulation_.name.clear();
+  activeMixerBus_ = MixerBus::Bass;
 
-  SampleZone zoneC1;
-  zoneC1.filePath = assetsAbsolutePath + "/C1.wav";
-  zoneC1.rootKey = 36;
-  zoneC1.lowVelocity = 0;
-  zoneC1.highVelocity = 127;
-  zoneC1.isLoaded = AudioFileReader::LoadFile(zoneC1.filePath, zoneC1.audioData,
-                                              zoneC1.sampleRate);
-  activeArticulation_.zones.push_back(zoneC1);
+  if (LooksLikeAcousticGuitarKit(assetsAbsolutePath)) {
+    auto &assetManager = AssetManager::GetInstance();
+    if (assetManager.LoadAcousticGuitarAnchors(assetsAbsolutePath)) {
+      activeArticulation_ = assetManager.GetAcousticGuitarArticulation();
+      activeArticulation_.name = "Acoustic_Guitar_Anchors";
+      activeMixerBus_ = MixerBus::Guitar;
+      return;
+    }
+  }
 
-  SampleZone zoneC2;
-  zoneC2.filePath = assetsAbsolutePath + "/C2.wav";
-  zoneC2.rootKey = 48;
-  zoneC2.lowVelocity = 0;
-  zoneC2.highVelocity = 127;
-  zoneC2.isLoaded = AudioFileReader::LoadFile(zoneC2.filePath, zoneC2.audioData,
-                                              zoneC2.sampleRate);
-  activeArticulation_.zones.push_back(zoneC2);
-
-  SampleZone zoneC3;
-  zoneC3.filePath = assetsAbsolutePath + "/C3.wav";
-  zoneC3.rootKey = 60;
-  zoneC3.lowVelocity = 0;
-  zoneC3.highVelocity = 127;
-  zoneC3.isLoaded = AudioFileReader::LoadFile(zoneC3.filePath, zoneC3.audioData,
-                                              zoneC3.sampleRate);
-  activeArticulation_.zones.push_back(zoneC3);
+  activeArticulation_.name = "Bass_Sawtooth_Mock";
+  LoadZoneIfPresent(assetsAbsolutePath, "C1.wav", 36, activeArticulation_);
+  LoadZoneIfPresent(assetsAbsolutePath, "C2.wav", 48, activeArticulation_);
+  LoadZoneIfPresent(assetsAbsolutePath, "C3.wav", 60, activeArticulation_);
 }
 
 void VoiceManager::RenderAudio(float **outputChannels, uint32_t numFrames,
@@ -143,7 +180,7 @@ void VoiceManager::RenderAudio(float **outputChannels, uint32_t numFrames,
     v.RenderNextBlock(tempChannels, numFrames, 2);
   }
 
-  mixer_.MixBusToOutput(MixerBus::Bass, tempChannels, outputChannels, numFrames,
+  mixer_.MixBusToOutput(activeMixerBus_, tempChannels, outputChannels, numFrames,
                         numChannels);
 }
 
