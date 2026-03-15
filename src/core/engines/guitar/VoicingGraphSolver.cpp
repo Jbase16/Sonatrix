@@ -67,6 +67,7 @@ GetAcousticShapeFamilyVariants(const ActiveChordContext &chord) {
                               });
     } else if (chord.quality == ChordQuality::Add9) {
       AppendVariants(variants, {
+                                  {0, 3, 2, 0, 3, 3},
                                   {-1, 3, 2, 0, 3, 3},
                                   {-1, 3, 2, 0, 3, 0},
                               });
@@ -208,7 +209,11 @@ bool IsFamilyCandidateCompatible(const GuitarVoicing &candidate,
 
   const PitchClass expectedBass =
       chord.isRootPosition() ? chord.root : chord.overBass;
-  if (Pc(lowestMidi) != static_cast<int>(expectedBass)) {
+  const PitchClass actualBass = static_cast<PitchClass>(Pc(lowestMidi));
+  const bool allowsAcousticAlternateBass =
+      chord.isRootPosition() && chord.quality == ChordQuality::Add9 &&
+      actualBass == TransposePitchClass(chord.root, 4);
+  if (actualBass != expectedBass && !allowsAcousticAlternateBass) {
     return false;
   }
 
@@ -233,6 +238,67 @@ bool MatchesAcousticShapeFamily(const GuitarVoicing &voicing,
                      [&](const AcousticShape &variant) {
                        return voicing.frets == variant;
                      });
+}
+
+float EvaluateAcousticFamilyVariantPreference(const GuitarVoicing &voicing,
+                                              const ActiveChordContext &chord) {
+  const auto &frets = voicing.frets;
+
+  switch (chord.root) {
+  case PitchClass::G:
+    if (chord.quality == ChordQuality::Major) {
+      if (frets == AcousticShape{3, 2, 0, 0, 3, 3}) {
+        return -12.0f;
+      }
+      if (frets == AcousticShape{3, 2, 0, 0, 0, 3}) {
+        return -6.0f;
+      }
+      if (frets == AcousticShape{3, 2, 0, 0, 3, 0}) {
+        return 3.0f;
+      }
+    }
+    break;
+  case PitchClass::E:
+    if (chord.quality == ChordQuality::Minor7) {
+      if (frets == AcousticShape{0, 2, 2, 0, 3, 3}) {
+        return -12.0f;
+      }
+      if (frets == AcousticShape{0, 2, 2, 0, 3, 0}) {
+        return -5.0f;
+      }
+      if (frets == AcousticShape{0, 2, 0, 0, 3, 0}) {
+        return 4.0f;
+      }
+    }
+    break;
+  case PitchClass::C:
+    if (chord.quality == ChordQuality::Add9) {
+      if (frets == AcousticShape{0, 3, 2, 0, 3, 3}) {
+        return -14.0f;
+      }
+      if (frets == AcousticShape{-1, 3, 2, 0, 3, 3}) {
+        return -8.0f;
+      }
+      if (frets == AcousticShape{-1, 3, 2, 0, 3, 0}) {
+        return 5.0f;
+      }
+    }
+    break;
+  case PitchClass::D:
+    if (chord.quality == ChordQuality::Major) {
+      if (frets == AcousticShape{-1, -1, 0, 2, 3, 2}) {
+        return -8.0f;
+      }
+      if (frets == AcousticShape{-1, -1, 0, 2, 3, 0}) {
+        return 2.0f;
+      }
+    }
+    break;
+  default:
+    break;
+  }
+
+  return 0.0f;
 }
 
 void AppendUniqueVoicing(std::vector<GuitarVoicing> &out,
@@ -419,6 +485,8 @@ float VoicingGraphSolver::EvaluateVoicingPreferenceCost(
     cost -= 30.0f;
   }
 
+  cost += EvaluateAcousticFamilyVariantPreference(voicing, chord);
+
   if (soundingStrings < 4) {
     cost += 6.0f;
   }
@@ -500,7 +568,11 @@ std::vector<GuitarVoicing> VoicingGraphSolver::SolveVoiceLeading(
   // 2. Initialize starting costs
   for (size_t i = 0; i < states[0].size(); ++i) {
     float startingCost = 0.0f;
-    if (!usedFamilyRestrictedCandidates[0]) {
+    if (usedFamilyRestrictedCandidates[0]) {
+      // Even within a locked acoustic family, we still need to rank the variants.
+      startingCost =
+          EvaluateVoicingPreferenceCost(states[0][i], chords[0].chord, voicingMode);
+    } else {
       startingCost = states[0][i].GetAverageFret();
 
       // Penalize sparse voicings based on sounding strings, not fretted notes
@@ -525,11 +597,9 @@ std::vector<GuitarVoicing> VoicingGraphSolver::SolveVoiceLeading(
       for (size_t j = 0; j < states[t - 1].size(); ++j) {
         const float transitionCost =
             EvaluateTransitionCost(states[t - 1][j], states[t][i], voicingMode);
-        const float voicingPreferenceCost = usedFamilyRestrictedCandidates[t]
-                                                ? 0.0f
-                                                : EvaluateVoicingPreferenceCost(
-                                                      states[t][i], chords[t].chord,
-                                                      voicingMode);
+        const float voicingPreferenceCost =
+            EvaluateVoicingPreferenceCost(states[t][i], chords[t].chord,
+                                          voicingMode);
         const float totalCost =
             trellis[t - 1][j].minCost + transitionCost + voicingPreferenceCost;
 

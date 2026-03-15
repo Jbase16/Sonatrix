@@ -5,8 +5,8 @@
       "name": "Acoustic Basic 8ths (D DU UDU)",
       "genre": "Acoustic Pop",
       "timeSignature": "4/4",
-      "patterns": {
-        "Guitar": {
+    "patterns": {
+      "Guitar": {
           "totalLengthBeats": 4.0,
           "events": [
             {
@@ -56,6 +56,7 @@
       "timeSignature": "4/4",
       "patterns": {
         "Guitar": {
+          "guitarVoicingMode": "AcousticOpen",
           "totalLengthBeats": 4.0,
           "events": [
             {
