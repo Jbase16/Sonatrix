@@ -67,16 +67,9 @@ void VoiceManager::ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
     if (ev.type == MIDI::MIDIEventType::NoteOn && ev.data2 > 0) {
 
       // PHYSICAL STRING CHOKING
-     if (stringId != -1) {
-        if (stringId >= 0 && stringId < 6) {
-          stringActiveNotes_[stringId]++;
-        }
-        for (auto &v : voices_) {
-          if (!v.IsFree() && v.GetStringId() == stringId) {
-            v.Stop(); 
-          }
-        }
-      }
+     if (stringId >= 0 && stringId < 6) {
+  stringActiveNotes_[stringId]++;
+}
       
 
       // Determine which physical acoustic zone to load via string-aware sparse routing
