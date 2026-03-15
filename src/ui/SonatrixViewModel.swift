@@ -10,6 +10,15 @@ import SwiftUI
 // -----------------------------------------------------------------------------
 
 public class SonatrixViewModel: ObservableObject {
+    public struct ChordStringNote: Identifiable, Equatable, Hashable, Codable {
+        public var stringIndex: Int
+        public var fret: Int
+        public var velocity: UInt8
+        public var order: Int
+
+        public var id: Int { stringIndex }
+    }
+
     public enum PatternCategory: String, CaseIterable, Identifiable, Codable {
         case strum
         case picking
@@ -73,7 +82,10 @@ public class SonatrixViewModel: ObservableObject {
     public static let ticksPerBeat: UInt16 = 960
     public static let defaultChordBeats: Int = 4
     public static let defaultPatternTemplateID: String = "acoustic_12_8_arpeggiated"
+    public static let defaultTempoBPM: Double = 120.0
     public static let minimumChordWidth: CGFloat = 84
+    public static let standardTuningMIDINotes: [Int] = [40, 45, 50, 55, 59, 64]
+    public static let stringNames: [String] = ["Low E", "A", "D", "G", "B", "High E"]
     public static let rootOptions: [RootOption] = [
         RootOption(id: 0, displayName: "C"),
         RootOption(id: 1, displayName: "C#"),
@@ -151,12 +163,16 @@ public class SonatrixViewModel: ObservableObject {
 
     // The bridged Objective-C++ Engine orchestrator
     private var engineFacade: SonatrixEngineFacade
+    private var playheadTimer: Timer?
+    private var lastPlayheadUpdate: Date?
 
     // Expose basic UI state
     @Published public var isPlaying: Bool = false
     @Published public var isCompiling: Bool = false
     @Published public private(set) var availablePatterns: [PatternDescriptor] = []
     @Published public private(set) var selectedPatternID: String = SonatrixViewModel.defaultPatternTemplateID
+    @Published public var tempoBPM: Double = SonatrixViewModel.defaultTempoBPM
+    @Published public var playheadTick: Double = 0
 
     // -----------------------------------------------------------------------------
     // Shared Data Models
@@ -169,6 +185,7 @@ public class SonatrixViewModel: ObservableObject {
         public var rootIndex: UInt8
         public var qualityIndex: UInt8
         public var durationTicks: UInt16 = UInt16(SonatrixViewModel.defaultChordBeats) * SonatrixViewModel.ticksPerBeat
+        public var guitarNotes: [ChordStringNote]? = nil
 
         public var durationBeats: Int {
             max(1, Int(durationTicks) / Int(SonatrixViewModel.ticksPerBeat))
@@ -193,6 +210,7 @@ public class SonatrixViewModel: ObservableObject {
         public let chords: [ChordItem]
         public let busVolumes: [Float]
         public let selectedPatternID: String?
+        public let tempoBPM: Double?
     }
 
     public init() {
@@ -204,6 +222,14 @@ public class SonatrixViewModel: ObservableObject {
             availablePatterns: availablePatterns)
         self.selectedPatternID = initialPatternID
         self.engineFacade.setPatternTemplateId(initialPatternID)
+        self.engineFacade.setTempoBPM(Self.defaultTempoBPM)
+        self.tempoBPM = Self.defaultTempoBPM
+        self.playheadTick = 0
+    }
+
+    deinit {
+        stopPlayheadTimer()
+        engineFacade.stop()
     }
 
     private func bundledPlaybackKitPath() throws -> String {
@@ -248,7 +274,8 @@ public class SonatrixViewModel: ObservableObject {
             qualityName: quality.storedName,
             rootIndex: root.id,
             qualityIndex: quality.id,
-            durationTicks: durationTicks)
+            durationTicks: durationTicks,
+            guitarNotes: nil)
     }
 
     public static func defaultChord() -> ChordItem {
@@ -263,13 +290,24 @@ public class SonatrixViewModel: ObservableObject {
         Array(Set(availablePatterns.map(\.genre))).sorted()
     }
 
+    public var arrangementDurationTicks: Double {
+        arrangementChords.reduce(0) { partial, chord in
+            partial + Double(chord.durationTicks)
+        }
+    }
+
+    public var arrangementDurationBeats: Double {
+        arrangementDurationTicks / Double(Self.ticksPerBeat)
+    }
+
     // MARK: - Project File API
 
     public func saveProject(to url: URL) throws {
         let state = ProjectState(
             chords: arrangementChords,
             busVolumes: busVolumes,
-            selectedPatternID: selectedPatternID)
+            selectedPatternID: selectedPatternID,
+            tempoBPM: tempoBPM)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
         let data = try encoder.encode(state)
@@ -288,6 +326,8 @@ public class SonatrixViewModel: ObservableObject {
                 availablePatterns: self.availablePatterns)
             self.selectedPatternID = restoredPatternID
             self.engineFacade.setPatternTemplateId(restoredPatternID)
+            let restoredTempo = state.tempoBPM ?? Self.defaultTempoBPM
+            self.setTempo(restoredTempo)
             for (index, volume) in state.busVolumes.enumerated() {
                 if index < self.busVolumes.count {
                     self.setVolume(bus: index, volume: volume)
@@ -323,15 +363,42 @@ public class SonatrixViewModel: ObservableObject {
 
     public func togglePlayback() {
         if isPlaying {
-            engineFacade.stop()
-            isPlaying = false
+            stopPlayback()
         } else if !arrangementChords.isEmpty {
-            compileArrangement()
-            engineFacade.play()
-            isPlaying = true
+            playFromCurrentPlayhead()
         } else {
             isPlaying = false
         }
+    }
+
+    public func playFromCurrentPlayhead() {
+        guard !arrangementChords.isEmpty else {
+            return
+        }
+
+        compileArrangement()
+        engineFacade.play(fromTick: playheadTick)
+        isPlaying = true
+        startPlayheadTimer()
+    }
+
+    public func stopPlayback() {
+        engineFacade.stop()
+        isPlaying = false
+        stopPlayheadTimer()
+    }
+
+    public func setTempo(_ bpm: Double) {
+        let clampedTempo = min(max(bpm, 40.0), 240.0)
+        tempoBPM = clampedTempo
+        engineFacade.setTempoBPM(clampedTempo)
+        lastPlayheadUpdate = Date()
+    }
+
+    public func seekPlayhead(to tick: Double) {
+        let clampedTick = min(max(0.0, tick), arrangementDurationTicks)
+        playheadTick = clampedTick
+        engineFacade.seek(toTick: clampedTick)
     }
 
     // MARK: - Mixer API
@@ -370,9 +437,10 @@ public class SonatrixViewModel: ObservableObject {
     public func clearArrangement() {
         engineFacade.clearChords()
         arrangementChords.removeAll()
+        playheadTick = 0
+        stopPlayheadTimer()
         if isPlaying {
-            engineFacade.stop()
-            isPlaying = false
+            stopPlayback()
         }
     }
 
@@ -399,6 +467,88 @@ public class SonatrixViewModel: ObservableObject {
             arrangementChords[index] = normalized(newChord)
             compileArrangement()
         }
+    }
+
+    public func updateChordNotes(at index: Int, notes: [ChordStringNote]) {
+        guard index >= 0 && index < arrangementChords.count else {
+            return
+        }
+
+        var chord = arrangementChords[index]
+        chord.guitarNotes = normalizedGuitarNotes(notes)
+        arrangementChords[index] = chord
+        compileArrangement()
+    }
+
+    public func editableGuitarNotes(for chord: ChordItem) -> [ChordStringNote] {
+        if let guitarNotes = chord.guitarNotes, !guitarNotes.isEmpty {
+            return normalizedGuitarNotes(guitarNotes)
+        }
+
+        let suggestedFrets = engineFacade.suggestGuitarFrets(
+            forRoot: chord.rootIndex,
+            quality: chord.qualityIndex)
+        let notes = suggestedFrets.enumerated().map { index, fretNumber in
+            ChordStringNote(
+                stringIndex: index,
+                fret: fretNumber.intValue,
+                velocity: 100,
+                order: index)
+        }
+        return normalizedGuitarNotes(notes)
+    }
+
+    public func timelineSectionFrames(pixelsPerBeat: CGFloat,
+                                      blockSpacing: CGFloat) -> [(index: Int, x: CGFloat, width: CGFloat)] {
+        var frames: [(index: Int, x: CGFloat, width: CGFloat)] = []
+        var cursor: CGFloat = 0
+
+        for (index, chord) in arrangementChords.enumerated() {
+            let blockWidth = width(for: chord, pixelsPerBeat: pixelsPerBeat)
+            frames.append((index: index, x: cursor, width: blockWidth))
+            cursor += blockWidth + blockSpacing
+        }
+
+        return frames
+    }
+
+    public func tick(forTimelineX timelineX: CGFloat,
+                     pixelsPerBeat: CGFloat,
+                     blockSpacing: CGFloat) -> Double {
+        let frames = timelineSectionFrames(pixelsPerBeat: pixelsPerBeat, blockSpacing: blockSpacing)
+        let clampedX = max(0, timelineX)
+
+        for frame in frames {
+            let frameStart = frame.x
+            let frameEnd = frame.x + frame.width
+            if clampedX <= frameEnd {
+                let chord = arrangementChords[frame.index]
+                let localRatio = frame.width > 0 ? min(max((clampedX - frameStart) / frame.width, 0), 1) : 0
+                let ticksBeforeChord = arrangementChords.prefix(frame.index).reduce(0.0) {
+                    $0 + Double($1.durationTicks)
+                }
+                return ticksBeforeChord + (Double(chord.durationTicks) * Double(localRatio))
+            }
+        }
+
+        return arrangementDurationTicks
+    }
+
+    public func playheadX(pixelsPerBeat: CGFloat,
+                          blockSpacing: CGFloat) -> CGFloat {
+        let frames = timelineSectionFrames(pixelsPerBeat: pixelsPerBeat, blockSpacing: blockSpacing)
+        var ticksRemaining = playheadTick
+
+        for frame in frames {
+            let chordTicks = Double(arrangementChords[frame.index].durationTicks)
+            if ticksRemaining <= chordTicks {
+                let progress = chordTicks > 0 ? ticksRemaining / chordTicks : 0
+                return frame.x + (frame.width * CGFloat(progress))
+            }
+            ticksRemaining -= chordTicks
+        }
+
+        return frames.last.map { $0.x + $0.width } ?? 0
     }
 
     public func width(for chord: ChordItem, pixelsPerBeat: CGFloat) -> CGFloat {
@@ -432,10 +582,51 @@ public class SonatrixViewModel: ObservableObject {
     }
 
     private func normalized(_ chord: ChordItem) -> ChordItem {
-        Self.makeChord(
+        var normalizedChord = Self.makeChord(
             rootIndex: chord.rootIndex,
             qualityIndex: chord.qualityIndex,
             durationBeats: chord.durationBeats)
+        normalizedChord.id = chord.id
+        normalizedChord.guitarNotes = chord.guitarNotes.map { normalizedGuitarNotes($0) }
+        return normalizedChord
+    }
+
+    private func normalizedGuitarNotes(_ notes: [ChordStringNote]) -> [ChordStringNote] {
+        let byOrder = notes
+            .sorted { lhs, rhs in
+                if lhs.order == rhs.order {
+                    return lhs.stringIndex < rhs.stringIndex
+                }
+                return lhs.order < rhs.order
+            }
+
+        return byOrder.enumerated().map { index, note in
+            ChordStringNote(
+                stringIndex: min(max(note.stringIndex, 0), 5),
+                fret: min(max(note.fret, -1), 24),
+                velocity: UInt8(min(max(Int(note.velocity), 1), 127)),
+                order: index)
+        }
+    }
+
+    public func noteDisplayName(for note: ChordStringNote) -> String {
+        if note.fret < 0 {
+            return "Muted"
+        }
+
+        let midi = Self.standardTuningMIDINotes[note.stringIndex] + note.fret
+        let noteNames = ["C", "C#", "D", "D#", "E", "F",
+                         "F#", "G", "G#", "A", "A#", "B"]
+        let noteName = noteNames[midi % 12]
+        let octave = (midi / 12) - 1
+        return "\(noteName)\(octave)"
+    }
+
+    public func stringName(for stringIndex: Int) -> String {
+        guard stringIndex >= 0 && stringIndex < Self.stringNames.count else {
+            return "String \(stringIndex + 1)"
+        }
+        return Self.stringNames[stringIndex]
     }
 
     private struct PatternLibraryDocument: Decodable {
@@ -528,7 +719,7 @@ public class SonatrixViewModel: ObservableObject {
 
     private static func resolvedPatternID(requestedID: String?,
                                           availablePatterns: [PatternDescriptor]) -> String {
-        if let requestedID,
+        if let requestedID = requestedID,
            availablePatterns.contains(where: { $0.id == requestedID }) {
             return requestedID
         }
@@ -540,6 +731,44 @@ public class SonatrixViewModel: ObservableObject {
         return availablePatterns.first?.id ?? defaultPatternTemplateID
     }
 
+    private func startPlayheadTimer() {
+        stopPlayheadTimer()
+        lastPlayheadUpdate = Date()
+
+        playheadTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+            self?.advancePlayhead()
+        }
+        if let playheadTimer = playheadTimer {
+            RunLoop.main.add(playheadTimer, forMode: .commonModes)
+        }
+    }
+
+    private func stopPlayheadTimer() {
+        playheadTimer?.invalidate()
+        playheadTimer = nil
+        lastPlayheadUpdate = nil
+    }
+
+    private func advancePlayhead() {
+        guard isPlaying else {
+            stopPlayheadTimer()
+            return
+        }
+
+        let now = Date()
+        let lastDate = lastPlayheadUpdate ?? now
+        lastPlayheadUpdate = now
+        let deltaSeconds = now.timeIntervalSince(lastDate)
+        let ticksPerSecond = (tempoBPM / 60.0) * Double(Self.ticksPerBeat)
+
+        playheadTick = min(arrangementDurationTicks,
+                           playheadTick + (deltaSeconds * ticksPerSecond))
+
+        if playheadTick >= arrangementDurationTicks {
+            stopPlayback()
+        }
+    }
+
     private func compileArrangement() {
         isCompiling = true
         defer { isCompiling = false }
@@ -548,8 +777,7 @@ public class SonatrixViewModel: ObservableObject {
 
         if arrangementChords.isEmpty {
             if isPlaying {
-                engineFacade.stop()
-                isPlaying = false
+                stopPlayback()
             }
             return
         }
@@ -557,14 +785,26 @@ public class SonatrixViewModel: ObservableObject {
         // Push chords to C++ based on the dynamic SwiftUI array
         var currentTick: UInt64 = 0
         for chord in arrangementChords {
+            let guitarNotes = chord.guitarNotes.map { normalizedGuitarNotes($0) } ?? []
+            let noteCount = guitarNotes.count
+
+            let guitarFrets = noteCount == 6 ? guitarNotes.map { NSNumber(value: $0.fret) } : nil
+            let noteOrder = noteCount == 6 ? guitarNotes.map { NSNumber(value: $0.order) } : nil
+            let noteVelocities = noteCount == 6 ? guitarNotes.map { NSNumber(value: Int($0.velocity)) } : nil
+
             engineFacade.addChord(
                 withRoot: chord.rootIndex,
                 quality: chord.qualityIndex,
-                tickOffset: Double(currentTick))
+                tickOffset: Double(currentTick),
+                guitarFrets: guitarFrets,
+                noteOrder: noteOrder,
+                noteVelocities: noteVelocities)
             currentTick += UInt64(chord.durationTicks)
         }
 
         // Tell the C++ layer to run the Viterbi Graph Solvers and Neural latencies
         engineFacade.compileAndSchedule()
+        playheadTick = min(playheadTick, arrangementDurationTicks)
+        engineFacade.seek(toTick: playheadTick)
     }
 }

@@ -232,6 +232,29 @@ struct TransportRibbon: View {
                             return NSItemProvider()
                         }
                     }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Tempo")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+
+                    HStack(spacing: 10) {
+                        Slider(
+                            value: Binding(
+                                get: { viewModel.tempoBPM },
+                                set: { viewModel.setTempo($0) }
+                            ),
+                            in: 40...240,
+                            step: 1
+                        )
+                        .frame(width: 150)
+
+                        Text("\(Int(viewModel.tempoBPM)) BPM")
+                            .font(.caption)
+                            .foregroundColor(.white)
+                            .frame(width: 62, alignment: .leading)
+                    }
+                }
             #endif
 
             Spacer()
@@ -271,10 +294,13 @@ struct ChordTrackRuler: View {
         @ObservedObject var viewModel: SonatrixViewModel
         @State private var editingSession: ChordEditSession?
         @State private var isDropTargeted = false
+        @State private var resumePlaybackAfterPlayheadDrag = false
     #endif
 
     private let pixelsPerBeat: CGFloat = 30
     private let blockSpacing: CGFloat = 6
+    private let horizontalInset: CGFloat = 12
+    private let trackLaneHeight: CGFloat = 68
 
     var body: some View {
         VStack(spacing: 8) {
@@ -319,15 +345,28 @@ struct ChordTrackRuler: View {
                     let timelineWidth = viewModel.timelineWidth(
                         pixelsPerBeat: pixelsPerBeat,
                         blockSpacing: blockSpacing)
+                    let sectionFrames = viewModel.timelineSectionFrames(
+                        pixelsPerBeat: pixelsPerBeat,
+                        blockSpacing: blockSpacing)
 
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 10)
                             .fill(Color.white.opacity(0.04))
 
-                        TimelineBarBackground(
-                            width: timelineWidth,
-                            pixelsPerBeat: pixelsPerBeat)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        TimelineChordLane(
+                            sectionFrames: sectionFrames,
+                            chords: viewModel.arrangementChords,
+                            sectionInset: horizontalInset,
+                            height: trackLaneHeight,
+                            onSelect: { index in
+                                let chord = viewModel.arrangementChords[index]
+                                editingSession = ChordEditSession(index: index, chord: chord)
+                            },
+                            onRemove: { index in
+                                viewModel.removeChord(at: index)
+                            }
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
 
                         if viewModel.arrangementChords.isEmpty {
                             VStack(alignment: .leading, spacing: 4) {
@@ -340,29 +379,15 @@ struct ChordTrackRuler: View {
                             }
                             .padding(.horizontal, 16)
                         } else {
-                            HStack(spacing: blockSpacing) {
-                                ForEach(Array(viewModel.arrangementChords.enumerated()), id: \.element.id) {
-                                    index, chord in
-                                    ChordBlock(
-                                        title: chord.displayName,
-                                        subtitle: "\(chord.durationBeats) beats",
-                                        width: viewModel.width(for: chord, pixelsPerBeat: pixelsPerBeat)
-                                    )
-                                    .contextMenu {
-                                        Button("Remove") {
-                                            viewModel.removeChord(at: index)
-                                        }
-                                    }
-                                    .onTapGesture {
-                                        editingSession = ChordEditSession(index: index, chord: chord)
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
+                            TimelinePlayhead(
+                                x: horizontalInset + viewModel.playheadX(
+                                    pixelsPerBeat: pixelsPerBeat,
+                                    blockSpacing: blockSpacing),
+                                height: trackLaneHeight
+                            )
                         }
                     }
-                    .frame(width: timelineWidth, height: 60)
+                    .frame(width: timelineWidth, height: trackLaneHeight)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
                             .stroke(isDropTargeted ? Color.orange : Color.white.opacity(0.08),
@@ -373,12 +398,21 @@ struct ChordTrackRuler: View {
                             perform: { providers, location in
                                 handleChordDrop(providers: providers, location: location)
                             })
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                updatePlayhead(location: value.location)
+                            }
+                            .onEnded { value in
+                                finishPlayheadDrag(location: value.location)
+                            }
+                    )
                 #else
                     HStack(spacing: blockSpacing) {
-                        ChordBlock(title: "C", subtitle: "4 beats", width: 120)
-                        ChordBlock(title: "Am", subtitle: "4 beats", width: 120)
-                        ChordBlock(title: "F", subtitle: "4 beats", width: 120)
-                        ChordBlock(title: "G", subtitle: "4 beats", width: 120)
+                        ChordBlock(title: "C", subtitle: "4 beats", width: 120, height: trackLaneHeight - 8, sectionIndex: 0)
+                        ChordBlock(title: "Am", subtitle: "4 beats", width: 120, height: trackLaneHeight - 8, sectionIndex: 1)
+                        ChordBlock(title: "F", subtitle: "4 beats", width: 120, height: trackLaneHeight - 8, sectionIndex: 2)
+                        ChordBlock(title: "G", subtitle: "4 beats", width: 120, height: trackLaneHeight - 8, sectionIndex: 3)
                     }
                 #endif
             }
@@ -387,6 +421,7 @@ struct ChordTrackRuler: View {
         #if STANDALONE
             .sheet(item: $editingSession) { session in
                 ChordEditorSheet(
+                    viewModel: viewModel,
                     chord: session.chord,
                     onSave: { updatedChord in
                         viewModel.updateChord(at: session.index, with: updatedChord)
@@ -410,7 +445,7 @@ struct ChordTrackRuler: View {
 
             provider.loadDataRepresentation(forTypeIdentifier: UTType.sonatrixChord.identifier) {
                 data, _ in
-                guard let data,
+                guard let data = data,
                       let payload = try? JSONDecoder().decode(DragChordPayload.self, from: data)
                 else {
                     return
@@ -429,17 +464,57 @@ struct ChordTrackRuler: View {
 
             return true
         }
+
+        private func updatePlayhead(location: CGPoint) {
+            guard !viewModel.arrangementChords.isEmpty else {
+                return
+            }
+
+            if viewModel.isPlaying && !resumePlaybackAfterPlayheadDrag {
+                resumePlaybackAfterPlayheadDrag = true
+                viewModel.stopPlayback()
+            }
+
+            let targetTick = viewModel.tick(
+                forTimelineX: max(0, location.x - horizontalInset),
+                pixelsPerBeat: pixelsPerBeat,
+                blockSpacing: blockSpacing)
+            viewModel.seekPlayhead(to: targetTick)
+        }
+
+        private func finishPlayheadDrag(location: CGPoint) {
+            updatePlayhead(location: location)
+
+            if resumePlaybackAfterPlayheadDrag {
+                resumePlaybackAfterPlayheadDrag = false
+                viewModel.playFromCurrentPlayhead()
+            }
+        }
     #endif
 }
 
 #if STANDALONE
     struct ChordEditorSheet: View {
+        @ObservedObject var viewModel: SonatrixViewModel
         @State var chord: SonatrixViewModel.ChordItem
+        @State private var guitarNotes: [SonatrixViewModel.ChordStringNote]
+        @State private var draggedNoteID: Int?
         var onSave: (SonatrixViewModel.ChordItem) -> Void
         var onCancel: () -> Void
 
+        init(viewModel: SonatrixViewModel,
+             chord: SonatrixViewModel.ChordItem,
+             onSave: @escaping (SonatrixViewModel.ChordItem) -> Void,
+             onCancel: @escaping () -> Void) {
+            self.viewModel = viewModel
+            self._chord = State(initialValue: chord)
+            self._guitarNotes = State(initialValue: viewModel.editableGuitarNotes(for: chord))
+            self.onSave = onSave
+            self.onCancel = onCancel
+        }
+
         var body: some View {
-            VStack(spacing: 20) {
+            VStack(spacing: 18) {
                 Text("Edit Chord")
                     .font(.headline)
 
@@ -470,19 +545,78 @@ struct ChordTrackRuler: View {
                         ),
                         in: 1...32)
                 }
-                .frame(width: 320, height: 170)
+                .frame(width: 420, height: 170)
+
+                HStack {
+                    Text("Chord Notes")
+                        .font(.headline)
+                    Spacer()
+                    Button("Suggest Acoustic Shape") {
+                        var resetChord = chord
+                        resetChord.guitarNotes = nil
+                        guitarNotes = viewModel.editableGuitarNotes(for: resetChord)
+                    }
+                    .buttonStyle(BorderedButtonStyle())
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Drag rows to change picking order.")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+
+                    ScrollView(.vertical, showsIndicators: true) {
+                        VStack(spacing: 8) {
+                            ForEach($guitarNotes) { $note in
+                                ChordNoteRow(
+                                    viewModel: viewModel,
+                                    note: $note
+                                )
+                                .onDrag {
+                                    draggedNoteID = note.id
+                                    return NSItemProvider(object: NSString(string: "\(note.id)"))
+                                }
+                                .onDrop(
+                                    of: [UTType.text],
+                                    delegate: ChordNoteDropDelegate(
+                                        targetNoteID: note.id,
+                                        notes: $guitarNotes,
+                                        draggedNoteID: $draggedNoteID
+                                    )
+                                )
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .frame(width: 520, height: 260)
+                    .padding(.horizontal, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.white.opacity(0.04))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+                }
 
                 HStack {
                     Button("Cancel", action: onCancel)
                         .buttonStyle(PlainButtonStyle())
                     Spacer()
-                    Button("Save") { onSave(chord) }
+                    Button("Save") {
+                        chord.guitarNotes = guitarNotes.enumerated().map { index, note in
+                            var updated = note
+                            updated.order = index
+                            return updated
+                        }
+                        onSave(chord)
+                    }
                         .buttonStyle(BorderedButtonStyle())
                         .tint(.blue)
                 }
             }
             .padding()
-            .frame(width: 420)
+            .frame(width: 620)
         }
     }
 #endif
@@ -787,20 +921,59 @@ private struct PaletteChordToken: View {
     }
 }
 
-private struct TimelineBarBackground: View {
-    let width: CGFloat
-    let pixelsPerBeat: CGFloat
+private struct TimelineChordLane: View {
+    let sectionFrames: [(index: Int, x: CGFloat, width: CGFloat)]
+    let chords: [SonatrixViewModel.ChordItem]
+    let sectionInset: CGFloat
+    let height: CGFloat
+    let onSelect: (Int) -> Void
+    let onRemove: (Int) -> Void
 
     var body: some View {
-        Canvas { context, size in
-            let barWidth = pixelsPerBeat * 4
-            var x: CGFloat = 0
-            while x <= max(width, size.width) {
-                let rect = CGRect(x: x, y: 0, width: 1, height: size.height)
-                context.fill(Path(rect), with: .color(Color.white.opacity(0.06)))
-                x += barWidth
+        ZStack(alignment: .leading) {
+            ForEach(sectionFrames, id: \.index) { frame in
+                if frame.index < chords.count {
+                    ChordBlock(
+                        title: chords[frame.index].displayName,
+                        subtitle: "\(chords[frame.index].durationBeats) beats",
+                        width: frame.width,
+                        height: height - 8,
+                        sectionIndex: frame.index
+                    )
+                    .position(
+                        x: sectionInset + frame.x + (frame.width / 2),
+                        y: height / 2
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: 8))
+                    .contextMenu {
+                        Button("Remove") {
+                            onRemove(frame.index)
+                        }
+                    }
+                    .onTapGesture {
+                        onSelect(frame.index)
+                    }
+                }
             }
         }
+    }
+}
+
+private struct TimelinePlayhead: View {
+    let x: CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.orange)
+            .frame(width: 2, height: height)
+            .overlay(alignment: .top) {
+                Circle()
+                    .fill(Color.orange)
+                    .frame(width: 10, height: 10)
+                    .offset(y: -6)
+            }
+            .offset(x: x)
     }
 }
 
@@ -808,6 +981,8 @@ struct ChordBlock: View {
     let title: String
     let subtitle: String
     let width: CGFloat
+    let height: CGFloat
+    let sectionIndex: Int
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -820,12 +995,14 @@ struct ChordBlock: View {
                 .foregroundColor(.white.opacity(0.7))
         }
         .padding(.horizontal, 10)
-        .frame(width: width, height: 42, alignment: .leading)
+        .frame(width: width, height: height, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(
                     LinearGradient(
-                        colors: [Color.blue.opacity(0.35), Color.cyan.opacity(0.18)],
+                        colors: sectionIndex.isMultiple(of: 2)
+                            ? [Color.blue.opacity(0.36), Color.cyan.opacity(0.18)]
+                            : [Color.green.opacity(0.28), Color.blue.opacity(0.2)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing)
                 )
@@ -836,3 +1013,112 @@ struct ChordBlock: View {
         )
     }
 }
+
+#if STANDALONE
+    private struct ChordNoteRow: View {
+        @ObservedObject var viewModel: SonatrixViewModel
+        @Binding var note: SonatrixViewModel.ChordStringNote
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: "line.3.horizontal")
+                        .foregroundColor(.gray)
+                    Text(viewModel.stringName(for: note.stringIndex))
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Spacer()
+                    Text(viewModel.noteDisplayName(for: note))
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+
+                HStack(spacing: 12) {
+                    Button(note.fret < 0 ? "Unmute" : "Mute") {
+                        note.fret = note.fret < 0 ? 0 : -1
+                    }
+                    .buttonStyle(BorderedButtonStyle())
+
+                    Stepper(
+                        "Fret \(note.fret < 0 ? "Muted" : "\(note.fret)")",
+                        value: Binding(
+                            get: { max(note.fret, 0) },
+                            set: { note.fret = $0 }
+                        ),
+                        in: 0...15
+                    )
+                    .disabled(note.fret < 0)
+                }
+
+                HStack(spacing: 10) {
+                    Text("Volume")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .frame(width: 48, alignment: .leading)
+
+                    Slider(
+                        value: Binding(
+                            get: { Double(note.velocity) },
+                            set: { note.velocity = UInt8($0) }
+                        ),
+                        in: 1...127,
+                        step: 1
+                    )
+
+                    Text("\(Int(note.velocity))")
+                        .font(.caption)
+                        .monospacedDigit()
+                        .frame(width: 32, alignment: .trailing)
+                }
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.white.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
+        }
+    }
+
+    private struct ChordNoteDropDelegate: DropDelegate {
+        let targetNoteID: Int
+        @Binding var notes: [SonatrixViewModel.ChordStringNote]
+        @Binding var draggedNoteID: Int?
+
+        func dropEntered(info: DropInfo) {
+            guard let draggedNoteID = draggedNoteID,
+                  draggedNoteID != targetNoteID,
+                  let fromIndex = notes.firstIndex(where: { $0.id == draggedNoteID }),
+                  let toIndex = notes.firstIndex(where: { $0.id == targetNoteID }) else {
+                return
+            }
+
+            withAnimation(.easeInOut(duration: 0.12)) {
+                notes.move(
+                    fromOffsets: IndexSet(integer: fromIndex),
+                    toOffset: toIndex > fromIndex ? toIndex + 1 : toIndex
+                )
+                normalizeOrders()
+            }
+        }
+
+        func dropUpdated(info: DropInfo) -> DropProposal? {
+            DropProposal(operation: .move)
+        }
+
+        func performDrop(info: DropInfo) -> Bool {
+            normalizeOrders()
+            draggedNoteID = nil
+            return true
+        }
+
+        private func normalizeOrders() {
+            for index in notes.indices {
+                notes[index].order = index
+            }
+        }
+    }
+#endif

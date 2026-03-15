@@ -12,6 +12,7 @@ bool AudioExporter::BounceOffline(
     const std::string &assetsPath, const std::vector<float> &busVolumes,
     double sampleRate,
     double tempoBPM) {
+  const double safeTempoBPM = (tempoBPM > 0.0) ? tempoBPM : 120.0;
 
   // 1. Setup VoiceManager
   VoiceManager voiceManager;
@@ -155,4 +156,3 @@ bool AudioExporter::BounceOffline(
 } // namespace Audio
 } // namespace Core
 } // namespace Sonatrix
-  const double safeTempoBPM = (tempoBPM > 0.0) ? tempoBPM : 120.0;

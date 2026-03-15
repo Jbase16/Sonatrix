@@ -312,17 +312,59 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
 - (void)clearChords {
   _chordTrack.clear();
   _scheduledStream.events.clear();
+  _currentPlayheadTick.store(0);
   [self stopPlaybackThread];
 }
 
 - (void)addChordWithRoot:(uint8_t)rootKey
                  quality:(uint8_t)quality
               tickOffset:(double)offset {
-  Sonatrix::Core::ChordTrackEvent ev;
-  ev.position = Sonatrix::Core::MusicalTime(static_cast<int64_t>(offset));
-  ev.chord.root = static_cast<Sonatrix::Core::PitchClass>(rootKey % 12);
-  ev.chord.quality = static_cast<Sonatrix::Core::ChordQuality>(quality);
-  ev.chord.overBass = ev.chord.root;
+  [self addChordWithRoot:rootKey
+                 quality:quality
+              tickOffset:offset
+             guitarFrets:nil
+               noteOrder:nil
+          noteVelocities:nil];
+}
+
+- (void)addChordWithRoot:(uint8_t)rootKey
+                 quality:(uint8_t)quality
+              tickOffset:(double)offset
+             guitarFrets:(NSArray<NSNumber *> *)guitarFrets
+               noteOrder:(NSArray<NSNumber *> *)noteOrder
+          noteVelocities:(NSArray<NSNumber *> *)noteVelocities {
+  Sonatrix::Core::ChordTrackEvent ev = MakeChordEvent(rootKey, quality, offset);
+
+  auto applyEditArray = [&](NSArray<NSNumber *> *source,
+                            auto &targetArray,
+                            auto converter) {
+    if (source == nil || [source count] != 6) {
+      return false;
+    }
+
+    for (NSUInteger index = 0; index < 6; ++index) {
+      targetArray[index] = converter(source[index]);
+    }
+    return true;
+  };
+
+  const bool hasFrets = applyEditArray(
+      guitarFrets, ev.guitarEditData.frets,
+      [](NSNumber *value) { return static_cast<int8_t>([value intValue]); });
+  if (hasFrets) {
+    ev.guitarEditData.hasCustomVoicing = true;
+
+    applyEditArray(noteOrder, ev.guitarEditData.noteOrder,
+                   [](NSNumber *value) {
+                     return static_cast<int8_t>([value intValue]);
+                   });
+    applyEditArray(noteVelocities, ev.guitarEditData.noteVelocity,
+                   [](NSNumber *value) {
+                     return static_cast<uint8_t>(
+                         std::clamp([value intValue], 1, 127));
+                   });
+  }
+
   _chordTrack.push_back(ev);
 
   std::stable_sort(
@@ -338,13 +380,17 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
       CompileInteractiveArrangement(_chordTrack, _selectedPatternTemplateId);
 
   if (_internalIsPlaying) {
-    [self restartPlaybackThread];
+    [self restartPlaybackThreadFromTick:_currentPlayheadTick.load()];
   } else {
     [self stopPlaybackThread];
   }
 }
 
 - (void)restartPlaybackThread {
+  [self restartPlaybackThreadFromTick:_currentPlayheadTick.load()];
+}
+
+- (void)restartPlaybackThreadFromTick:(int64_t)startTick {
   [self stopPlaybackThread];
 
   if (_scheduledStream.events.empty()) {
@@ -352,50 +398,62 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
   }
 
   const Sonatrix::Core::MIDI::MIDIStream stream = _scheduledStream;
-  _shouldStopPlayback = NO;
+  const int64_t clampedStartTick = std::max<int64_t>(0, startTick);
+  const double tempoBPM = _tempoBPM;
+  _shouldStopPlayback.store(false);
+  _currentPlayheadTick.store(clampedStartTick);
 
-  _playbackThread = std::make_unique<std::thread>([self, stream]() {
-    int64_t currentTick = 0;
+  _playbackThread =
+      std::make_unique<std::thread>([self, stream, clampedStartTick, tempoBPM]() {
+        int64_t currentTick = clampedStartTick;
 
-    for (const auto &event : stream.events) {
-      if (self->_shouldStopPlayback) {
-        break;
-      }
+        for (const auto &event : stream.events) {
+          if (self->_shouldStopPlayback.load()) {
+            break;
+          }
 
-      const int64_t sleepTicks = event.timelinePosition.ticks - currentTick;
-      if (sleepTicks > 0) {
-        std::this_thread::sleep_for(
-            std::chrono::duration<double, std::milli>(sleepTicks *
-                                                      MillisecondsPerTick()));
-      }
-      currentTick = event.timelinePosition.ticks;
+          if (event.timelinePosition.ticks < clampedStartTick) {
+            continue;
+          }
 
-      uint8_t status = 0;
-      switch (event.type) {
-      case Sonatrix::Core::MIDI::MIDIEventType::NoteOn:
-        status = 0x90;
-        break;
-      case Sonatrix::Core::MIDI::MIDIEventType::NoteOff:
-        status = 0x80;
-        break;
-      case Sonatrix::Core::MIDI::MIDIEventType::ControlChange:
-        status = 0xB0;
-        break;
-      case Sonatrix::Core::MIDI::MIDIEventType::PitchBend:
-        status = 0xE0;
-        break;
-      }
+          const int64_t sleepTicks = event.timelinePosition.ticks - currentTick;
+          if (sleepTicks > 0) {
+            std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(
+                sleepTicks * MillisecondsPerTick(tempoBPM)));
+          }
+          currentTick = event.timelinePosition.ticks;
+          self->_currentPlayheadTick.store(currentTick);
 
-      [self.audioEngine pushMIDIEventStatus:status
-                                      data1:event.data1
-                                      data2:event.data2
-                                    channel:event.channel];
-    }
-  });
+          uint8_t status = 0;
+          switch (event.type) {
+          case Sonatrix::Core::MIDI::MIDIEventType::NoteOn:
+            status = 0x90;
+            break;
+          case Sonatrix::Core::MIDI::MIDIEventType::NoteOff:
+            status = 0x80;
+            break;
+          case Sonatrix::Core::MIDI::MIDIEventType::ControlChange:
+            status = 0xB0;
+            break;
+          case Sonatrix::Core::MIDI::MIDIEventType::PitchBend:
+            status = 0xE0;
+            break;
+          }
+
+          [self.audioEngine pushMIDIEventStatus:status
+                                          data1:event.data1
+                                          data2:event.data2
+                                        channel:event.channel];
+        }
+
+        if (!self->_shouldStopPlayback.load()) {
+          self->_internalIsPlaying = NO;
+        }
+      });
 }
 
 - (void)stopPlaybackThread {
-  _shouldStopPlayback = YES;
+  _shouldStopPlayback.store(true);
   if (_playbackThread && _playbackThread->joinable()) {
     _playbackThread->join();
   }
@@ -429,7 +487,8 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
   std::string cppAssetsPath = [assetsPath UTF8String];
 
   return Sonatrix::Core::Audio::AudioExporter::BounceOffline(
-      cppOutputPath, masterStream.events, cppAssetsPath, cVols);
+      cppOutputPath, masterStream.events, cppAssetsPath, cVols, 44100.0,
+      _tempoBPM);
 }
 
 - (BOOL)exportMIDIToPath:(NSString *)path {
@@ -438,7 +497,23 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
 
   std::string cppOutputPath = [path UTF8String];
   return Sonatrix::Core::MIDI::MIDIExporter::ExportToSMF(cppOutputPath,
-                                                         masterStream.events);
+                                                         masterStream.events,
+                                                         static_cast<uint16_t>(
+                                                             Sonatrix::Core::STANDARD_PPQN),
+                                                         _tempoBPM);
+}
+
+- (NSArray<NSNumber *> *)suggestGuitarFretsForRoot:(uint8_t)rootKey
+                                           quality:(uint8_t)quality {
+  const auto event = MakeChordEvent(rootKey, quality, 0.0);
+  const auto frets = SuggestAcousticVoicingFrets(event.chord);
+
+  NSMutableArray<NSNumber *> *result =
+      [NSMutableArray arrayWithCapacity:frets.size()];
+  for (const int8_t fret : frets) {
+    [result addObject:@(fret)];
+  }
+  return result;
 }
 
 @end
