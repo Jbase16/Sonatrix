@@ -735,7 +735,8 @@ Sonatrix::Core::MIDI::MIDIStream CompileInteractiveArrangement(
   std::string cppAssetsPath = [assetsPath UTF8String];
 
   return Sonatrix::Core::Audio::AudioExporter::BounceOffline(
-      cppOutputPath, masterStream.events, cppAssetsPath, cVols, 44100.0,
+      cppOutputPath, masterStream.events, cppAssetsPath,
+      Sonatrix::Core::Audio::PlaybackInstrument::Guitar, cVols, 44100.0,
       _tempoBPM);
 }
 

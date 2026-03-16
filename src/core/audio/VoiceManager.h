@@ -6,39 +6,28 @@
 #include "SampleZone.h"
 
 #include <array>
-#include <string>
+#include <cstdint>
 #include <vector>
 
 namespace Sonatrix {
 namespace Core {
 namespace Audio {
 
-// -----------------------------------------------------------------------------
-// VoiceManager
-//
-// Represents the synthesis brain for a single conceptual instrument
-// (e.g., "The Bass Engine", "The Guitar Engine").
-// It handles mapping incoming MIDI events to physical SampleZones,
-// allocating polyphonic voices, and summing their outputs.
-// -----------------------------------------------------------------------------
+enum class PlaybackInstrument : uint8_t {
+  Guitar,
+  ElectricBass,
+  MockBass
+};
 
+// Shared polyphonic voice container and renderer.
+// Instrument-specific managers own loading and MIDI semantics on top of this.
 class VoiceManager {
 public:
   VoiceManager() = default;
-  ~VoiceManager() = default;
+  virtual ~VoiceManager() = default;
 
-  // Loads a sparse matrix of samples into RAM for this specific engine.
-  void LoadInstrumentKit(const std::string &assetsAbsolutePath);
+  virtual void ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events) = 0;
 
-  // Receives a stream of timestamped MIDI events.
-  // In real-time use, this should only receive events meant for the current
-  // audio block.
-  void ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
-                   const InstrumentArticulation &articulation);
-
-  // Pulls the next N samples from all active voices, sums them together,
-  // passes them through the mixer for gain/pan staging, and accumulates
-  // the result into outputChannels.
   void RenderAudio(float **outputChannels, uint32_t numFrames,
                    uint32_t numChannels);
 
@@ -47,24 +36,27 @@ public:
   const InstrumentArticulation &GetKitArticulation() const {
     return activeArticulation_;
   }
+  MixerBus GetMixerBus() const { return activeMixerBus_; }
+
+protected:
+  static constexpr size_t MAX_VOICES = 32;
+
+  bool LoadArticulation(const InstrumentArticulation &articulation,
+                        MixerBus mixerBus);
+  bool HasLoadedArticulation() const { return !activeArticulation_.zones.empty(); }
+
+  bool StartVoiceForEvent(const MIDI::MIDIEvent &event, int stringId = -1);
+  void StopVoiceForEvent(const MIDI::MIDIEvent &event, int stringId = -1);
+  void ChokeVoicesOnString(int stringId);
+  void ResetRuntimeState();
 
 private:
-  // Expanded to handle overlapping acoustic guitar strums without needless
-  // stealing.
-  static constexpr size_t MAX_VOICES = 32;
+  SamplerVoice *GetBestAvailableVoice();
 
   std::array<SamplerVoice, MAX_VOICES> voices_;
   InstrumentArticulation activeArticulation_;
   AudioMixer mixer_;
   MixerBus activeMixerBus_{MixerBus::Bass};
-
-  // Tracks active note-ons per physical string (0-5) to avoid orphan note-offs
-  // killing a freshly restruck string.
-  std::array<int, 6> stringActiveNotes_{0, 0, 0, 0, 0, 0};
-
-  // Finds a free voice slot. If all slots are full, returns the active
-  // voice with the lowest amplitude (voice stealing).
-  SamplerVoice *GetBestAvailableVoice();
 };
 
 } // namespace Audio

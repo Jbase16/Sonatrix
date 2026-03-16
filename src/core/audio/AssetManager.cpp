@@ -1,75 +1,86 @@
 #include "AssetManager.h"
+
 #include "AudioFileReader.h"
+
+#include <initializer_list>
 #include <iostream>
 
 namespace Sonatrix {
 namespace Core {
 namespace Audio {
 
-bool AssetManager::LoadAcousticGuitarAnchors(const std::string &directoryPath) {
-  acousticGuitar_.name = "Acoustic_Guitar_Granular";
-  acousticGuitar_.zones.clear();
+namespace {
 
-  // We load a sparse set of anchor samples. For a 6-string guitar, ideally
-  // one per open string, or one per octave. We'll set up a generic mapping
-  // here. For now, we mock loading a few anchors (similar to test_pecr.cpp
-  // logic)
+struct AnchorDefinition {
+  const char *fileName;
+  uint8_t rootKey;
+};
 
-  // Example mappings: E2 (40), A2 (45), D3 (50), G3 (55), B3 (59), E4 (64)
-  const int rootKeys[] = {40, 45, 50, 55, 59, 64};
-  const std::string fileNames[] = {"/E2.wav", "/A2.wav", "/D3.wav",
-                                   "/G3.wav", "/B3.wav", "/E4.wav"};
+bool LoadAnchorSet(const std::string &directoryPath,
+                   const std::string &articulationName,
+                   std::initializer_list<AnchorDefinition> anchors,
+                   InstrumentArticulation &articulation,
+                   const char *failureLabel) {
+  articulation.name = articulationName;
+  articulation.zones.clear();
 
-  for (int i = 0; i < 6; ++i) {
+  for (const auto &anchor : anchors) {
     SampleZone zone;
-    zone.filePath = directoryPath + fileNames[i];
-    zone.rootKey = rootKeys[i];
+    zone.filePath = directoryPath + "/" + anchor.fileName;
+    zone.rootKey = anchor.rootKey;
     zone.lowVelocity = 0;
     zone.highVelocity = 127;
-    // For sparse matrix, let's span the keys between anchors
-    // Actually, InstrumentArticulation::FindZone handles closest rootKey logic
-    // if implemented properly.
+    zone.isLoaded =
+        AudioFileReader::LoadFile(zone.filePath, zone.audioData, zone.sampleRate);
 
-    zone.isLoaded = AudioFileReader::LoadFile(zone.filePath, zone.audioData,
-                                              zone.sampleRate);
     if (!zone.isLoaded) {
-      std::cerr << "Sonatrix: Failed to load Granular Anchor: " << zone.filePath
-                << "\n";
-      // Don't fail completely, keep trying others
-    } else {
-      acousticGuitar_.zones.push_back(zone);
+      std::cerr << "Sonatrix: Failed to load " << failureLabel << ": "
+                << zone.filePath << "\n";
+      continue;
     }
+
+    articulation.zones.push_back(std::move(zone));
   }
 
-  return !acousticGuitar_.zones.empty();
+  return !articulation.zones.empty();
+}
+
+} // namespace
+
+bool AssetManager::LoadAcousticGuitarAnchors(const std::string &directoryPath) {
+  return LoadAnchorSet(
+      directoryPath, "Acoustic_Guitar_Anchors",
+      {
+          {"E2.wav", 40},
+          {"A2.wav", 45},
+          {"D3.wav", 50},
+          {"G3.wav", 55},
+          {"B3.wav", 59},
+          {"E4.wav", 64},
+      },
+      acousticGuitar_, "guitar anchor");
 }
 
 bool AssetManager::LoadElectricBassAnchors(const std::string &directoryPath) {
-  electricBass_.name = "Electric_Bass_Granular";
-  electricBass_.zones.clear();
+  return LoadAnchorSet(
+      directoryPath, "Electric_Bass_Anchors",
+      {
+          {"B1.wav", 35},
+          {"C3.wav", 48},
+          {"C4.wav", 60},
+      },
+      electricBass_, "bass anchor");
+}
 
-  // Anchors: B1 (35), C3 (48), C4 (60)
-  const int rootKeys[] = {35, 48, 60};
-  const std::string fileNames[] = {"/B1.wav", "/C3.wav", "/C4.wav"};
-
-  for (int i = 0; i < 3; ++i) {
-    SampleZone zone;
-    zone.filePath = directoryPath + fileNames[i];
-    zone.rootKey = rootKeys[i];
-    zone.lowVelocity = 0;
-    zone.highVelocity = 127;
-
-    zone.isLoaded = AudioFileReader::LoadFile(zone.filePath, zone.audioData,
-                                              zone.sampleRate);
-    if (!zone.isLoaded) {
-      std::cerr << "Sonatrix: Failed to load Bass Anchor: " << zone.filePath
-                << "\n";
-    } else {
-      electricBass_.zones.push_back(zone);
-    }
-  }
-
-  return !electricBass_.zones.empty();
+bool AssetManager::LoadMockBassAnchors(const std::string &directoryPath) {
+  return LoadAnchorSet(
+      directoryPath, "Bass_Sawtooth_Mock",
+      {
+          {"C1.wav", 36},
+          {"C2.wav", 48},
+          {"C3.wav", 60},
+      },
+      mockBass_, "mock bass anchor");
 }
 
 } // namespace Audio

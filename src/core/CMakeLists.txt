@@ -38,6 +38,10 @@ add_library(SonatrixCore STATIC
     audio/AssetManager.cpp
     audio/VoiceManager.h
     audio/VoiceManager.cpp
+    audio/GuitarVoiceManager.h
+    audio/GuitarVoiceManager.cpp
+    audio/BassVoiceManager.h
+    audio/BassVoiceManager.cpp
     audio/AudioFileReader.h
     audio/AudioFileReader.cpp
     audio/AudioMixer.h

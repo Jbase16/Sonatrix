@@ -9,13 +9,21 @@
 #include <memory>
 #include <vector>
 
+#include "../core/audio/BassVoiceManager.h"
+#include "../core/audio/GuitarVoiceManager.h"
 #include "../core/audio/VoiceManager.h"
 #include "../core/concurrency/SPSCQueue.h"
 #include "../core/midi/MIDIEvent.h"
 
 namespace {
 
-std::string ResolvePlaybackKitPath(NSBundle *bundle) {
+struct ResolvedPlaybackKit {
+  Sonatrix::Core::Audio::PlaybackInstrument instrument{
+      Sonatrix::Core::Audio::PlaybackInstrument::Guitar};
+  std::string path;
+};
+
+ResolvedPlaybackKit ResolvePlaybackKit(NSBundle *bundle) {
   NSFileManager *fileManager = [NSFileManager defaultManager];
 
   if (bundle != nil) {
@@ -24,28 +32,61 @@ std::string ResolvePlaybackKitPath(NSBundle *bundle) {
       NSString *bundledGuitarPath =
           [resourcePath stringByAppendingPathComponent:@"Assets/Exciters/FS_Guitars"];
       if ([fileManager fileExistsAtPath:bundledGuitarPath]) {
-        return std::string([bundledGuitarPath UTF8String]);
+        return {Sonatrix::Core::Audio::PlaybackInstrument::Guitar,
+                std::string([bundledGuitarPath UTF8String])};
       }
 
       NSString *bundledBassPath =
           [resourcePath stringByAppendingPathComponent:@"Assets/samples/bass_mock"];
       if ([fileManager fileExistsAtPath:bundledBassPath]) {
-        return std::string([bundledBassPath UTF8String]);
+        return {Sonatrix::Core::Audio::PlaybackInstrument::MockBass,
+                std::string([bundledBassPath UTF8String])};
       }
     }
   }
 
   NSString *repoGuitarPath = @"/Users/jason/Developer/Sonatrix/assets/Exciters/FS_Guitars";
   if ([fileManager fileExistsAtPath:repoGuitarPath]) {
-    return std::string([repoGuitarPath UTF8String]);
+    return {Sonatrix::Core::Audio::PlaybackInstrument::Guitar,
+            std::string([repoGuitarPath UTF8String])};
   }
 
   NSString *repoBassPath = @"/Users/jason/Developer/Sonatrix/assets/samples/bass_mock";
   if ([fileManager fileExistsAtPath:repoBassPath]) {
-    return std::string([repoBassPath UTF8String]);
+    return {Sonatrix::Core::Audio::PlaybackInstrument::MockBass,
+            std::string([repoBassPath UTF8String])};
   }
 
   return {};
+}
+
+std::unique_ptr<Sonatrix::Core::Audio::VoiceManager>
+CreateVoiceManagerForKit(const ResolvedPlaybackKit &kit) {
+  using namespace Sonatrix::Core::Audio;
+
+  switch (kit.instrument) {
+  case PlaybackInstrument::Guitar: {
+    auto manager = std::make_unique<GuitarVoiceManager>();
+    if (!kit.path.empty()) {
+      manager->LoadAcousticGuitarKit(kit.path);
+    }
+    return manager;
+  }
+  case PlaybackInstrument::ElectricBass:
+  case PlaybackInstrument::MockBass: {
+    auto manager = std::make_unique<BassVoiceManager>();
+    if (!kit.path.empty()) {
+      if (kit.instrument == PlaybackInstrument::ElectricBass) {
+        manager->LoadElectricBassKit(kit.path);
+      } else {
+        manager->LoadMockBassKit(kit.path);
+      }
+    }
+    return manager;
+  }
+  }
+
+  return std::make_unique<GuitarVoiceManager>();
 }
 
 } // namespace
@@ -111,11 +152,9 @@ std::string ResolvePlaybackKitPath(NSBundle *bundle) {
 - (instancetype)init {
   self = [super init];
   if (self) {
-    _voiceManager = std::make_unique<Sonatrix::Core::Audio::VoiceManager>();
-    const std::string kitPath = ResolvePlaybackKitPath([NSBundle mainBundle]);
-    if (!kitPath.empty()) {
-      _voiceManager->LoadInstrumentKit(kitPath);
-    } else {
+    const auto kit = ResolvePlaybackKit([NSBundle mainBundle]);
+    _voiceManager = CreateVoiceManagerForKit(kit);
+    if (kit.path.empty()) {
       NSLog(@"StandaloneAudioEngine: Failed to resolve playback instrument kit path.");
     }
     _midiQueue = std::make_unique<Sonatrix::Core::Concurrency::SPSCQueue<
@@ -152,7 +191,7 @@ std::string ResolvePlaybackKitPath(NSBundle *bundle) {
              events.push_back(ev);
            }
            if (!events.empty()) {
-             manager->ProcessMIDI(events, manager->GetKitArticulation());
+             manager->ProcessMIDI(events);
            }
 
            // Zero out buffers

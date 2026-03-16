@@ -47,6 +47,21 @@ void SamplerVoice::Start(const SampleZone *zone, uint8_t targetPitch,
   state_ = State::Active;
 }
 
+void SamplerVoice::Reset() {
+  state_ = State::Free;
+  activeZone_ = nullptr;
+  currentPitch_ = 0;
+  currentVelocity_ = 0.0f;
+  currentStringId_ = -1;
+  directReadPos_ = 0.0;
+  pitchRatio_ = 1.0;
+  envelopeLevel_ = 0.0f;
+  attackPos_ = 0.0;
+  releasePos_ = 0.0;
+  activeReleaseSamples_ = releaseSamples_;
+  releaseStartAmp_ = 1.0f;
+}
+
 void SamplerVoice::Stop() {
   if (state_ == State::Active) {
     state_ = State::Releasing;

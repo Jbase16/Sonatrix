@@ -15,6 +15,7 @@ public:
 
   void Start(const SampleZone *zone, uint8_t targetPitch, double pitchRatio,
              float velocity, int stringId = -1);
+  void Reset();
 
   // Musical release for normal NoteOff behavior.
   void Stop();
