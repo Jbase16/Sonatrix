@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../midi/MIDIEvent.h"
-#include "VoiceManager.h"
+#include "PlaybackInstrument.h"
 
 #include <string>
 #include <vector>

@@ -13,12 +13,6 @@ namespace Sonatrix {
 namespace Core {
 namespace Audio {
 
-enum class PlaybackInstrument : uint8_t {
-  Guitar,
-  ElectricBass,
-  MockBass
-};
-
 // Shared polyphonic voice container and renderer.
 // Instrument-specific managers own loading and MIDI semantics on top of this.
 class VoiceManager {

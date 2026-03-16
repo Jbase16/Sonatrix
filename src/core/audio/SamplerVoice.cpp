@@ -1,6 +1,7 @@
 #include "SamplerVoice.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 
 namespace Sonatrix {
@@ -12,6 +13,8 @@ namespace {
 inline float ClampFloat(float x, float lo, float hi) {
   return std::max(lo, std::min(x, hi));
 }
+
+std::atomic<uint64_t> gVoiceStartSequence{0};
 
 } // namespace
 
@@ -31,6 +34,7 @@ void SamplerVoice::Start(const SampleZone *zone, uint8_t targetPitch,
   activeZone_ = zone;
   currentPitch_ = targetPitch;
   currentStringId_ = stringId;
+  startSequence_ = ++gVoiceStartSequence;
   pitchRatio_ = std::max(0.01, pitchRatio);
   currentVelocity_ = ClampFloat(velocity, 0.0f, 1.0f);
 
@@ -53,6 +57,7 @@ void SamplerVoice::Reset() {
   currentPitch_ = 0;
   currentVelocity_ = 0.0f;
   currentStringId_ = -1;
+  startSequence_ = 0;
   directReadPos_ = 0.0;
   pitchRatio_ = 1.0;
   envelopeLevel_ = 0.0f;

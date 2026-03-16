@@ -13,9 +13,12 @@ bool GuitarVoiceManager::LoadAcousticGuitarKit(
     return false;
   }
 
-  ResetStringState();
-  return LoadArticulation(assetManager.GetAcousticGuitarArticulation(),
-                          MixerBus::Guitar);
+  const bool loaded = LoadArticulation(
+      assetManager.GetAcousticGuitarArticulation(), MixerBus::Guitar);
+  if (loaded) {
+    ResetStringState();
+  }
+  return loaded;
 }
 
 void GuitarVoiceManager::ProcessMIDI(

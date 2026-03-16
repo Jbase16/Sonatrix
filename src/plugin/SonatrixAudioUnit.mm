@@ -4,9 +4,9 @@
 #include <vector>
 
 #include "../core/EngineConfig.h"
-#include "../core/audio/BassVoiceManager.h"
-#include "../core/audio/GuitarVoiceManager.h"
+#include "../core/audio/PlaybackInstrument.h"
 #include "../core/audio/VoiceManager.h"
+#include "../core/audio/VoiceManagerFactory.h"
 #include "../core/midi/MIDIEvent.h"
 
 namespace {
@@ -54,35 +54,6 @@ ResolvedPlaybackKit ResolvePlaybackKit(NSBundle *bundle) {
   return {};
 }
 
-std::unique_ptr<Sonatrix::Core::Audio::VoiceManager>
-CreateVoiceManagerForKit(const ResolvedPlaybackKit &kit) {
-  using namespace Sonatrix::Core::Audio;
-
-  switch (kit.instrument) {
-  case PlaybackInstrument::Guitar: {
-    auto manager = std::make_unique<GuitarVoiceManager>();
-    if (!kit.path.empty()) {
-      manager->LoadAcousticGuitarKit(kit.path);
-    }
-    return manager;
-  }
-  case PlaybackInstrument::ElectricBass:
-  case PlaybackInstrument::MockBass: {
-    auto manager = std::make_unique<BassVoiceManager>();
-    if (!kit.path.empty()) {
-      if (kit.instrument == PlaybackInstrument::ElectricBass) {
-        manager->LoadElectricBassKit(kit.path);
-      } else {
-        manager->LoadMockBassKit(kit.path);
-      }
-    }
-    return manager;
-  }
-  }
-
-  return std::make_unique<GuitarVoiceManager>();
-}
-
 } // namespace
 
 @interface SonatrixAudioUnit ()
@@ -108,8 +79,9 @@ CreateVoiceManagerForKit(const ResolvedPlaybackKit &kit) {
   // Initialize the C++ Core Engine
   const auto kit =
       ResolvePlaybackKit([NSBundle bundleForClass:[SonatrixAudioUnit class]]);
-  _voiceManager = CreateVoiceManagerForKit(kit);
-  if (kit.path.empty()) {
+  _voiceManager =
+      Sonatrix::Core::Audio::CreateLoadedVoiceManager(kit.instrument, kit.path);
+  if (!_voiceManager || kit.path.empty()) {
     os_log_error(OS_LOG_DEFAULT,
                  "SonatrixAudioUnit: Failed to resolve playback instrument kit path.");
   }

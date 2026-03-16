@@ -42,6 +42,11 @@ bool VoiceManager::StartVoiceForEvent(const MIDI::MIDIEvent &event,
 
 void VoiceManager::StopVoiceForEvent(const MIDI::MIDIEvent &event,
                                      int stringId) {
+  SamplerVoice *oldestActiveMatch = nullptr;
+  SamplerVoice *oldestReleasingMatch = nullptr;
+  uint64_t oldestActiveSequence = std::numeric_limits<uint64_t>::max();
+  uint64_t oldestReleasingSequence = std::numeric_limits<uint64_t>::max();
+
   for (auto &voice : voices_) {
     if (voice.IsFree() || voice.GetCurrentPitch() != event.data1) {
       continue;
@@ -51,8 +56,27 @@ void VoiceManager::StopVoiceForEvent(const MIDI::MIDIEvent &event,
       continue;
     }
 
-    voice.Stop();
-    break;
+    if (voice.IsReleasing()) {
+      if (voice.GetStartSequence() < oldestReleasingSequence) {
+        oldestReleasingSequence = voice.GetStartSequence();
+        oldestReleasingMatch = &voice;
+      }
+      continue;
+    }
+
+    if (voice.GetStartSequence() < oldestActiveSequence) {
+      oldestActiveSequence = voice.GetStartSequence();
+      oldestActiveMatch = &voice;
+    }
+  }
+
+  if (oldestActiveMatch) {
+    oldestActiveMatch->Stop();
+    return;
+  }
+
+  if (oldestReleasingMatch) {
+    oldestReleasingMatch->Stop();
   }
 }
 

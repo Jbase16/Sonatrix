@@ -1,7 +1,7 @@
 #include "AudioExporter.h"
 
-#include "BassVoiceManager.h"
-#include "GuitarVoiceManager.h"
+#include "VoiceManager.h"
+#include "VoiceManagerFactory.h"
 
 #include <AudioToolbox/AudioToolbox.h>
 #include <algorithm>
@@ -12,40 +12,6 @@ namespace Sonatrix {
 namespace Core {
 namespace Audio {
 
-namespace {
-
-std::unique_ptr<VoiceManager>
-CreateVoiceManagerForBounce(const std::string &assetsPath,
-                            PlaybackInstrument instrument) {
-  switch (instrument) {
-  case PlaybackInstrument::Guitar: {
-    auto manager = std::make_unique<GuitarVoiceManager>();
-    if (!manager->LoadAcousticGuitarKit(assetsPath)) {
-      return nullptr;
-    }
-    return manager;
-  }
-  case PlaybackInstrument::ElectricBass: {
-    auto manager = std::make_unique<BassVoiceManager>();
-    if (!manager->LoadElectricBassKit(assetsPath)) {
-      return nullptr;
-    }
-    return manager;
-  }
-  case PlaybackInstrument::MockBass: {
-    auto manager = std::make_unique<BassVoiceManager>();
-    if (!manager->LoadMockBassKit(assetsPath)) {
-      return nullptr;
-    }
-    return manager;
-  }
-  }
-
-  return nullptr;
-}
-
-} // namespace
-
 bool AudioExporter::BounceOffline(
     const std::string &outputPath,
     const std::vector<Sonatrix::Core::MIDI::MIDIEvent> &midiStream,
@@ -55,7 +21,7 @@ bool AudioExporter::BounceOffline(
   const double safeTempoBPM = (tempoBPM > 0.0) ? tempoBPM : 120.0;
 
   std::unique_ptr<VoiceManager> voiceManager =
-      CreateVoiceManagerForBounce(assetsPath, instrument);
+      CreateLoadedVoiceManager(instrument, assetsPath);
   if (!voiceManager) {
     std::cerr << "AudioExporter: Failed to create instrument voice manager for "
               << assetsPath << std::endl;

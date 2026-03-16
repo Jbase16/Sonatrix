@@ -27,9 +27,11 @@ public:
                        uint32_t numChannels);
 
   bool IsFree() const { return state_ == State::Free; }
+  bool IsReleasing() const { return state_ == State::Releasing; }
   uint8_t GetCurrentPitch() const { return currentPitch_; }
   int GetStringId() const { return currentStringId_; }
   float GetStealingPriority() const { return envelopeLevel_; }
+  uint64_t GetStartSequence() const { return startSequence_; }
 
 private:
   enum class State { Free, Active, Releasing };
@@ -45,6 +47,7 @@ private:
   uint8_t currentPitch_{0};
   float currentVelocity_{0.0f};
   int currentStringId_{-1};
+  uint64_t startSequence_{0};
 
   // Sampler Playhead Time Model
   double directReadPos_{0.0};
