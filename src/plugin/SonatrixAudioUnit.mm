@@ -129,6 +129,18 @@ ResolvedPlaybackKit ResolvePlaybackKit(NSBundle *bundle) {
       AVAudioFrameCount frameCount, NSInteger outputBusNumber,
       AudioBufferList *outputData, const AURenderEvent *realtimeEventListHead,
       AURenderPullInputBlock pullInputBlock) {
+    float *channels[8];
+    UInt32 numChannels = MIN(outputData->mNumberBuffers, 8);
+    for (UInt32 i = 0; i < numChannels; ++i) {
+      memset(outputData->mBuffers[i].mData, 0,
+             outputData->mBuffers[i].mDataByteSize);
+      channels[i] = (float *)outputData->mBuffers[i].mData;
+    }
+
+    if (manager == nullptr) {
+      return noErr;
+    }
+
     // 1. Process Host Musical Context (Tempo, Position)
     // 2. Consume events from the Lock-Free UI Queue (e.g., User changed a
     // chord)
@@ -141,15 +153,17 @@ ResolvedPlaybackKit ResolvePlaybackKit(NSBundle *bundle) {
       if (event->head.eventType == AURenderEventMIDI) {
         const AUMIDIEvent *midiEvent = (const AUMIDIEvent *)event;
         const uint8_t status = midiEvent->data[0] & 0xF0;
+        const uint8_t channel = static_cast<uint8_t>((midiEvent->data[0] & 0x0F) + 1);
 
         Sonatrix::Core::MIDI::MIDIEvent ev;
         // Timestamp parsed conceptually; processed synchronously in block
         ev.data1 = midiEvent->data[1];
         ev.data2 = midiEvent->data[2];
+        ev.channel = channel;
 
-        if (status == 0x90)
+        if (status == 0x90 && ev.data2 > 0)
           ev.type = Sonatrix::Core::MIDI::MIDIEventType::NoteOn;
-        else if (status == 0x80)
+        else if (status == 0x80 || (status == 0x90 && ev.data2 == 0))
           ev.type = Sonatrix::Core::MIDI::MIDIEventType::NoteOff;
         else
           ev.type = Sonatrix::Core::MIDI::MIDIEventType::ControlChange;
@@ -160,15 +174,6 @@ ResolvedPlaybackKit ResolvePlaybackKit(NSBundle *bundle) {
     }
 
     manager->ProcessMIDI(events);
-
-    // Initialize output buffers to zero
-    float *channels[8];
-    UInt32 numChannels = MIN(outputData->mNumberBuffers, 8);
-    for (UInt32 i = 0; i < numChannels; ++i) {
-      memset(outputData->mBuffers[i].mData, 0,
-             outputData->mBuffers[i].mDataByteSize);
-      channels[i] = (float *)outputData->mBuffers[i].mData;
-    }
 
     // 4. Execute C++ VoiceManager Synthesis
     manager->RenderAudio(channels, frameCount, numChannels);

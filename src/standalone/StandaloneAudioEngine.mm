@@ -155,6 +155,19 @@ ResolvedPlaybackKit ResolvePlaybackKit(NSBundle *bundle) {
                                const AudioTimeStamp *_Nonnull timestamp,
                                AVAudioFrameCount frameCount,
                                AudioBufferList *_Nonnull outputData) {
+           float *channels[8];
+           UInt32 numChannels = MIN(outputData->mNumberBuffers, 8);
+           for (UInt32 i = 0; i < numChannels; ++i) {
+             memset(outputData->mBuffers[i].mData, 0,
+                    outputData->mBuffers[i].mDataByteSize);
+             channels[i] = (float *)outputData->mBuffers[i].mData;
+           }
+
+           if (manager == nullptr) {
+             *isSilence = YES;
+             return noErr;
+           }
+
            // --- Process queued MIDI exactly at the start of the audio frame
            // logic ---
            std::vector<Sonatrix::Core::MIDI::MIDIEvent> events;
@@ -164,15 +177,6 @@ ResolvedPlaybackKit ResolvePlaybackKit(NSBundle *bundle) {
            }
            if (!events.empty()) {
              manager->ProcessMIDI(events);
-           }
-
-           // Zero out buffers
-           float *channels[8];
-           UInt32 numChannels = MIN(outputData->mNumberBuffers, 8);
-           for (UInt32 i = 0; i < numChannels; ++i) {
-             memset(outputData->mBuffers[i].mData, 0,
-                    outputData->mBuffers[i].mDataByteSize);
-             channels[i] = (float *)outputData->mBuffers[i].mData;
            }
 
            // Render C++ Synthesizer

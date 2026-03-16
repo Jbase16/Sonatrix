@@ -4,6 +4,8 @@
 #include "GuitarVoiceManager.h"
 #include "VoiceManager.h"
 
+#include <iostream>
+
 namespace Sonatrix {
 namespace Core {
 namespace Audio {
@@ -11,27 +13,36 @@ namespace Audio {
 std::unique_ptr<VoiceManager>
 CreateLoadedVoiceManager(PlaybackInstrument instrument,
                          const std::string &assetsAbsolutePath) {
+  if (assetsAbsolutePath.empty()) {
+    std::cerr << "VoiceManagerFactory: empty asset path for instrument "
+              << static_cast<int>(instrument) << std::endl;
+    return nullptr;
+  }
+
   switch (instrument) {
   case PlaybackInstrument::Guitar: {
     auto manager = std::make_unique<GuitarVoiceManager>();
-    if (!assetsAbsolutePath.empty() &&
-        !manager->LoadAcousticGuitarKit(assetsAbsolutePath)) {
+    if (!manager->LoadAcousticGuitarKit(assetsAbsolutePath)) {
+      std::cerr << "VoiceManagerFactory: failed to load guitar kit from "
+                << assetsAbsolutePath << std::endl;
       return nullptr;
     }
     return manager;
   }
   case PlaybackInstrument::ElectricBass: {
     auto manager = std::make_unique<BassVoiceManager>();
-    if (!assetsAbsolutePath.empty() &&
-        !manager->LoadElectricBassKit(assetsAbsolutePath)) {
+    if (!manager->LoadElectricBassKit(assetsAbsolutePath)) {
+      std::cerr << "VoiceManagerFactory: failed to load electric bass kit from "
+                << assetsAbsolutePath << std::endl;
       return nullptr;
     }
     return manager;
   }
   case PlaybackInstrument::MockBass: {
     auto manager = std::make_unique<BassVoiceManager>();
-    if (!assetsAbsolutePath.empty() &&
-        !manager->LoadMockBassKit(assetsAbsolutePath)) {
+    if (!manager->LoadMockBassKit(assetsAbsolutePath)) {
+      std::cerr << "VoiceManagerFactory: failed to load mock bass kit from "
+                << assetsAbsolutePath << std::endl;
       return nullptr;
     }
     return manager;

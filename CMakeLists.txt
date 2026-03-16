@@ -81,6 +81,7 @@ target_compile_options(SonatrixStandalone PRIVATE "$<$<COMPILE_LANGUAGE:Swift>:-
 add_library(SonatrixAUv3 MODULE
     src/plugin/SonatrixAudioUnit.mm
     src/plugin/SonatrixAudioUnit.h
+    src/ui/SonatrixViewModel.swift
     src/ui/ArrangementView.swift
     src/ui/MixerView.swift
     src/ui/PatternBrowser.swift
