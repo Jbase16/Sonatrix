@@ -44,6 +44,34 @@ bool AssetManager::LoadAcousticGuitarAnchors(const std::string &directoryPath) {
   return !acousticGuitar_.zones.empty();
 }
 
+bool AssetManager::LoadElectricBassAnchors(const std::string &directoryPath) {
+  electricBass_.name = "Electric_Bass_Granular";
+  electricBass_.zones.clear();
+
+  // Anchors: B1 (35), C3 (48), C4 (60)
+  const int rootKeys[] = {35, 48, 60};
+  const std::string fileNames[] = {"/B1.wav", "/C3.wav", "/C4.wav"};
+
+  for (int i = 0; i < 3; ++i) {
+    SampleZone zone;
+    zone.filePath = directoryPath + fileNames[i];
+    zone.rootKey = rootKeys[i];
+    zone.lowVelocity = 0;
+    zone.highVelocity = 127;
+
+    zone.isLoaded = AudioFileReader::LoadFile(zone.filePath, zone.audioData,
+                                              zone.sampleRate);
+    if (!zone.isLoaded) {
+      std::cerr << "Sonatrix: Failed to load Bass Anchor: " << zone.filePath
+                << "\n";
+    } else {
+      electricBass_.zones.push_back(zone);
+    }
+  }
+
+  return !electricBass_.zones.empty();
+}
+
 } // namespace Audio
 } // namespace Core
 } // namespace Sonatrix

@@ -72,8 +72,12 @@ MIDIStream BassCompiler::CompileClip(
       stream.events.push_back({lockedTime, MIDIEventType::NoteOn, 1,
                                targetPitch, finalVel}); // Ch 2 (idx 1) for Bass
 
-      // Emit Note Off (Generic 8th note duration)
-      MusicalTime offTime = lockedTime + MusicalTime(480);
+      // 4. Emit Note Off
+      // Use mir.lengthBeats if available, otherwise default to 1 beat (480 ticks)
+      uint32_t durationTicks = (mir.lengthBeats > 0)
+                                   ? static_cast<uint32_t>(mir.lengthBeats * 480)
+                                   : 480;
+      MusicalTime offTime = lockedTime + MusicalTime(durationTicks);
       stream.events.push_back(
           {offTime, MIDIEventType::NoteOff, 1, targetPitch, 0});
     }

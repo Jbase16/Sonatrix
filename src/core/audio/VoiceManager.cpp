@@ -54,6 +54,18 @@ bool LooksLikeAcousticGuitarKit(const std::string &directoryPath) {
   return true;
 }
 
+bool LooksLikeElectricBassKit(const std::string &directoryPath) {
+  static constexpr const char *kRequiredFiles[] = {"B1.wav", "C3.wav", "C4.wav"};
+
+  for (const char *fileName : kRequiredFiles) {
+    if (!FileExists(directoryPath + "/" + fileName)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 } // namespace
 
 void VoiceManager::ProcessMIDI(const std::vector<MIDI::MIDIEvent> &events,
@@ -147,6 +159,16 @@ void VoiceManager::LoadInstrumentKit(const std::string &assetsAbsolutePath) {
       activeArticulation_ = assetManager.GetAcousticGuitarArticulation();
       activeArticulation_.name = "Acoustic_Guitar_Anchors";
       activeMixerBus_ = MixerBus::Guitar;
+      return;
+    }
+  }
+
+  if (LooksLikeElectricBassKit(assetsAbsolutePath)) {
+    auto &assetManager = AssetManager::GetInstance();
+    if (assetManager.LoadElectricBassAnchors(assetsAbsolutePath)) {
+      activeArticulation_ = assetManager.GetElectricBassArticulation();
+      activeArticulation_.name = "Electric_Bass_Anchors";
+      activeMixerBus_ = MixerBus::Bass;
       return;
     }
   }

@@ -22,6 +22,14 @@ public:
     return acousticGuitar_;
   }
 
+  // Loads sparse electric bass anchors (e.g., B1, C3, C4)
+  bool LoadElectricBassAnchors(const std::string &directoryPath);
+
+  // Retrieve the global electric bass articulation
+  const InstrumentArticulation &GetElectricBassArticulation() const {
+    return electricBass_;
+  }
+
 private:
   AssetManager() = default;
   ~AssetManager() = default;
@@ -31,6 +39,7 @@ private:
   AssetManager &operator=(const AssetManager &) = delete;
 
   InstrumentArticulation acousticGuitar_;
+  InstrumentArticulation electricBass_;
 };
 
 } // namespace Audio
