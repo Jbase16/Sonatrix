@@ -41,6 +41,7 @@ struct SampleZone {
 
 struct InstrumentArticulation {
     std::string name;
+    float outputGain{1.0f};
     std::vector<SampleZone> zones;
     
     // Real-time lookup: Find the best zone for a given requested pitch, velocity, and optional explicit physical string

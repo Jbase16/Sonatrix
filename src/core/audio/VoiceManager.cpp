@@ -12,6 +12,8 @@ bool VoiceManager::LoadArticulation(const InstrumentArticulation &articulation,
                                     MixerBus mixerBus) {
   ResetRuntimeState();
   activeArticulation_ = articulation;
+  articulationOutputGain_ =
+      (articulation.outputGain > 0.0f) ? articulation.outputGain : 1.0f;
   activeMixerBus_ = mixerBus;
   return HasLoadedArticulation();
 }
@@ -138,6 +140,13 @@ void VoiceManager::RenderAudio(float **outputChannels, uint32_t numFrames,
 
   for (auto &voice : voices_) {
     voice.RenderNextBlock(tempChannels, numFrames, 2);
+  }
+
+  if (articulationOutputGain_ != 1.0f) {
+    for (uint32_t i = 0; i < numFrames; ++i) {
+      tempL[i] *= articulationOutputGain_;
+      tempR[i] *= articulationOutputGain_;
+    }
   }
 
   mixer_.MixBusToOutput(activeMixerBus_, tempChannels, outputChannels, numFrames,

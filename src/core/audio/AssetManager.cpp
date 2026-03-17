@@ -19,9 +19,11 @@ struct AnchorDefinition {
 bool LoadAnchorSet(const std::string &directoryPath,
                    const std::string &articulationName,
                    std::initializer_list<AnchorDefinition> anchors,
+                   float outputGain,
                    InstrumentArticulation &articulation,
                    const char *failureLabel) {
   articulation.name = articulationName;
+  articulation.outputGain = outputGain;
   articulation.zones.clear();
 
   for (const auto &anchor : anchors) {
@@ -58,6 +60,9 @@ bool AssetManager::LoadAcousticGuitarAnchors(const std::string &directoryPath) {
           {"B3.wav", 59},
           {"E4.wav", 64},
       },
+      // Full guitar voicings stack several near-full-scale anchors at once, so
+      // keep some built-in headroom before user mixer gain is applied.
+      0.35f,
       acousticGuitar_, "guitar anchor");
 }
 
@@ -69,6 +74,7 @@ bool AssetManager::LoadElectricBassAnchors(const std::string &directoryPath) {
           {"C3.wav", 48},
           {"C4.wav", 60},
       },
+      1.0f,
       electricBass_, "bass anchor");
 }
 
@@ -80,6 +86,7 @@ bool AssetManager::LoadMockBassAnchors(const std::string &directoryPath) {
           {"C2.wav", 48},
           {"C3.wav", 60},
       },
+      1.0f,
       mockBass_, "mock bass anchor");
 }
 

@@ -1,6 +1,88 @@
 import Combine
 import SwiftUI
 
+#if !STANDALONE
+private final class SonatrixEngineFacade {
+    private(set) var isPlaying: Bool = false
+    private(set) var currentPlayheadTick: Double = 0
+    private(set) var tempoBPM: Double = 120.0
+    private(set) var arrangementLoopEnabled: Bool = false
+
+    init() {}
+
+    func play() {
+        isPlaying = true
+    }
+
+    func play(fromTick tickOffset: Double) {
+        currentPlayheadTick = max(0.0, tickOffset)
+        isPlaying = true
+    }
+
+    func stop() {
+        isPlaying = false
+    }
+
+    func seek(toTick tickOffset: Double) {
+        currentPlayheadTick = max(0.0, tickOffset)
+    }
+
+    func setTempoBPM(_ bpm: Double) {
+        tempoBPM = bpm
+    }
+
+    func setArrangementLoopEnabled(_ enabled: Bool) {
+        arrangementLoopEnabled = enabled
+    }
+
+    func setArrangementLengthTicks(_ lengthTicks: Double) {}
+
+    func clearChords() {}
+
+    func addChord(withRoot rootKey: UInt8,
+                  quality: UInt8,
+                  tickOffset offset: Double) {}
+
+    func addChord(withRoot rootKey: UInt8,
+                  quality: UInt8,
+                  tickOffset offset: Double,
+                  guitarFrets: [NSNumber]?,
+                  noteOrder: [NSNumber]?,
+                  noteVelocities: [NSNumber]?) {}
+
+    func compileAndSchedule() {}
+
+    func previewChord(withRoot rootKey: UInt8,
+                      quality: UInt8,
+                      durationTicks: Double,
+                      guitarFrets: [NSNumber]?,
+                      noteOrder: [NSNumber]?,
+                      noteVelocities: [NSNumber]?,
+                      shouldLoop: Bool) {
+        isPlaying = shouldLoop
+    }
+
+    func setPatternTemplateId(_ patternTemplateId: String) {}
+
+    func setVolume(_ volume: Float, forBus busIndex: UInt8) {}
+
+    func bounceAudio(toPath path: String,
+                     assetsPath: String,
+                     volumes: [NSNumber]) -> Bool {
+        false
+    }
+
+    func exportMIDI(toPath path: String) -> Bool {
+        false
+    }
+
+    func suggestGuitarFrets(forRoot rootKey: UInt8,
+                            quality: UInt8) -> [NSNumber] {
+        Array(repeating: NSNumber(value: -1), count: 6)
+    }
+}
+#endif
+
 // -----------------------------------------------------------------------------
 // SonatrixViewModel
 //
@@ -708,15 +790,7 @@ public class SonatrixViewModel: ObservableObject {
               let data = try? Data(contentsOf: libraryURL),
               let document = try? JSONDecoder().decode(PatternLibraryDocument.self, from: data)
         else {
-            return [
-                PatternDescriptor(
-                    id: defaultPatternTemplateID,
-                    name: "Acoustic 12/8 Arpeggiated",
-                    genre: "Acoustic Pop",
-                    timeSignature: "4/4",
-                    category: .picking,
-                    eventCount: 12)
-            ]
+            return fallbackPatternCatalog()
         }
 
         let guitarTemplates = document.templates.compactMap { template -> PatternDescriptor? in
@@ -733,15 +807,19 @@ public class SonatrixViewModel: ObservableObject {
                 eventCount: guitarPattern.events.count)
         }
 
-        return guitarTemplates.isEmpty ? [
-            PatternDescriptor(
-                id: defaultPatternTemplateID,
-                name: "Acoustic 12/8 Arpeggiated",
-                genre: "Acoustic Pop",
-                timeSignature: "4/4",
-                category: .picking,
-                eventCount: 12)
-        ] : guitarTemplates
+        guard !guitarTemplates.isEmpty else {
+            return fallbackPatternCatalog()
+        }
+
+        return guitarTemplates.sorted { lhs, rhs in
+            if lhs.category != rhs.category {
+                return lhs.category == .strum
+            }
+            if lhs.genre != rhs.genre {
+                return lhs.genre < rhs.genre
+            }
+            return lhs.name < rhs.name
+        }
     }
 
     private static func classifyPattern(events: [PatternEvent]) -> PatternCategory {
@@ -750,6 +828,39 @@ public class SonatrixViewModel: ObservableObject {
             return .picking
         }
         return .strum
+    }
+
+    private static func fallbackPatternCatalog() -> [PatternDescriptor] {
+        [
+            PatternDescriptor(
+                id: "acoustic_basic_8ths",
+                name: "Acoustic Basic 8ths (D DU UDU)",
+                genre: "Acoustic Pop",
+                timeSignature: "4/4",
+                category: .strum,
+                eventCount: 6),
+            PatternDescriptor(
+                id: "acoustic_island_soft",
+                name: "Acoustic Island Soft (DDUUDU)",
+                genre: "Acoustic Pop",
+                timeSignature: "4/4",
+                category: .strum,
+                eventCount: 6),
+            PatternDescriptor(
+                id: "acoustic_singer_songwriter_1",
+                name: "Acoustic Singer-Songwriter 1",
+                genre: "Acoustic Pop",
+                timeSignature: "4/4",
+                category: .strum,
+                eventCount: 5),
+            PatternDescriptor(
+                id: defaultPatternTemplateID,
+                name: "12/8 Arpeggiated Strum",
+                genre: "Acoustic Pop",
+                timeSignature: "4/4",
+                category: .picking,
+                eventCount: 12)
+        ]
     }
 
     private static func resolvePatternLibraryURL() -> URL? {

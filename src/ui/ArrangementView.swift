@@ -301,7 +301,7 @@ struct ChordTrackRuler: View {
             let chord: SonatrixViewModel.ChordItem
 
             init(index: Int, chord: SonatrixViewModel.ChordItem) {
-                self.id = chord.id
+                self.id = UUID()
                 self.index = index
                 self.chord = chord
             }
@@ -415,7 +415,7 @@ struct ChordTrackRuler: View {
                             perform: { providers, location in
                                 handleChordDrop(providers: providers, location: location)
                             })
-                    .gesture(
+                    .simultaneousGesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { value in
                                 updatePlayhead(location: value.location)
@@ -1102,7 +1102,7 @@ private struct TimelineChordLane: View {
     let onRemove: (Int) -> Void
 
     var body: some View {
-        ZStack(alignment: .leading) {
+        ZStack(alignment: .topLeading) {
             ForEach(sectionFrames, id: \.index) { frame in
                 if frame.index < chords.count {
                     ZStack(alignment: .topTrailing) {
@@ -1127,10 +1127,8 @@ private struct TimelineChordLane: View {
                         .buttonStyle(PlainButtonStyle())
                         .padding(6)
                     }
-                    .position(
-                        x: sectionInset + frame.x + (frame.width / 2),
-                        y: height / 2
-                    )
+                    .frame(width: frame.width, height: height - 8, alignment: .topLeading)
+                    .offset(x: sectionInset + frame.x, y: 4)
                     .contentShape(RoundedRectangle(cornerRadius: 8))
                     .contextMenu {
                         Button("Remove") {

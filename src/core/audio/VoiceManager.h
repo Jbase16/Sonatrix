@@ -49,6 +49,7 @@ private:
 
   std::array<SamplerVoice, MAX_VOICES> voices_;
   InstrumentArticulation activeArticulation_;
+  float articulationOutputGain_{1.0f};
   AudioMixer mixer_;
   MixerBus activeMixerBus_{MixerBus::Bass};
 };
