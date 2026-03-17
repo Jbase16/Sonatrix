@@ -34,11 +34,38 @@ MIDIStream BassCompiler::CompileClip(
       const auto &activeChord = chordTimeline[currentChordIndex].chord;
       int rootOffset = static_cast<int>(activeChord.root);
 
-      // Octave calculation logic (try to stay between E1 and G2)
-      // Octave 1 base is C1 (36).
-      int calculatedPitch = 36 + rootOffset;
-      if (calculatedPitch < 40)
-        calculatedPitch += 12; // Shift up if too low
+      // Base calculations
+      int rootPitch = 36 + rootOffset; // C1 is 36
+      if (rootPitch < 40) rootPitch += 12; // Shift up if below E1 (40)
+      
+      int calculatedPitch = rootPitch;
+      
+      // Determine interval from actionParameter
+      // 0 = Root, 1 = Perfect Fifth, 2 = Octave Up, 3 = Approach Below, 4 = Approach Above
+      int interval = mir.actionParameter;
+      
+      if (interval == 1) {
+          // Perfect Fifth (7 semitones)
+          calculatedPitch = rootPitch + 7;
+          // If the fifth goes too high (e.g. above G2/55), drop it down an octave
+          if (calculatedPitch > 55) {
+              calculatedPitch -= 12;
+          }
+      } else if (interval == 2) {
+          // Octave (12 semitones)
+          calculatedPitch = rootPitch + 12; 
+      } else if (interval == 3) {
+          // Chromatic approach below
+          calculatedPitch = rootPitch - 1;
+      } else if (interval == 4) {
+          // Chromatic approach above
+          calculatedPitch = rootPitch + 1;
+      }
+
+      // Final bounds check (E1 to G2 loosely)
+      if (calculatedPitch < 35) calculatedPitch += 12; // absolute floor is B0
+      if (calculatedPitch > 60) calculatedPitch -= 12; // absolute ceiling is C4
+
       targetPitch = static_cast<uint8_t>(calculatedPitch);
     }
 

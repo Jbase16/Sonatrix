@@ -1,5 +1,5 @@
 #include "src/core/audio/AssetManager.h"
-#include "src/core/audio/VoiceManager.h"
+#include "src/core/audio/BassVoiceManager.h"
 #include "src/core/engines/bass/BassCompiler.h"
 #include "src/core/mir/MIRPattern.h"
 #include "src/core/mir/PatternLibrary.h"
@@ -114,17 +114,17 @@ int main() {
   }
   
   // Guard against missing engine data
-  if (tmpl->patterns.find(MIRPattern::TargetEngine::Guitar) == tmpl->patterns.end()) {
-      std::cerr << "Engine data NOT FOUND for " << (int)MIRPattern::TargetEngine::Guitar << std::endl;
+  if (tmpl->patterns.find(MIRPattern::TargetEngine::Bass) == tmpl->patterns.end()) {
+      std::cerr << "Engine data NOT FOUND for " << (int)MIRPattern::TargetEngine::Bass << std::endl;
       return 1;
   }
   
-  // For the test, we'll just reuse the guitar pattern timing but route to bass
-  auto pattern = tmpl->patterns.at(MIRPattern::TargetEngine::Guitar);
-  std::cout << "   Using timing from " << patternId << " Guitar pattern (Events: " << pattern->events.size() << ")" << std::endl;
+  // Use the native Bass pattern
+  auto pattern = tmpl->patterns.at(MIRPattern::TargetEngine::Bass);
+  std::cout << "   Using native timing from " << patternId << " Bass pattern (Events: " << pattern->events.size() << ")" << std::endl;
 
-  Audio::VoiceManager voiceManager;
-  voiceManager.LoadInstrumentKit("assets/Samples/bass_clean");
+  Audio::BassVoiceManager voiceManager;
+  voiceManager.LoadElectricBassKit("assets/Samples/bass_clean");
 
   std::cout << "4. Compiling Bass MIDI..." << std::endl;
   auto compiler = MIDI::CreateBassEngine();
@@ -163,7 +163,7 @@ int main() {
               rendered += toRender;
           }
           std::vector<MIDI::MIDIEvent> evs = {scheduled[eventIndex].second};
-          voiceManager.ProcessMIDI(evs, articulation);
+          voiceManager.ProcessMIDI(evs);
           eventIndex++;
       }
 

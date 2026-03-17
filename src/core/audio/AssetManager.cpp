@@ -18,11 +18,13 @@ struct AnchorDefinition {
 
 bool LoadAnchorSet(const std::string &directoryPath,
                    const std::string &articulationName,
+                   PlaybackInstrument instrumentType,
                    std::initializer_list<AnchorDefinition> anchors,
                    float outputGain,
                    InstrumentArticulation &articulation,
                    const char *failureLabel) {
   articulation.name = articulationName;
+  articulation.instrumentType = instrumentType;
   articulation.outputGain = outputGain;
   articulation.zones.clear();
 
@@ -51,7 +53,7 @@ bool LoadAnchorSet(const std::string &directoryPath,
 
 bool AssetManager::LoadAcousticGuitarAnchors(const std::string &directoryPath) {
   return LoadAnchorSet(
-      directoryPath, "Acoustic_Guitar_Anchors",
+      directoryPath, "Acoustic_Guitar_Anchors", PlaybackInstrument::Guitar,
       {
           {"E2.wav", 40},
           {"A2.wav", 45},
@@ -68,7 +70,7 @@ bool AssetManager::LoadAcousticGuitarAnchors(const std::string &directoryPath) {
 
 bool AssetManager::LoadElectricBassAnchors(const std::string &directoryPath) {
   return LoadAnchorSet(
-      directoryPath, "Electric_Bass_Anchors",
+      directoryPath, "Electric_Bass_Anchors", PlaybackInstrument::ElectricBass,
       {
           {"B1.wav", 35},
           {"C3.wav", 48},
@@ -80,7 +82,7 @@ bool AssetManager::LoadElectricBassAnchors(const std::string &directoryPath) {
 
 bool AssetManager::LoadMockBassAnchors(const std::string &directoryPath) {
   return LoadAnchorSet(
-      directoryPath, "Bass_Sawtooth_Mock",
+      directoryPath, "Bass_Sawtooth_Mock", PlaybackInstrument::MockBass,
       {
           {"C1.wav", 36},
           {"C2.wav", 48},
