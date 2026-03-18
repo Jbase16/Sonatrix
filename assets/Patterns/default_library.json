@@ -46,6 +46,16 @@
               "type": "GuitarUpstroke"
             }
           ]
+        },
+        "Bass": {
+          "totalLengthBeats": 4.0,
+          "events": [
+            { "offsetBeats": 0.0, "lengthBeats": 1.0, "velocityBase": 105, "type": "GenericNote", "actionParameter": 0 },
+            { "offsetBeats": 1.0, "lengthBeats": 1.0, "velocityBase": 95, "type": "GenericNote", "actionParameter": 0 },
+            { "offsetBeats": 2.0, "lengthBeats": 1.0, "velocityBase": 100, "type": "GenericNote", "actionParameter": 0 },
+            { "offsetBeats": 3.0, "lengthBeats": 0.75, "velocityBase": 90, "type": "GenericNote", "actionParameter": 0 },
+            { "offsetBeats": 3.75, "lengthBeats": 0.25, "velocityBase": 85, "type": "GenericNote", "actionParameter": 3 }
+          ]
         }
       }
     },
@@ -173,6 +183,14 @@
               "type": "GuitarUpstroke"
             }
           ]
+        },
+        "Bass": {
+          "totalLengthBeats": 4.0,
+          "events": [
+            { "offsetBeats": 0.0, "lengthBeats": 2.0, "velocityBase": 110, "type": "GenericNote", "actionParameter": 0 },
+            { "offsetBeats": 2.0, "lengthBeats": 1.5, "velocityBase": 100, "type": "GenericNote", "actionParameter": 0 },
+            { "offsetBeats": 3.5, "lengthBeats": 0.5, "velocityBase": 85, "type": "GenericNote", "actionParameter": 1 }
+          ]
         }
       }
     },
@@ -233,6 +251,17 @@
               "velocityBase": 74,
               "type": "GuitarUpstroke"
             }
+          ]
+        },
+        "Bass": {
+          "totalLengthBeats": 4.0,
+          "events": [
+            { "offsetBeats": 0.0, "lengthBeats": 1.0, "velocityBase": 115, "type": "GenericNote", "actionParameter": 0 },
+            { "offsetBeats": 1.0, "lengthBeats": 0.5, "velocityBase": 100, "type": "GenericNote", "actionParameter": 1 },
+            { "offsetBeats": 1.5, "lengthBeats": 0.5, "velocityBase": 95, "type": "GenericNote", "actionParameter": 0 },
+            { "offsetBeats": 2.0, "lengthBeats": 1.0, "velocityBase": 110, "type": "GenericNote", "actionParameter": 0 },
+            { "offsetBeats": 3.0, "lengthBeats": 0.5, "velocityBase": 105, "type": "GenericNote", "actionParameter": 2 },
+            { "offsetBeats": 3.5, "lengthBeats": 0.5, "velocityBase": 90, "type": "GenericNote", "actionParameter": 4 }
           ]
         }
       }

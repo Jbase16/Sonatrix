@@ -12,10 +12,12 @@ MIDIStream BassCompiler::CompileClip(
     const EditorClip &clip, const std::vector<ChordTrackEvent> &chordTimeline,
     Sonatrix::Core::ML::DynamicGrooveVector *grooveVectorContext) const {
   MIDIStream stream;
+  uint8_t lastPitch = 0; // State for register continuity
 
   // Mock Bass Range: E1 (40) to G2 (55)
 
-  for (const auto &mir : clip.basePattern->events) {
+  for (size_t mirIdx = 0; mirIdx < clip.basePattern->events.size(); ++mirIdx) {
+    const auto &mir = clip.basePattern->events[mirIdx];
     MusicalTime eventAbsoluteTime = clip.timelineStart + mir.offsetMap;
 
     // 1. Determine Harmonic Target Pitch
@@ -33,40 +35,52 @@ MIDIStream BassCompiler::CompileClip(
         currentChordIndex < static_cast<int>(chordTimeline.size())) {
       const auto &activeChord = chordTimeline[currentChordIndex].chord;
       int rootOffset = static_cast<int>(activeChord.root);
-
-      // Base calculations
       int rootPitch = 36 + rootOffset; // C1 is 36
-      if (rootPitch < 40) rootPitch += 12; // Shift up if below E1 (40)
-      
-      int calculatedPitch = rootPitch;
-      
+
       // Determine interval from actionParameter
       // 0 = Root, 1 = Perfect Fifth, 2 = Octave Up, 3 = Approach Below, 4 = Approach Above
       int interval = mir.actionParameter;
-      
+      int calculatedPitch = rootPitch;
+
       if (interval == 1) {
-          // Perfect Fifth (7 semitones)
           calculatedPitch = rootPitch + 7;
-          // If the fifth goes too high (e.g. above G2/55), drop it down an octave
-          if (calculatedPitch > 55) {
-              calculatedPitch -= 12;
-          }
+          if (calculatedPitch > 55) calculatedPitch -= 12; // Avoid excessive height
       } else if (interval == 2) {
-          // Octave (12 semitones)
           calculatedPitch = rootPitch + 12; 
-      } else if (interval == 3) {
-          // Chromatic approach below
-          calculatedPitch = rootPitch - 1;
-      } else if (interval == 4) {
-          // Chromatic approach above
-          calculatedPitch = rootPitch + 1;
+      } else if (interval == 3 || interval == 4) {
+          // HARMONIC LOOK-AHEAD
+          // If this is an approach note, try to target the NEXT chord's root
+          int nextChordRoot = rootPitch; 
+          if (currentChordIndex + 1 < static_cast<int>(chordTimeline.size())) {
+              nextChordRoot = 36 + static_cast<int>(chordTimeline[currentChordIndex+1].chord.root);
+          } else if (mirIdx + 1 < clip.basePattern->events.size()) {
+              // If no next chord event, but more notes in pattern, assume it targets current root
+              nextChordRoot = rootPitch;
+          }
+
+          calculatedPitch = (interval == 3) ? (nextChordRoot - 1) : (nextChordRoot + 1);
       }
 
-      // Final bounds check (E1 to G2 loosely)
-      if (calculatedPitch < 35) calculatedPitch += 12; // absolute floor is B0
-      if (calculatedPitch > 60) calculatedPitch -= 12; // absolute ceiling is C4
+      // REGISTER CONTINUITY
+      // If we have a lastPitch, try to keep this note in the nearest octave to it.
+      if (lastPitch > 0) {
+          int distCurr = std::abs(calculatedPitch - static_cast<int>(lastPitch));
+          int distUp = std::abs((calculatedPitch + 12) - static_cast<int>(lastPitch));
+          int distDown = std::abs((calculatedPitch - 12) - static_cast<int>(lastPitch));
+
+          if (distUp < distCurr && distUp < distDown && (calculatedPitch + 12) <= 60) {
+              calculatedPitch += 12;
+          } else if (distDown < distCurr && distDown < distUp && (calculatedPitch - 12) >= 30) {
+              calculatedPitch -= 12;
+          }
+      }
+
+      // Final bounding (E1=40 to G2=55 is the sweet spot, but allow logic flexibility)
+      while (calculatedPitch < 35) calculatedPitch += 12;
+      while (calculatedPitch > 60) calculatedPitch -= 12;
 
       targetPitch = static_cast<uint8_t>(calculatedPitch);
+      lastPitch = targetPitch;
     }
 
     // 2. Query Phase-Locking Groove Vector
