@@ -14,7 +14,9 @@ MIDIStream BassCompiler::CompileClip(
   MIDIStream stream;
   uint8_t lastPitch = 0; // State for register continuity
 
-  // Mock Bass Range: E1 (40) to G2 (55)
+  // REGISTER POLICY: B1 (35) to C4 (60)
+  // Our physical anchors are sparse: B1, C3, C4.
+  // We prioritize the E2 (40) to G3 (55) range for melodic continuity.
 
   for (size_t mirIdx = 0; mirIdx < clip.basePattern->events.size(); ++mirIdx) {
     const auto &mir = clip.basePattern->events[mirIdx];
@@ -35,7 +37,7 @@ MIDIStream BassCompiler::CompileClip(
         currentChordIndex < static_cast<int>(chordTimeline.size())) {
       const auto &activeChord = chordTimeline[currentChordIndex].chord;
       int rootOffset = static_cast<int>(activeChord.root);
-      int rootPitch = 36 + rootOffset; // C1 is 36
+      int rootPitch = 36 + rootOffset; // C2 is 36 (assuming 60=C4)
 
       // Determine interval from actionParameter
       // 0 = Root, 1 = Perfect Fifth, 2 = Octave Up, 3 = Approach Below, 4 = Approach Above
@@ -75,7 +77,8 @@ MIDIStream BassCompiler::CompileClip(
           }
       }
 
-      // Final bounding (E1=40 to G2=55 is the sweet spot, but allow logic flexibility)
+      // Final bounding: Keep performance between B1 (35) and C4 (60)
+      // This ensures we stay within a reasonable distance of our sparse anchors.
       while (calculatedPitch < 35) calculatedPitch += 12;
       while (calculatedPitch > 60) calculatedPitch -= 12;
 
