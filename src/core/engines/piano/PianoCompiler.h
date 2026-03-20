@@ -1,6 +1,6 @@
 #pragma once
 
-#include "src/core/mir/IMIRCompiler.h"
+#include "src/core/midi/IMIRCompiler.h"
 #include "PianoVoicingPlanner.h"
 
 #include <memory>
