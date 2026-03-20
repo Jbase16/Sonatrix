@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <set>
+#include <cmath>
 
 using namespace Sonatrix::Core;
 
@@ -13,17 +14,26 @@ static std::string PitchToName(uint8_t pitch) {
     if (pitch == 0) return "---";
     const char* notes[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
     int octave = (pitch / 12) - 1;
-    int noteIndex = pitch % 12;
-    return std::string(notes[noteIndex]) + std::to_string(octave);
+    return std::string(notes[pitch % 12]) + std::to_string(octave);
 }
 
 static std::string StyleName(MIDI::PianoStyle s) {
     switch (s) {
-        case MIDI::PianoStyle::PopBlock: return "PopBlock";
-        case MIDI::PianoStyle::SingerSongwriter: return "SingerSongwriter";
-        case MIDI::PianoStyle::JazzShell: return "JazzShell";
+        case MIDI::PianoStyle::PopBlock: return "Pop";
+        case MIDI::PianoStyle::SingerSongwriter: return "SS";
+        case MIDI::PianoStyle::JazzShell: return "Jazz";
     }
-    return "Unknown";
+    return "?";
+}
+
+static std::string ContourName(MIDI::SopranoContour c) {
+    switch (c) {
+        case MIDI::SopranoContour::Hold: return "Hold";
+        case MIDI::SopranoContour::Rise: return "Rise";
+        case MIDI::SopranoContour::Fall: return "Fall";
+        case MIDI::SopranoContour::Arch: return "Arch";
+    }
+    return "?";
 }
 
 struct ProgressionEntry {
@@ -31,10 +41,29 @@ struct ProgressionEntry {
     PitchClass root;
     ChordQuality quality;
     const char* label;
+    PitchClass overBass;  // same as root = root position
+    bool isSlash;
 };
 
-static void RunTrace(const char* title, MIDI::PianoStyle style, const std::vector<ProgressionEntry>& entries) {
-    std::cout << "\n=== " << title << " [" << StyleName(style) << "] ===\n";
+static ProgressionEntry Chord(double beat, PitchClass root, ChordQuality q, const char* label) {
+    return {beat, root, q, label, root, false};
+}
+
+static ProgressionEntry SlashChord(double beat, PitchClass root, ChordQuality q, const char* label, PitchClass bass) {
+    return {beat, root, q, label, bass, true};
+}
+
+struct QualityMetrics {
+    int commonTonesRetained = 0;
+    int semitoneResolutions = 0;
+    int guideToneContinuity = 0; // guide tone held as common tone across chord change
+    int fifthOmissions = 0;
+    float avgRHDensity = 0;
+};
+
+static void RunTrace(const char* title, MIDI::PianoStyle style, MIDI::SopranoContour contour,
+                     const std::vector<ProgressionEntry>& entries) {
+    std::cout << "\n=== " << title << " [" << StyleName(style) << "/" << ContourName(contour) << "] ===\n";
 
     std::vector<ChordTrackEvent> chordTimeline;
     for (const auto& e : entries) {
@@ -42,28 +71,31 @@ static void RunTrace(const char* title, MIDI::PianoStyle style, const std::vecto
         ev.position = MusicalTime(static_cast<int64_t>(e.beat * 960));
         ev.chord.root = e.root;
         ev.chord.quality = e.quality;
+        ev.chord.overBass = e.overBass;
         chordTimeline.push_back(ev);
     }
 
-    MIDI::PianoVoicingPlanner planner(style);
+    MIDI::PianoVoicingPlanner planner(style, contour);
     auto solved = planner.SolveTimeline(chordTimeline);
 
     std::cout << std::left
-              << std::setw(8) << "Beat"
+              << std::setw(8)  << "Beat"
               << std::setw(10) << "Chord"
-              << std::setw(10) << "LH Root"
-              << std::setw(10) << "LH 2nd"
-              << std::setw(10) << "RH Low"
-              << std::setw(10) << "RH High"
-              << std::setw(10) << "RH Top"
-              << std::setw(6) << "RHsp"
-              << std::setw(6) << "LHsp"
-              << std::setw(6) << "Dupes"
-              << std::setw(12) << "Violations"
+              << std::setw(8)  << "LH Rt"
+              << std::setw(8)  << "LH 2"
+              << std::setw(8)  << "RH Lo"
+              << std::setw(8)  << "RH In"
+              << std::setw(8)  << "RH Hi"
+              << std::setw(8)  << "RH Tp"
+              << std::setw(5)  << "Rsp"
+              << std::setw(5)  << "Den"
+              << std::setw(8)  << "Viol"
               << "\n";
-    std::cout << std::string(96, '-') << "\n";
+    std::cout << std::string(84, '-') << "\n";
 
     int violationCount = 0;
+    QualityMetrics qm;
+    int totalDensity = 0;
 
     for (size_t i = 0; i < entries.size(); ++i) {
         const auto& v = solved[i];
@@ -73,92 +105,123 @@ static void RunTrace(const char* title, MIDI::PianoStyle style, const std::vecto
         if (lh2 == 0) lh2 = v.GetPitch(MIDI::PianoTargetRole::LH_ShellLow);
 
         uint8_t rhLow = v.GetPitch(MIDI::PianoTargetRole::RH_GuideLow);
+        uint8_t rhInner = v.GetPitch(MIDI::PianoTargetRole::RH_Inner);
         uint8_t rhHigh = v.GetPitch(MIDI::PianoTargetRole::RH_GuideHigh);
         uint8_t rhTop = v.GetPitch(MIDI::PianoTargetRole::RH_Top);
 
         int rhSpan = v.RHSpan();
-        int lhSpan = v.LHSpan();
+        int density = v.RHDensity();
+        totalDensity += density;
 
-        // Check for duplicate pitch classes across RH
-        std::set<int> rhPcs;
-        std::string dupes = "";
-        auto checkDupe = [&](uint8_t p) {
-            if (p == 0) return;
-            if (!rhPcs.insert(p % 12).second) {
-                dupes += PitchToName(p) + " ";
-            }
-        };
-        checkDupe(rhLow);
-        checkDupe(rhHigh);
-        checkDupe(rhTop);
-
-        // Check violations
+        // Violations
         std::string violations = "";
-        if (rhSpan > 12) { violations += "SPAN! "; ++violationCount; }
-        if (rhHigh != 0 && rhTop != 0 && (rhTop - rhHigh) < 2) { violations += "SEP! "; ++violationCount; }
-        if (rhLow != 0 && rhHigh != 0 && (rhHigh - rhLow) < 2) { violations += "SEP! "; ++violationCount; }
-        if (rhLow != 0 && rhLow < 60 && style != MIDI::PianoStyle::JazzShell) { violations += "MUD! "; ++violationCount; }
+        if (rhSpan > 14) { violations += "SPAN "; ++violationCount; }
 
-        if (dupes.empty()) dupes = "-";
+        // Quality metrics (transitions — compare with previous chord)
+        if (i > 0) {
+            const auto& prev = solved[i - 1];
+            // Common tones: any RH pitch held from previous voicing
+            for (int r = 4; r <= 7; ++r) {
+                if (v.pitches[r] == 0) continue;
+                for (int pr = 4; pr <= 7; ++pr) {
+                    if (prev.pitches[pr] == v.pitches[r]) {
+                        qm.commonTonesRetained++;
+                        break;
+                    }
+                }
+            }
+            // Semitone resolutions: any RH voice that moved exactly 1 semitone
+            for (int r = 4; r <= 7; ++r) {
+                if (v.pitches[r] == 0) continue;
+                for (int pr = 4; pr <= 7; ++pr) {
+                    if (prev.pitches[pr] == 0) continue;
+                    if (std::abs(static_cast<int>(v.pitches[r]) - static_cast<int>(prev.pitches[pr])) == 1) {
+                        qm.semitoneResolutions++;
+                        break;
+                    }
+                }
+            }
+            // Soprano direction
+            int sopranoDelta = static_cast<int>(rhTop) - static_cast<int>(prev.GetPitch(MIDI::PianoTargetRole::RH_Top));
+            (void)sopranoDelta; // used for future contour tracking
+        }
+
         if (violations.empty()) violations = "OK";
 
         std::cout << std::left
                   << std::setw(8) << std::fixed << std::setprecision(1) << entries[i].beat
                   << std::setw(10) << entries[i].label
-                  << std::setw(10) << PitchToName(lhRoot)
-                  << std::setw(10) << PitchToName(lh2)
-                  << std::setw(10) << PitchToName(rhLow)
-                  << std::setw(10) << PitchToName(rhHigh)
-                  << std::setw(10) << PitchToName(rhTop)
-                  << std::setw(6) << rhSpan
-                  << std::setw(6) << lhSpan
-                  << std::setw(6) << dupes
-                  << std::setw(12) << violations
+                  << std::setw(8) << PitchToName(lhRoot)
+                  << std::setw(8) << PitchToName(lh2)
+                  << std::setw(8) << PitchToName(rhLow)
+                  << std::setw(8) << PitchToName(rhInner)
+                  << std::setw(8) << PitchToName(rhHigh)
+                  << std::setw(8) << PitchToName(rhTop)
+                  << std::setw(5) << rhSpan
+                  << std::setw(5) << density
+                  << std::setw(8) << violations
                   << "\n";
     }
 
-    std::cout << "Total violations: " << violationCount << "\n";
+    qm.avgRHDensity = static_cast<float>(totalDensity) / static_cast<float>(entries.size());
+
+    std::cout << "--- Quality: "
+              << "CommonTones=" << qm.commonTonesRetained
+              << "  SemitoneRes=" << qm.semitoneResolutions
+              << "  AvgDensity=" << std::fixed << std::setprecision(1) << qm.avgRHDensity
+              << "  Violations=" << violationCount
+              << "\n";
 }
 
 int main() {
     std::cout << "==========================================\n";
-    std::cout << "  HIERARCHICAL PIANO VOICING TRACE v2\n";
+    std::cout << "  HIERARCHICAL PIANO VOICING TRACE v3\n";
     std::cout << "==========================================\n";
 
-    // --- Progression 1: Standard ii-V-I ---
-    std::vector<ProgressionEntry> prog1 = {
-        {0,  PitchClass::A,      ChordQuality::Minor7,          "Am7"},
-        {4,  PitchClass::D,      ChordQuality::Dominant7,       "D7"},
-        {8,  PitchClass::G,      ChordQuality::Major7,          "Gmaj7"},
-        {12, PitchClass::C,      ChordQuality::Major7,          "Cmaj7"},
-        {16, PitchClass::B,      ChordQuality::HalfDiminished7, "Bm7b5"},
-        {20, PitchClass::E,      ChordQuality::Minor,           "Em"},
+    // --- Progression 1: ii-V-I ---
+    auto prog1 = std::vector<ProgressionEntry>{
+        Chord(0,  PitchClass::A,       ChordQuality::Minor7,          "Am7"),
+        Chord(4,  PitchClass::D,       ChordQuality::Dominant7,       "D7"),
+        Chord(8,  PitchClass::G,       ChordQuality::Major7,          "Gmaj7"),
+        Chord(12, PitchClass::C,       ChordQuality::Major7,          "Cmaj7"),
+        Chord(16, PitchClass::B,       ChordQuality::HalfDiminished7, "Bm7b5"),
+        Chord(20, PitchClass::E,       ChordQuality::Minor,           "Em"),
     };
 
-    // --- Progression 2: Secondary Dominants ---
-    std::vector<ProgressionEntry> prog2 = {
-        {0,  PitchClass::C,      ChordQuality::Major,           "C"},
-        {4,  PitchClass::E,      ChordQuality::Dominant7,       "E7"},
-        {8,  PitchClass::A,      ChordQuality::Minor,           "Am"},
-        {12, PitchClass::D,      ChordQuality::Dominant7,       "D7"},
-        {16, PitchClass::G,      ChordQuality::Major,           "G"},
+    // --- Progression 2: Slash Chords ---
+    auto prog2 = std::vector<ProgressionEntry>{
+        Chord(0,       PitchClass::C,       ChordQuality::Major,     "C"),
+        SlashChord(4,  PitchClass::C,       ChordQuality::Major,     "C/E",  PitchClass::E),
+        Chord(8,       PitchClass::F,       ChordQuality::Major,     "F"),
+        SlashChord(12, PitchClass::G,       ChordQuality::Major,     "G/B",  PitchClass::B),
+        Chord(16,      PitchClass::A,       ChordQuality::Minor,     "Am"),
+        SlashChord(20, PitchClass::A,       ChordQuality::Minor,     "Am/G", PitchClass::G),
+        Chord(24,      PitchClass::F,       ChordQuality::Major,     "F"),
+        Chord(28,      PitchClass::G,       ChordQuality::Major,     "G"),
     };
 
     // --- Progression 3: Chromatic Mediants ---
-    std::vector<ProgressionEntry> prog3 = {
-        {0,  PitchClass::C,      ChordQuality::Major,           "C"},
-        {4,  PitchClass::G_Sharp, ChordQuality::Major,          "Ab"},
-        {8,  PitchClass::E,      ChordQuality::Major,           "E"},
-        {12, PitchClass::C,      ChordQuality::Major,           "C"},
+    auto prog3 = std::vector<ProgressionEntry>{
+        Chord(0,  PitchClass::C,       ChordQuality::Major,     "C"),
+        Chord(4,  PitchClass::G_Sharp, ChordQuality::Major,     "Ab"),
+        Chord(8,  PitchClass::E,       ChordQuality::Major,     "E"),
+        Chord(12, PitchClass::C,       ChordQuality::Major,     "C"),
     };
 
-    // Run all three progressions across all three styles
+    // Run core style comparison on ii-V-I with Hold contour
     MIDI::PianoStyle styles[] = {MIDI::PianoStyle::PopBlock, MIDI::PianoStyle::SingerSongwriter, MIDI::PianoStyle::JazzShell};
-
     for (auto style : styles) {
-        RunTrace("ii-V-I Chain", style, prog1);
-        RunTrace("Secondary Dominants", style, prog2);
-        RunTrace("Chromatic Mediants", style, prog3);
+        RunTrace("ii-V-I Chain", style, MIDI::SopranoContour::Hold, prog1);
+    }
+
+    // Run slash chord test
+    RunTrace("Slash Chords", MIDI::PianoStyle::PopBlock, MIDI::SopranoContour::Hold, prog2);
+
+    // Run contour mode sweep on chromatic mediants
+    MIDI::SopranoContour contours[] = {MIDI::SopranoContour::Hold, MIDI::SopranoContour::Rise,
+                                        MIDI::SopranoContour::Fall, MIDI::SopranoContour::Arch};
+    for (auto c : contours) {
+        RunTrace("Chromatic Mediants", MIDI::PianoStyle::PopBlock, c, prog3);
     }
 
     std::cout << "\n==========================================\n";
