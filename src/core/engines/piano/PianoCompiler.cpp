@@ -2,77 +2,63 @@
 
 namespace Sonatrix {
 namespace Core {
-namespace Engines {
+namespace MIDI {
 
-std::unique_ptr<MIDI::IMIRCompiler> CreatePianoEngine() {
+std::unique_ptr<IMIRCompiler> CreatePianoEngine() {
   return std::make_unique<PianoCompiler>();
 }
 
-MIDI::MIDIStream PianoCompiler::CompileClip(
+PianoCompiler::PianoCompiler() {
+  m_planner = std::make_unique<PianoVoicingPlanner>();
+}
+
+MIDIStream PianoCompiler::CompileClip(
     const EditorClip &clip, const std::vector<ChordTrackEvent> &chordTimeline,
     Sonatrix::Core::ML::DynamicGrooveVector *grooveVectorContext) const {
-  MIDI::MIDIStream stream;
+  
+  MIDIStream stream;
 
-  // In a real implementation we maintain state across the clip:
-  std::vector<uint8_t> currentVoicing;
-  ActiveChordContext mockContext; // Mocked active context
+  // 1. Solve the Voice Leading for the entire timeline
+  // In a real implementation we would only solve this when chords change,
+  // but for now we solve the block.
+  m_planner->SolveTimeline(chordTimeline);
 
-  // 1. Voice Leading Pass
+  // 2. Map MIR Events to the optimized Voicing
   for (const auto &mir : clip.basePattern->events) {
-    if (mir.type != ArticulationType::GenericNote &&
-        mir.type != ArticulationType::PianoChord) {
-      continue;
+    MusicalTime eventTime = clip.timelineStart + mir.offsetMap;
+
+    // Find active chord index
+    int currentChordIndex = -1;
+    for (size_t i = 0; i < chordTimeline.size(); ++i) {
+      if (eventTime >= chordTimeline[i].position) {
+        currentChordIndex = static_cast<int>(i);
+      } else {
+        break;
+      }
     }
 
-    MusicalTime triggerTime = clip.timelineStart + mir.offsetMap;
+    if (currentChordIndex < 0) continue;
 
-    // Mocking the smooth voice algorithm execution
-    currentVoicing = CalculateSmoothVoicing(currentVoicing, mockContext);
+    // Retrieve optimal voicing
+    PianoVoicing voicing = m_planner->GetVoicingForChordIndex(currentChordIndex);
+    if (!voicing.IsValid()) continue;
 
-    // Render Notes
-    for (uint8_t currentNote : currentVoicing) {
-      stream.events.push_back({triggerTime, MIDI::MIDIEventType::NoteOn, 0,
-                               currentNote, mir.velocityBase});
+    // Map Action Parameter to Semantic Role
+    PianoTargetRole role = static_cast<PianoTargetRole>(mir.actionParameter);
+    uint8_t pitch = voicing.GetPitch(role);
+    if (pitch == 0) continue; // Note not present in this voicing
 
-      MusicalTime offTime = triggerTime + BeatsToTime(mir.lengthBeats);
-      stream.events.push_back(
-          {offTime, MIDI::MIDIEventType::NoteOff, 0, currentNote, 0});
-    }
+    // Render MIDI
+    stream.events.push_back({eventTime, MIDIEventType::NoteOn, 0, pitch, mir.velocityBase});
+    
+    uint32_t durTicks = (mir.lengthBeats > 0) ? static_cast<uint32_t>(mir.lengthBeats * 480) : 480;
+    stream.events.push_back({eventTime + MusicalTime(durTicks), MIDIEventType::NoteOff, 0, pitch, 0});
   }
-
-  // 2. Automated Pedal Pass (CC64)
-  SynthesizePedal(stream, clip.timelineStart,
-                  clip.timelineStart + BeatsToTime(4.0), chordTimeline);
 
   stream.SortByTime();
   return stream;
 }
 
-std::vector<uint8_t> PianoCompiler::CalculateSmoothVoicing(
-    const std::vector<uint8_t> & /*previousVoicing*/,
-    const ActiveChordContext & /*targetChord*/
-) const {
-  // PhD Component: Voice leading combinatorial optimizer constraint logic.
-  // E.g., given a previous voicing, we penalize aggregate intervallic leaps.
-
-  // Mocked output: Hand-voiced C Major triad over C2 bass
-  return {36, 60, 64, 67};
-}
-
-void PianoCompiler::SynthesizePedal(
-    MIDI::MIDIStream &outStream, MusicalTime startTime, MusicalTime /*endTime*/,
-    const std::vector<ChordTrackEvent> & /*chordTimeline*/
-) const {
-  // CC64: 127 = Down, 0 = Up
-  // A real implementation scans the duration and looks for chord transitions.
-  // If Harmony changes but Bass is identical: "Half-pedal" (CC 64 -> 60 -> 127)
-  // If Harmony changes and Bass changes: Full pedal clear (CC 64 -> 0 -> 127)
-
-  // Mock simple sustain for the clip duration
-  outStream.events.push_back(
-      {startTime, MIDI::MIDIEventType::ControlChange, 0, 64, 127});
-}
-
-} // namespace Engines
+} // namespace MIDI
 } // namespace Core
 } // namespace Sonatrix
