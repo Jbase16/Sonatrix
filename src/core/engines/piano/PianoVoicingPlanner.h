@@ -48,33 +48,34 @@ struct PianoVoicing {
 };
 
 // ---------------------------------------------------------
-// Piano Voicing Planner
+// Piano Voicing Planner (Hierarchical Contrapuntal Solver)
 // ---------------------------------------------------------
-// An energy-based constraint solver. It does not output MIDI.
-// It generates candidates for each chord and uses Viterbi pathfinding
-// to find the sequence with the lowest transition energy (smooth voice-leading).
+// Generates a structural voice-leading graph in distinct passes:
+// 1. Macro: Outer shells (Soprano and Bass contour).
+// 2. Meso: Neo-Riemannian inner voice fluid filling.
 class PianoVoicingPlanner {
 public:
     PianoVoicingPlanner();
     ~PianoVoicingPlanner() = default;
 
     // The main engine entry point:
-    // Takes the full song timeline and pre-calculates the optimal 
-    // sequence of voicings, cached internally.
     bool SolveTimeline(const std::vector<ChordTrackEvent>& chordTimeline);
 
-    // Returns the cached optimum. If un-solved, generates a naive default.
+    // Returns the cached optimum.
     PianoVoicing GetVoicingForChordIndex(size_t index) const;
 
 private:
-    std::vector<std::vector<PianoVoicing>> m_candidatesPerChord;
     std::vector<PianoVoicing> m_solvedTimeline;
 
-    // Step 1: Combinatorial Space
-    void GenerateCandidates(const ChordTrackEvent& event, std::vector<PianoVoicing>& outVoicings) const;
+    // Phase A: Macro Constraints
+    // Analyzes the chord progression to determine logical top-line (Soprano)
+    // and bottom-line (Bass) trajectories based on phrase arc.
+    void SolveOuterVoices(const std::vector<ChordTrackEvent>& chordTimeline);
     
-    // Step 2: Energy/Cost Evaluation
-    float CalculateTransitionCost(const PianoVoicing& from, const PianoVoicing& to) const;
+    // Phase B: Meso Fluidity
+    // Given locked outer limits, pours inner guide tones (3/7/tensions)
+    // into the remaining space minimizing vertical movement.
+    void SolveInnerVoices(const std::vector<ChordTrackEvent>& chordTimeline);
 };
 
 } // namespace MIDI
