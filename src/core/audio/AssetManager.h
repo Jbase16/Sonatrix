@@ -30,6 +30,11 @@ public:
     return mockBass_;
   }
 
+  bool LoadAcousticPianoAnchors(const std::string &directoryPath);
+  const InstrumentArticulation &GetAcousticPianoArticulation() const {
+    return acousticPiano_;
+  }
+
 private:
   AssetManager() = default;
   ~AssetManager() = default;
@@ -40,6 +45,7 @@ private:
   InstrumentArticulation acousticGuitar_;
   InstrumentArticulation electricBass_;
   InstrumentArticulation mockBass_;
+  InstrumentArticulation acousticPiano_;
 };
 
 } // namespace Audio

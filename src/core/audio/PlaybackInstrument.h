@@ -9,7 +9,8 @@ namespace Audio {
 enum class PlaybackInstrument : uint8_t {
   Guitar,
   ElectricBass,
-  MockBass
+  MockBass,
+  AcousticPiano
 };
 
 } // namespace Audio

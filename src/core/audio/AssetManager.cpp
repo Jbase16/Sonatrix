@@ -92,6 +92,18 @@ bool AssetManager::LoadMockBassAnchors(const std::string &directoryPath) {
       mockBass_, "mock bass anchor");
 }
 
+bool AssetManager::LoadAcousticPianoAnchors(const std::string &directoryPath) {
+  return LoadAnchorSet(
+      directoryPath, "Acoustic_Piano_Anchors", PlaybackInstrument::AcousticPiano,
+      {
+          {"piano_c3.wav", 48},
+          {"piano_c4.wav", 60},
+          {"piano_c5.wav", 72},
+      },
+      0.6f,
+      acousticPiano_, "piano anchor");
+}
+
 } // namespace Audio
 } // namespace Core
 } // namespace Sonatrix
