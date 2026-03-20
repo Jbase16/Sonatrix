@@ -27,10 +27,6 @@ public:
       const EditorClip &clip,
       const std::vector<ChordTrackEvent> &chordTimeline,
       Sonatrix::Core::ML::DynamicGrooveVector *grooveVectorContext = nullptr) const override;
-
-private:
-  // The core AI intelligence that solves voicing continuity for the entire track
-  std::unique_ptr<PianoVoicingPlanner> m_planner;
 };
 
 std::unique_ptr<IMIRCompiler> CreatePianoEngine();

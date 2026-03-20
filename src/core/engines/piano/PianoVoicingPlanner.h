@@ -59,23 +59,15 @@ public:
     ~PianoVoicingPlanner() = default;
 
     // The main engine entry point:
-    bool SolveTimeline(const std::vector<ChordTrackEvent>& chordTimeline);
-
-    // Returns the cached optimum.
-    PianoVoicing GetVoicingForChordIndex(size_t index) const;
+    // Takes the full timeline and returns the solved structural voicings.
+    std::vector<PianoVoicing> SolveTimeline(const std::vector<ChordTrackEvent>& chordTimeline) const;
 
 private:
-    std::vector<PianoVoicing> m_solvedTimeline;
-
     // Phase A: Macro Constraints
-    // Analyzes the chord progression to determine logical top-line (Soprano)
-    // and bottom-line (Bass) trajectories based on phrase arc.
-    void SolveOuterVoices(const std::vector<ChordTrackEvent>& chordTimeline);
+    void SolveOuterVoices(const std::vector<ChordTrackEvent>& chordTimeline, std::vector<PianoVoicing>& inOutTimeline) const;
     
     // Phase B: Meso Fluidity
-    // Given locked outer limits, pours inner guide tones (3/7/tensions)
-    // into the remaining space minimizing vertical movement.
-    void SolveInnerVoices(const std::vector<ChordTrackEvent>& chordTimeline);
+    void SolveInnerVoices(const std::vector<ChordTrackEvent>& chordTimeline, std::vector<PianoVoicing>& inOutTimeline) const;
 };
 
 } // namespace MIDI

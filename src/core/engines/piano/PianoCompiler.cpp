@@ -9,7 +9,6 @@ std::unique_ptr<IMIRCompiler> CreatePianoEngine() {
 }
 
 PianoCompiler::PianoCompiler() {
-  m_planner = std::make_unique<PianoVoicingPlanner>();
 }
 
 MIDIStream PianoCompiler::CompileClip(
@@ -18,10 +17,9 @@ MIDIStream PianoCompiler::CompileClip(
   
   MIDIStream stream;
 
-  // 1. Solve the Voice Leading for the entire timeline
-  // In a real implementation we would only solve this when chords change,
-  // but for now we solve the block.
-  m_planner->SolveTimeline(chordTimeline);
+  // 1. Solve the Voice Leading for the entire timeline safely on the stack
+  PianoVoicingPlanner planner;
+  std::vector<PianoVoicing> solvedTimeline = planner.SolveTimeline(chordTimeline);
 
   // 2. Map MIR Events to the optimized Voicing
   for (const auto &mir : clip.basePattern->events) {
@@ -37,10 +35,10 @@ MIDIStream PianoCompiler::CompileClip(
       }
     }
 
-    if (currentChordIndex < 0) continue;
+    if (currentChordIndex < 0 || currentChordIndex >= solvedTimeline.size()) continue;
 
-    // Retrieve optimal voicing
-    PianoVoicing voicing = m_planner->GetVoicingForChordIndex(currentChordIndex);
+    // Retrieve optimal voicing directly from local vector
+    const PianoVoicing& voicing = solvedTimeline[currentChordIndex];
     if (!voicing.IsValid()) continue;
 
     // Map Action Parameter to Semantic Role

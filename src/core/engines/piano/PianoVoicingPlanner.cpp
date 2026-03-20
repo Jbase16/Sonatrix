@@ -62,30 +62,20 @@ static std::vector<int> GetChordTonesInRange(const ActiveChordContext& chord, in
 PianoVoicingPlanner::PianoVoicingPlanner() {
 }
 
-bool PianoVoicingPlanner::SolveTimeline(const std::vector<ChordTrackEvent>& chordTimeline) {
-    m_solvedTimeline.clear();
-    if (chordTimeline.empty()) return false;
-
-    // Pre-allocate the timeline slots
-    m_solvedTimeline.resize(chordTimeline.size());
+std::vector<PianoVoicing> PianoVoicingPlanner::SolveTimeline(const std::vector<ChordTrackEvent>& chordTimeline) const {
+    std::vector<PianoVoicing> timeline(chordTimeline.size());
+    if (chordTimeline.empty()) return timeline;
 
     // Phase A: Structural Skeleton
-    SolveOuterVoices(chordTimeline);
+    SolveOuterVoices(chordTimeline, timeline);
 
     // Phase B: Harmonic Fill
-    SolveInnerVoices(chordTimeline);
+    SolveInnerVoices(chordTimeline, timeline);
 
-    return true;
+    return timeline;
 }
 
-PianoVoicing PianoVoicingPlanner::GetVoicingForChordIndex(size_t index) const {
-    if (index < m_solvedTimeline.size()) {
-        return m_solvedTimeline[index];
-    }
-    return PianoVoicing();
-}
-
-void PianoVoicingPlanner::SolveOuterVoices(const std::vector<ChordTrackEvent>& chordTimeline) {
+void PianoVoicingPlanner::SolveOuterVoices(const std::vector<ChordTrackEvent>& chordTimeline, std::vector<PianoVoicing>& inOutTimeline) const {
     int currentSoprano = 72; // Default starting gravity center (C5)
 
     for (size_t i = 0; i < chordTimeline.size(); ++i) {
@@ -95,8 +85,8 @@ void PianoVoicingPlanner::SolveOuterVoices(const std::vector<ChordTrackEvent>& c
         int rootPitch = 36 + static_cast<int>(ctx.root); // Start C2
         if (rootPitch > 45) rootPitch -= 12; // Keep LH bass tight between E1(40) to A2(45) roughly
 
-        m_solvedTimeline[i].pitches[static_cast<int>(PianoTargetRole::LH_Root)]   = rootPitch;
-        m_solvedTimeline[i].pitches[static_cast<int>(PianoTargetRole::LH_Fifth)]  = rootPitch + 7;
+        inOutTimeline[i].pitches[static_cast<int>(PianoTargetRole::LH_Root)]   = rootPitch;
+        inOutTimeline[i].pitches[static_cast<int>(PianoTargetRole::LH_Fifth)]  = rootPitch + 7;
         
         // 2. Establish Soprano Trajectory (Macro Top / RH_Top)
         // Bounding pop melody range between F4 (65) and G5 (79)
@@ -106,13 +96,10 @@ void PianoVoicingPlanner::SolveOuterVoices(const std::vector<ChordTrackEvent>& c
         float bestCost = 99999.0f;
         
         for (int t : rhTones) {
-            // Evaluates smoothness and phrasing. 
-            // Avoids jumping unless pulled by gravity to the register center (72).
             float distCost = std::abs(t - currentSoprano);
             float gravityCost = std::abs(t - 72) * 0.1f;
             float totalCost = distCost + gravityCost;
             
-            // Explicitly reward common tones (zero distance) to build sustained counter-lines
             if (distCost == 0.0f) {
                 totalCost -= 0.5f; 
             }
@@ -123,34 +110,30 @@ void PianoVoicingPlanner::SolveOuterVoices(const std::vector<ChordTrackEvent>& c
             }
         }
         
-        m_solvedTimeline[i].pitches[static_cast<int>(PianoTargetRole::RH_Top)] = static_cast<uint8_t>(bestTone);
+        inOutTimeline[i].pitches[static_cast<int>(PianoTargetRole::RH_Top)] = static_cast<uint8_t>(bestTone);
         currentSoprano = bestTone; // Track momentum for next chord boundary
     }
 }
 
-void PianoVoicingPlanner::SolveInnerVoices(const std::vector<ChordTrackEvent>& chordTimeline) {
-    // Meso Pass: Structurally "hang" the inner guide tones below the solved Soprano boundary.
-    // Because the Soprano boundary moves smoothly, the inner voices will automatically 
-    // exhibit Neo-Riemannian voice-leading without complex matrix searching.
+void PianoVoicingPlanner::SolveInnerVoices(const std::vector<ChordTrackEvent>& chordTimeline, std::vector<PianoVoicing>& inOutTimeline) const {
     for (size_t i = 0; i < chordTimeline.size(); ++i) {
-        int topPitch = m_solvedTimeline[i].pitches[static_cast<int>(PianoTargetRole::RH_Top)];
+        int topPitch = inOutTimeline[i].pitches[static_cast<int>(PianoTargetRole::RH_Top)];
         const auto& ctx = chordTimeline[i].chord;
         
-        // Search downwards from the note immediately beneath the Soprano.
         auto allTones = GetChordTonesInRange(ctx, 48, topPitch - 1); 
         
         int guideHigh = 0;
         int guideLow = 0;
         
         if (allTones.size() >= 2) {
-            guideHigh = allTones[allTones.size() - 1]; // First chord tone below top
-            guideLow = allTones[allTones.size() - 2];  // Second chord tone below top
+            guideHigh = allTones[allTones.size() - 1]; 
+            guideLow = allTones[allTones.size() - 2];  
         } else if (allTones.size() == 1) {
             guideHigh = allTones[0];
         }
         
-        m_solvedTimeline[i].pitches[static_cast<int>(PianoTargetRole::RH_GuideHigh)] = static_cast<uint8_t>(guideHigh);
-        m_solvedTimeline[i].pitches[static_cast<int>(PianoTargetRole::RH_GuideLow)]  = static_cast<uint8_t>(guideLow);
+        inOutTimeline[i].pitches[static_cast<int>(PianoTargetRole::RH_GuideHigh)] = static_cast<uint8_t>(guideHigh);
+        inOutTimeline[i].pitches[static_cast<int>(PianoTargetRole::RH_GuideLow)]  = static_cast<uint8_t>(guideLow);
     }
 }
 

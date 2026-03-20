@@ -69,9 +69,9 @@ int main() {
 
     std::cout << "1. Resolving Outer & Inner Voices via PianoVoicingPlanner...\n\n";
 
-    // Directly instantiate the planner to trace the structural graph
+    // Directly instantiate the planner to trace the structural graph safely on the stack
     MIDI::PianoVoicingPlanner planner;
-    planner.SolveTimeline(chordTimeline);
+    std::vector<MIDI::PianoVoicing> solvedTimeline = planner.SolveTimeline(chordTimeline);
 
     std::cout << std::left 
               << std::setw(8) << "Beat"
@@ -98,7 +98,7 @@ int main() {
         else if (q == ChordQuality::Major7) chordName += "maj7";
         else if (q == ChordQuality::HalfDiminished7) chordName += "m7b5";
 
-        MIDI::PianoVoicing v = planner.GetVoicingForChordIndex(i);
+        MIDI::PianoVoicing v = solvedTimeline[i];
 
         std::string soprano = PitchToName(v.GetPitch(MIDI::PianoTargetRole::RH_Top));
         std::string innerH = PitchToName(v.GetPitch(MIDI::PianoTargetRole::RH_GuideHigh));
