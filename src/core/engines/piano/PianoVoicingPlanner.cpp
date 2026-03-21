@@ -353,9 +353,75 @@ void PianoVoicingPlanner::SolveOuterVoices(const std::vector<ChordTrackEvent>& c
 }
 
 // ---------------------------------------------------------
-// Pass 3: Inner Voice Fill + RH_Inner Color Tone
+// Pass 3: Inner Voice Fill with Assignment Continuity
 // ---------------------------------------------------------
+// The key difference from Phase 19.3: inner voices now carry
+// their previous assignments forward as soft targets. Instead
+// of blindly picking the first valid candidate, we score each
+// candidate against both harmonic priority AND proximity to
+// the previous chord's same-role pitch.
+
+// Harmonic extension table: maps (style, quality) -> preferred
+// color pitch class interval from root. Returns -1 if no
+// color tone is appropriate for this context.
+static int GetColorToneInterval(PianoStyle style, ChordQuality quality) {
+    switch (style) {
+        case PianoStyle::PopBlock:
+            switch (quality) {
+                case ChordQuality::Major:
+                case ChordQuality::Major7:
+                case ChordQuality::Minor:
+                case ChordQuality::Minor7:
+                    return 7; // 5th as thickening
+                case ChordQuality::Dominant7:
+                    return 2; // 9th adds brightness
+                case ChordQuality::Sus2:
+                case ChordQuality::Sus4:
+                case ChordQuality::Diminished:
+                case ChordQuality::HalfDiminished7:
+                    return -1; // already colorful or too dense
+                default:
+                    return 7;
+            }
+        case PianoStyle::SingerSongwriter:
+            switch (quality) {
+                case ChordQuality::Major:
+                case ChordQuality::Major7:
+                case ChordQuality::Minor:
+                case ChordQuality::Minor7:
+                case ChordQuality::Dominant7:
+                    return 2; // 9th for shimmer
+                case ChordQuality::Sus4:
+                    return 2; // 9th for open color
+                case ChordQuality::Sus2:
+                    return -1; // already has the 2nd
+                default:
+                    return -1;
+            }
+        case PianoStyle::JazzShell:
+            switch (quality) {
+                case ChordQuality::Major7:
+                case ChordQuality::Minor:
+                case ChordQuality::Major:
+                    return 2; // 9th
+                case ChordQuality::Minor7:
+                case ChordQuality::HalfDiminished7:
+                    return 5; // 11th
+                case ChordQuality::Dominant7:
+                    return 9; // 13th
+                default:
+                    return -1;
+            }
+    }
+    return -1;
+}
+
 void PianoVoicingPlanner::SolveInnerVoices(const std::vector<ChordTrackEvent>& chordTimeline, std::vector<PianoVoicing>& t) const {
+    // Previous voice assignments — chord 0 has no history
+    int prevGuideHigh = 0;
+    int prevGuideLow = 0;
+    int prevInner = 0;
+
     for (size_t i = 0; i < chordTimeline.size(); ++i) {
         int topPitch = t[i].pitches[static_cast<int>(PianoTargetRole::RH_Top)];
         const auto& ctx = chordTimeline[i].chord;
@@ -363,109 +429,147 @@ void PianoVoicingPlanner::SolveInnerVoices(const std::vector<ChordTrackEvent>& c
         int searchFloor = std::max(m_rhMinPitch, topPitch - m_maxRHSpan);
         auto candidates = GetChordTonesInRange(ctx, searchFloor, topPitch - 1);
 
-        // Priority sort: guide tones > root > 5th
-        std::sort(candidates.begin(), candidates.end(), [&](int a, int b) {
-            bool aGuide = IsGuideTone(ctx, a % 12);
-            bool bGuide = IsGuideTone(ctx, b % 12);
-            if (aGuide != bGuide) return aGuide;
-
-            bool aFifth = IsFifth(ctx, a % 12);
-            bool bFifth = IsFifth(ctx, b % 12);
-            if (aFifth != bFifth) return !aFifth;
-
-            return a > b;
-        });
-
-        int guideHigh = 0;
-        int guideLow = 0;
-        int lastPlaced = topPitch;
         std::vector<int> usedPcs;
         usedPcs.push_back(topPitch % 12);
 
-        for (int candidate : candidates) {
-            int cpc = candidate % 12;
-            if (std::find(usedPcs.begin(), usedPcs.end(), cpc) != usedPcs.end()) continue;
-            if (lastPlaced - candidate < m_minVoiceSep) continue;
-            if (candidate < m_rhMinPitch) continue;
+        // --- GuideHigh: scored selection ---
+        int guideHigh = 0;
+        {
+            float bestScore = -99999.0f;
+            for (int c : candidates) {
+                int cpc = c % 12;
+                if (std::find(usedPcs.begin(), usedPcs.end(), cpc) != usedPcs.end()) continue;
+                if (topPitch - c < m_minVoiceSep) continue;
+                if (c < m_rhMinPitch) continue;
 
-            if (guideHigh == 0) {
-                guideHigh = candidate;
-                lastPlaced = candidate;
-                usedPcs.push_back(cpc);
-            } else if (guideLow == 0) {
-                guideLow = candidate;
-                lastPlaced = candidate;
-                usedPcs.push_back(cpc);
-                break;
+                float score = 0.0f;
+
+                // Harmonic priority
+                if (IsGuideTone(ctx, cpc)) score += 3.0f;
+                else if (IsFifth(ctx, cpc)) score -= 1.0f;
+                else score += 1.0f;
+
+                // Proximity to soprano
+                score -= static_cast<float>(topPitch - c) * 0.1f;
+
+                // Continuity from previous GuideHigh
+                if (prevGuideHigh > 0) {
+                    int dist = std::abs(c - prevGuideHigh);
+                    if (dist == 0) score += 4.0f;
+                    else if (dist == 1) score += 2.5f;
+                    else if (dist == 2) score += 1.5f;
+                    else score -= static_cast<float>(dist) * 0.3f;
+                }
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    guideHigh = c;
+                }
             }
         }
 
+        if (guideHigh > 0) usedPcs.push_back(guideHigh % 12);
         t[i].pitches[static_cast<int>(PianoTargetRole::RH_GuideHigh)] = static_cast<uint8_t>(guideHigh);
-        t[i].pitches[static_cast<int>(PianoTargetRole::RH_GuideLow)]  = static_cast<uint8_t>(guideLow);
 
-        // --- RH_Inner: Color Tone with Avoid-Tone Logic ---
-        if (!m_allowRHInner) continue;
+        // --- GuideLow: scored selection ---
+        int guideLow = 0;
+        {
+            float bestScore = -99999.0f;
+            int lastPlaced = (guideHigh > 0) ? guideHigh : topPitch;
 
-        int colorPc = -1;
-        switch (m_style) {
-            case PianoStyle::PopBlock: {
-                int fifthPc = (static_cast<int>(ctx.root) + 7) % 12;
-                bool fifthPresent = false;
-                for (int pc : usedPcs) {
-                    if (pc == fifthPc) { fifthPresent = true; break; }
+            for (int c : candidates) {
+                int cpc = c % 12;
+                if (std::find(usedPcs.begin(), usedPcs.end(), cpc) != usedPcs.end()) continue;
+                if (lastPlaced - c < m_minVoiceSep) continue;
+                if (c < m_rhMinPitch) continue;
+
+                float score = 0.0f;
+
+                if (IsGuideTone(ctx, cpc)) score += 3.0f;
+                else if (IsFifth(ctx, cpc)) score -= 1.0f;
+                else score += 1.0f;
+
+                score -= static_cast<float>(topPitch - c) * 0.05f;
+
+                // Continuity from previous GuideLow
+                if (prevGuideLow > 0) {
+                    int dist = std::abs(c - prevGuideLow);
+                    if (dist == 0) score += 4.0f;
+                    else if (dist == 1) score += 2.5f;
+                    else if (dist == 2) score += 1.5f;
+                    else score -= static_cast<float>(dist) * 0.3f;
                 }
-                if (!fifthPresent) colorPc = fifthPc;
-                break;
-            }
-            case PianoStyle::SingerSongwriter:
-                colorPc = GetNinthPc(ctx);
-                break;
-            case PianoStyle::JazzShell: {
-                int seventhInt = GetSeventhInterval(ctx.quality);
-                if (seventhInt >= 0) {
-                    colorPc = GetNinthPc(ctx);
-                } else {
-                    colorPc = (static_cast<int>(ctx.root) + 10) % 12;
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    guideLow = c;
                 }
-                break;
             }
         }
 
-        if (colorPc < 0) continue;
+        if (guideLow > 0) usedPcs.push_back(guideLow % 12);
+        t[i].pitches[static_cast<int>(PianoTargetRole::RH_GuideLow)] = static_cast<uint8_t>(guideLow);
 
-        // Avoid-tone gate: reject color tones that create contextual clashes
-        if (IsAvoidTone(ctx, colorPc)) continue;
+        // --- RH_Inner: Color Tone (extension-table driven) ---
+        int innerPitch = 0;
 
-        // Duplicate gate
-        if (std::find(usedPcs.begin(), usedPcs.end(), colorPc) != usedPcs.end()) continue;
+        if (m_allowRHInner) {
+            int colorInterval = GetColorToneInterval(m_style, ctx.quality);
+            if (colorInterval >= 0) {
+                int colorPc = (static_cast<int>(ctx.root) + colorInterval) % 12;
 
-        // Find physical placement
-        int bestColor = 0;
-        int bestDist = 999;
-        for (int p = searchFloor; p < topPitch; ++p) {
-            if (p % 12 != colorPc) continue;
-            if (p < m_rhMinPitch) continue;
+                if (!IsAvoidTone(ctx, colorPc) &&
+                    std::find(usedPcs.begin(), usedPcs.end(), colorPc) == usedPcs.end()) {
 
-            bool tooClose = false;
-            if (std::abs(p - topPitch) < m_minVoiceSep) tooClose = true;
-            if (guideHigh != 0 && std::abs(p - guideHigh) < m_minVoiceSep) tooClose = true;
-            if (guideLow != 0 && std::abs(p - guideLow) < m_minVoiceSep) tooClose = true;
-            if (tooClose) continue;
+                    int bestColor = 0;
+                    float bestScore = -99999.0f;
 
-            int voiceCenter = (topPitch + (guideLow != 0 ? guideLow : guideHigh)) / 2;
-            int dist = std::abs(p - voiceCenter);
-            if (dist < bestDist) {
-                bestDist = dist;
-                bestColor = p;
+                    for (int p = searchFloor; p < topPitch; ++p) {
+                        if (p % 12 != colorPc) continue;
+                        if (p < m_rhMinPitch) continue;
+
+                        bool tooClose = false;
+                        if (std::abs(p - topPitch) < m_minVoiceSep) tooClose = true;
+                        if (guideHigh > 0 && std::abs(p - guideHigh) < m_minVoiceSep) tooClose = true;
+                        if (guideLow > 0 && std::abs(p - guideLow) < m_minVoiceSep) tooClose = true;
+                        if (tooClose) continue;
+
+                        float score = 0.0f;
+
+                        // Center placement
+                        int voiceCenter = (topPitch + (guideLow > 0 ? guideLow : guideHigh)) / 2;
+                        score -= static_cast<float>(std::abs(p - voiceCenter)) * 0.2f;
+
+                        // Continuity from previous Inner
+                        if (prevInner > 0) {
+                            int dist = std::abs(p - prevInner);
+                            if (dist == 0) score += 4.0f;
+                            else if (dist == 1) score += 2.5f;
+                            else if (dist == 2) score += 1.5f;
+                            else score -= static_cast<float>(dist) * 0.3f;
+                        }
+
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestColor = p;
+                        }
+                    }
+
+                    innerPitch = bestColor;
+                }
             }
         }
 
-        if (bestColor > 0) {
-            t[i].pitches[static_cast<int>(PianoTargetRole::RH_Inner)] = static_cast<uint8_t>(bestColor);
-        }
+        t[i].pitches[static_cast<int>(PianoTargetRole::RH_Inner)] = static_cast<uint8_t>(innerPitch);
+
+        // Carry forward for next chord's continuity
+        prevGuideHigh = guideHigh;
+        prevGuideLow = guideLow;
+        prevInner = innerPitch;
     }
 }
 
 } // namespace MIDI
 } // namespace Core
 } // namespace Sonatrix
+
