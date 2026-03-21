@@ -54,16 +54,17 @@ static ProgressionEntry Sl(double beat, PitchClass root, ChordQuality q, const c
 // ---------------------------------------------------------
 // Voice Identity Metrics
 // ---------------------------------------------------------
-// Tracks whether the SAME ROLE retains the same pitch or
-// resolves by semitone across chord changes. This is not
-// set-overlap. This is structural identity.
 struct VoiceIdentityMetrics {
-    int roleRetained[4] = {0}; // per RH role (GuideLow=0, Inner=1, GuideHigh=2, Top=3)
-    int roleResolved[4] = {0}; // semitone motion in same role
+    // Per-role: same role retains same pitch or resolves by semitone
+    int roleRetained[4] = {0};
+    int roleResolved[4] = {0};
+    // Cross-role: any pitch retained or resolved across any inner voice
+    int crossRetained = 0;
+    int crossResolved = 0;
     int totalTransitions = 0;
 
-    int TotalRetained() const { int s = 0; for (int i = 0; i < 4; ++i) s += roleRetained[i]; return s; }
-    int TotalResolved() const { int s = 0; for (int i = 0; i < 4; ++i) s += roleResolved[i]; return s; }
+    int TotalRoleRetained() const { int s = 0; for (int i = 0; i < 4; ++i) s += roleRetained[i]; return s; }
+    int TotalRoleResolved() const { int s = 0; for (int i = 0; i < 4; ++i) s += roleResolved[i]; return s; }
 };
 
 static void RunTrace(const char* title, MIDI::PianoStyle style, MIDI::SopranoContour contour,
@@ -118,19 +119,41 @@ static void RunTrace(const char* title, MIDI::PianoStyle style, MIDI::SopranoCon
         uint8_t rhHigh = v.GetPitch(MIDI::PianoTargetRole::RH_GuideHigh);
         uint8_t rhTop = v.GetPitch(MIDI::PianoTargetRole::RH_Top);
 
-        // Voice identity tracking
         if (i > 0) {
             vim.totalTransitions++;
             const auto& prev = solved[i - 1];
+
+            // Per-role tracking
             for (int r = 0; r < 4; ++r) {
                 int roleIdx = rhRoles[r];
                 uint8_t curr = v.pitches[roleIdx];
                 uint8_t prv = prev.pitches[roleIdx];
                 if (curr == 0 || prv == 0) continue;
-                if (curr == prv) {
-                    vim.roleRetained[r]++;
-                } else if (std::abs(static_cast<int>(curr) - static_cast<int>(prv)) == 1) {
-                    vim.roleResolved[r]++;
+                if (curr == prv) vim.roleRetained[r]++;
+                else if (std::abs(static_cast<int>(curr) - static_cast<int>(prv)) == 1) vim.roleResolved[r]++;
+            }
+
+            // Cross-role tracking: for each previous inner pitch,
+            // check if it appears in any current inner role (hold) or ±1 (resolve)
+            std::vector<uint8_t> prevPitches, currPitches;
+            for (int r = 0; r < 4; ++r) {
+                uint8_t pp = prev.pitches[rhRoles[r]];
+                uint8_t cp = v.pitches[rhRoles[r]];
+                if (pp > 0) prevPitches.push_back(pp);
+                if (cp > 0) currPitches.push_back(cp);
+            }
+            for (uint8_t pp : prevPitches) {
+                bool matched = false;
+                for (uint8_t cp : currPitches) {
+                    if (cp == pp) { vim.crossRetained++; matched = true; break; }
+                }
+                if (!matched) {
+                    for (uint8_t cp : currPitches) {
+                        if (std::abs(static_cast<int>(cp) - static_cast<int>(pp)) == 1) {
+                            vim.crossResolved++;
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -149,18 +172,20 @@ static void RunTrace(const char* title, MIDI::PianoStyle style, MIDI::SopranoCon
                   << "\n";
     }
 
-    // Print voice identity report
+    // Print metrics
     const char* roleNames[] = {"GuidLo", "Inner", "GuidHi", "Top"};
-    std::cout << "--- Voice Identity (role-to-role): ";
+    std::cout << "--- Per-Role: ";
     for (int r = 0; r < 4; ++r) {
         if (vim.roleRetained[r] > 0 || vim.roleResolved[r] > 0) {
-            std::cout << roleNames[r] << "[hold=" << vim.roleRetained[r]
-                      << " res=" << vim.roleResolved[r] << "] ";
+            std::cout << roleNames[r] << "[h=" << vim.roleRetained[r]
+                      << " r=" << vim.roleResolved[r] << "] ";
         }
     }
-    std::cout << " | Transitions=" << vim.totalTransitions
-              << " TotalHeld=" << vim.TotalRetained()
-              << " TotalRes=" << vim.TotalResolved() << "\n";
+    std::cout << " RoleTotal=" << (vim.TotalRoleRetained() + vim.TotalRoleResolved()) << "\n";
+    std::cout << "--- Cross-Role: held=" << vim.crossRetained
+              << " res=" << vim.crossResolved
+              << " total=" << (vim.crossRetained + vim.crossResolved)
+              << " | Transitions=" << vim.totalTransitions << "\n";
 }
 
 int main() {
