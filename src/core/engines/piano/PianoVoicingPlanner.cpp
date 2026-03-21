@@ -105,10 +105,42 @@ static bool IsFifth(const ActiveChordContext& chord, int pc) {
     return pc == fifthPc;
 }
 
-// Returns the 9th pitch class for color-tone usage
 static int GetNinthPc(const ActiveChordContext& chord) {
+    return (static_cast<int>(chord.root) + 2) % 12;
+}
+
+// ---------------------------------------------------------
+// Avoid-Tone Logic
+// ---------------------------------------------------------
+// Certain pitch classes create harsh dissonances in specific
+// chord contexts. These are not "wrong notes" — they are
+// context-dependent clashes that a competent pianist would avoid.
+static bool IsAvoidTone(const ActiveChordContext& chord, int pc) {
     int root = static_cast<int>(chord.root);
-    return (root + 2) % 12; // major 9th by default
+
+    switch (chord.quality) {
+        case ChordQuality::Major:
+        case ChordQuality::Major7:
+            // b9 (minor 2nd from root) clashes with major 3rd
+            if (pc == (root + 1) % 12) return true;
+            // #11 (tritone from root) clashes in pop context unless Lydian
+            if (pc == (root + 6) % 12) return true;
+            break;
+        case ChordQuality::Dominant7:
+            // b9 is sometimes used but generally avoided in pop
+            if (pc == (root + 1) % 12) return true;
+            break;
+        case ChordQuality::Minor:
+        case ChordQuality::Minor7:
+            // b2 (minor 9th from root) clashes with minor 3rd (Phrygian sound)
+            if (pc == (root + 1) % 12) return true;
+            // b6 (minor 6th) is context-dependent; avoid in pop, fine in Dorian
+            if (pc == (root + 8) % 12) return true;
+            break;
+        default:
+            break;
+    }
+    return false;
 }
 
 // ---------------------------------------------------------
@@ -122,58 +154,113 @@ PianoVoicingPlanner::PianoVoicingPlanner(PianoStyle style, SopranoContour contou
             m_rhMinPitch = 60;
             m_maxRHSpan = 12;
             m_minVoiceSep = 2;
-            m_allowRHInner = true;  // 5th as color
+            m_allowRHInner = true;
             break;
         case PianoStyle::SingerSongwriter:
             m_lhStrategy = LHStrategy::RootTenth;
             m_rhMinPitch = 60;
             m_maxRHSpan = 14;
             m_minVoiceSep = 3;
-            m_allowRHInner = true;  // 9th as color
+            m_allowRHInner = true;
             break;
         case PianoStyle::JazzShell:
             m_lhStrategy = LHStrategy::Shell;
             m_rhMinPitch = 55;
             m_maxRHSpan = 12;
             m_minVoiceSep = 2;
-            m_allowRHInner = true;  // tension as color
+            m_allowRHInner = true;
             break;
     }
 }
 
 // ---------------------------------------------------------
-// Main Entry Point
+// Main Entry Point (3-pass)
 // ---------------------------------------------------------
 std::vector<PianoVoicing> PianoVoicingPlanner::SolveTimeline(const std::vector<ChordTrackEvent>& chordTimeline) const {
     std::vector<PianoVoicing> timeline(chordTimeline.size());
     if (chordTimeline.empty()) return timeline;
 
-    SolveOuterVoices(chordTimeline, timeline);
+    // Pass 1: Plan the soprano trajectory independent of harmony
+    auto sopranoPath = PlanSopranoTrajectory(chordTimeline.size());
+
+    // Pass 2: Solve outer voices (snap trajectory to chord tones + LH)
+    SolveOuterVoices(chordTimeline, sopranoPath, timeline);
+
+    // Pass 3: Inner voice fill + color tone
     SolveInnerVoices(chordTimeline, timeline);
 
     return timeline;
 }
 
 // ---------------------------------------------------------
-// Phase A: Macro Pass (Outer Shell — Bass + Soprano)
+// Pass 1: Pre-compute the ideal Soprano trajectory
 // ---------------------------------------------------------
-void PianoVoicingPlanner::SolveOuterVoices(const std::vector<ChordTrackEvent>& chordTimeline, std::vector<PianoVoicing>& t) const {
-    int currentSoprano = 72; // C5 gravity center
-    size_t phraseLen = chordTimeline.size();
+// This is the key structural difference from Phase 19.2.
+// Instead of choosing chord tones locally, we first define what
+// the top-line SHOULD do across the phrase, then constrain
+// chord-tone selection to serve that shape.
+//
+// The trajectory emits a concrete MIDI pitch target per position.
+// It does NOT yet know what chord tones are available — that
+// happens in Pass 2 when we snap to the nearest valid tone.
+std::vector<int> PianoVoicingPlanner::PlanSopranoTrajectory(size_t phraseLen) const {
+    std::vector<int> trajectory(phraseLen);
+
+    // Define soprano register endpoints
+    constexpr int kSopFloor = 65; // F4
+    constexpr int kSopCeil  = 79; // G5
+    constexpr int kSopMid   = 72; // C5
 
     for (size_t i = 0; i < phraseLen; ++i) {
+        float t = (phraseLen > 1) ? static_cast<float>(i) / static_cast<float>(phraseLen - 1) : 0.5f;
+
+        float target;
+        switch (m_contour) {
+            case SopranoContour::Hold:
+                target = static_cast<float>(kSopMid);
+                break;
+            case SopranoContour::Rise:
+                // Linear ascent from floor to ceiling
+                target = static_cast<float>(kSopFloor) + t * static_cast<float>(kSopCeil - kSopFloor);
+                break;
+            case SopranoContour::Fall:
+                // Linear descent from ceiling to floor
+                target = static_cast<float>(kSopCeil) - t * static_cast<float>(kSopCeil - kSopFloor);
+                break;
+            case SopranoContour::Arch:
+                // Parabolic: peaks at midpoint
+                // f(t) = floor + (1 - 4*(t-0.5)^2) * range
+                target = static_cast<float>(kSopFloor) +
+                         (1.0f - 4.0f * (t - 0.5f) * (t - 0.5f)) *
+                         static_cast<float>(kSopCeil - kSopFloor);
+                break;
+        }
+
+        trajectory[i] = static_cast<int>(std::round(target));
+    }
+
+    return trajectory;
+}
+
+// ---------------------------------------------------------
+// Pass 2: Solve Outer Voices (Bass + Soprano → Trajectory)
+// ---------------------------------------------------------
+void PianoVoicingPlanner::SolveOuterVoices(const std::vector<ChordTrackEvent>& chordTimeline,
+                                            const std::vector<int>& sopranoPath,
+                                            std::vector<PianoVoicing>& t) const {
+    int currentSoprano = sopranoPath[0]; // seed from trajectory
+
+    for (size_t i = 0; i < chordTimeline.size(); ++i) {
         const auto& ctx = chordTimeline[i].chord;
         int root = static_cast<int>(ctx.root);
 
         // --- LEFT HAND ---
-        // Slash chord support: if overBass differs from root, use overBass as LH note
         int bassNote;
         if (!ctx.isRootPosition()) {
             bassNote = 36 + static_cast<int>(ctx.overBass);
         } else {
             bassNote = 36 + root;
         }
-        // Clamp to C2(36)..E3(52)
         if (bassNote > 52) bassNote -= 12;
         if (bassNote < 36) bassNote += 12;
 
@@ -181,15 +268,14 @@ void PianoVoicingPlanner::SolveOuterVoices(const std::vector<ChordTrackEvent>& c
 
         switch (m_lhStrategy) {
             case LHStrategy::RootFifth: {
-                int fifthPitch = bassNote + 7;
-                if (bassNote >= 38) { // mud suppression
-                    t[i].pitches[static_cast<int>(PianoTargetRole::LH_Fifth)] = static_cast<uint8_t>(fifthPitch);
+                if (bassNote >= 38) {
+                    t[i].pitches[static_cast<int>(PianoTargetRole::LH_Fifth)] = static_cast<uint8_t>(bassNote + 7);
                 }
                 break;
             }
             case LHStrategy::RootTenth: {
-                int tenthPitch = bassNote + 12 + GetThirdInterval(ctx.quality);
-                t[i].pitches[static_cast<int>(PianoTargetRole::LH_ShellLow)] = static_cast<uint8_t>(tenthPitch);
+                t[i].pitches[static_cast<int>(PianoTargetRole::LH_ShellLow)] =
+                    static_cast<uint8_t>(bassNote + 12 + GetThirdInterval(ctx.quality));
                 break;
             }
             case LHStrategy::RootOnly:
@@ -197,51 +283,44 @@ void PianoVoicingPlanner::SolveOuterVoices(const std::vector<ChordTrackEvent>& c
             case LHStrategy::Shell: {
                 int seventhInterval = GetSeventhInterval(ctx.quality);
                 if (seventhInterval >= 0) {
-                    t[i].pitches[static_cast<int>(PianoTargetRole::LH_ShellLow)] = static_cast<uint8_t>(bassNote + seventhInterval);
+                    t[i].pitches[static_cast<int>(PianoTargetRole::LH_ShellLow)] =
+                        static_cast<uint8_t>(bassNote + seventhInterval);
                 } else {
-                    t[i].pitches[static_cast<int>(PianoTargetRole::LH_ShellLow)] = static_cast<uint8_t>(bassNote + GetThirdInterval(ctx.quality));
+                    t[i].pitches[static_cast<int>(PianoTargetRole::LH_ShellLow)] =
+                        static_cast<uint8_t>(bassNote + GetThirdInterval(ctx.quality));
                 }
                 break;
             }
         }
 
-        // --- SOPRANO (RH_Top) with Contour Intent ---
-        auto rhTones = GetChordTonesInRange(ctx, 65, 79); // F4 to G5
+        // --- SOPRANO: Two competing forces ---
+        // 1. The planned trajectory (where the contour wants us to be)
+        // 2. Local smoothness (distance from current position)
+        //
+        // The trajectory is the INTENT. Smoothness is the CONSTRAINT.
+        // We score each candidate against both, with the trajectory
+        // weighted more heavily than in Phase 19.2's pure-gravity approach.
 
-        // Calculate phrase position as normalized 0.0..1.0
-        float phrasePos = (phraseLen > 1) ? static_cast<float>(i) / static_cast<float>(phraseLen - 1) : 0.5f;
+        auto rhTones = GetChordTonesInRange(ctx, 65, 79);
 
-        // Contour bias: shifts the gravity center based on phrase position
-        float gravityCenter = 72.0f; // default C5
-        switch (m_contour) {
-            case SopranoContour::Hold:
-                // No bias shift — pure smoothness
-                break;
-            case SopranoContour::Rise:
-                // Gravity center rises from F4(65) to G5(79) across the phrase
-                gravityCenter = 65.0f + phrasePos * 14.0f;
-                break;
-            case SopranoContour::Fall:
-                // Gravity center falls from G5(79) to F4(65)
-                gravityCenter = 79.0f - phrasePos * 14.0f;
-                break;
-            case SopranoContour::Arch:
-                // Rise to apex at midpoint, then fall
-                // Parabolic: peaks at 0.5
-                gravityCenter = 65.0f + (1.0f - 4.0f * (phrasePos - 0.5f) * (phrasePos - 0.5f)) * 14.0f;
-                break;
-        }
-
+        int trajectoryTarget = sopranoPath[i];
         int bestTone = currentSoprano;
         float bestCost = 99999.0f;
 
         for (int tone : rhTones) {
-            float distCost = static_cast<float>(std::abs(tone - currentSoprano));
-            float gravityCost = std::abs(static_cast<float>(tone) - gravityCenter) * 0.15f;
-            float totalCost = distCost + gravityCost;
+            // Cost 1: Distance from planned trajectory target
+            // This is the primary shaping force. Weight = 0.6
+            float trajCost = std::abs(static_cast<float>(tone) - static_cast<float>(trajectoryTarget)) * 0.6f;
 
-            // Common tone reward
-            if (distCost == 0.0f) {
+            // Cost 2: Distance from current position (smoothness)
+            // This prevents wild jumps. Weight = 1.0
+            float smoothCost = static_cast<float>(std::abs(tone - currentSoprano));
+
+            float totalCost = trajCost + smoothCost;
+
+            // Common tone reward (holding a pitch is desirable unless the
+            // trajectory strongly wants us to move)
+            if (tone == currentSoprano) {
                 totalCost -= 0.5f;
             }
 
@@ -250,11 +329,16 @@ void PianoVoicingPlanner::SolveOuterVoices(const std::vector<ChordTrackEvent>& c
                 totalCost -= 0.3f;
             }
 
-            // Contour direction momentum
-            if (m_contour == SopranoContour::Rise && tone > currentSoprano) {
-                totalCost -= 0.2f; // reward upward motion
-            } else if (m_contour == SopranoContour::Fall && tone < currentSoprano) {
-                totalCost -= 0.2f; // reward downward motion
+            // Directional momentum: if the trajectory is asking for movement,
+            // reward motion in the right direction
+            int trajDelta = trajectoryTarget - currentSoprano;
+            int toneDelta = tone - currentSoprano;
+            if (trajDelta != 0 && toneDelta != 0) {
+                // Same sign = moving in trajectory direction
+                bool sameDir = (trajDelta > 0 && toneDelta > 0) || (trajDelta < 0 && toneDelta < 0);
+                if (sameDir) {
+                    totalCost -= 0.25f;
+                }
             }
 
             if (totalCost < bestCost) {
@@ -269,18 +353,17 @@ void PianoVoicingPlanner::SolveOuterVoices(const std::vector<ChordTrackEvent>& c
 }
 
 // ---------------------------------------------------------
-// Phase B: Meso Pass (Inner Voice Fill + RH_Inner Color)
+// Pass 3: Inner Voice Fill + RH_Inner Color Tone
 // ---------------------------------------------------------
 void PianoVoicingPlanner::SolveInnerVoices(const std::vector<ChordTrackEvent>& chordTimeline, std::vector<PianoVoicing>& t) const {
     for (size_t i = 0; i < chordTimeline.size(); ++i) {
         int topPitch = t[i].pitches[static_cast<int>(PianoTargetRole::RH_Top)];
         const auto& ctx = chordTimeline[i].chord;
-        int topPc = topPitch % 12;
 
         int searchFloor = std::max(m_rhMinPitch, topPitch - m_maxRHSpan);
         auto candidates = GetChordTonesInRange(ctx, searchFloor, topPitch - 1);
 
-        // Priority sort: guide tones first, root second, 5th last
+        // Priority sort: guide tones > root > 5th
         std::sort(candidates.begin(), candidates.end(), [&](int a, int b) {
             bool aGuide = IsGuideTone(ctx, a % 12);
             bool bGuide = IsGuideTone(ctx, b % 12);
@@ -290,26 +373,19 @@ void PianoVoicingPlanner::SolveInnerVoices(const std::vector<ChordTrackEvent>& c
             bool bFifth = IsFifth(ctx, b % 12);
             if (aFifth != bFifth) return !aFifth;
 
-            return a > b; // higher = closer to soprano
+            return a > b;
         });
 
-        // Place guide voices (RH_GuideHigh, RH_GuideLow)
         int guideHigh = 0;
         int guideLow = 0;
         int lastPlaced = topPitch;
         std::vector<int> usedPcs;
-        usedPcs.push_back(topPc);
+        usedPcs.push_back(topPitch % 12);
 
         for (int candidate : candidates) {
             int cpc = candidate % 12;
-
-            // Duplicate suppression
             if (std::find(usedPcs.begin(), usedPcs.end(), cpc) != usedPcs.end()) continue;
-
-            // Minimum voice separation
             if (lastPlaced - candidate < m_minVoiceSep) continue;
-
-            // Muddy register gate
             if (candidate < m_rhMinPitch) continue;
 
             if (guideHigh == 0) {
@@ -327,33 +403,28 @@ void PianoVoicingPlanner::SolveInnerVoices(const std::vector<ChordTrackEvent>& c
         t[i].pitches[static_cast<int>(PianoTargetRole::RH_GuideHigh)] = static_cast<uint8_t>(guideHigh);
         t[i].pitches[static_cast<int>(PianoTargetRole::RH_GuideLow)]  = static_cast<uint8_t>(guideLow);
 
-        // --- RH_Inner: Color Tone ---
-        // Only populate if style allows and there is acoustic space
+        // --- RH_Inner: Color Tone with Avoid-Tone Logic ---
         if (!m_allowRHInner) continue;
 
-        // Determine the target color pitch class based on style
         int colorPc = -1;
         switch (m_style) {
-            case PianoStyle::PopBlock:
-                // 5th as mild thickening (only if not already present)
-                if (IsFifth(ctx, topPc) || (guideHigh != 0 && IsFifth(ctx, guideHigh % 12)) ||
-                    (guideLow != 0 && IsFifth(ctx, guideLow % 12))) {
-                    // 5th already present somewhere, skip
-                    continue;
+            case PianoStyle::PopBlock: {
+                int fifthPc = (static_cast<int>(ctx.root) + 7) % 12;
+                bool fifthPresent = false;
+                for (int pc : usedPcs) {
+                    if (pc == fifthPc) { fifthPresent = true; break; }
                 }
-                colorPc = (static_cast<int>(ctx.root) + 7) % 12;
+                if (!fifthPresent) colorPc = fifthPc;
                 break;
+            }
             case PianoStyle::SingerSongwriter:
-                // 9th for open shimmer
                 colorPc = GetNinthPc(ctx);
                 break;
             case PianoStyle::JazzShell: {
-                // If chord has a 7th, add the 9th. Otherwise add the 7th as a tension.
                 int seventhInt = GetSeventhInterval(ctx.quality);
                 if (seventhInt >= 0) {
                     colorPc = GetNinthPc(ctx);
                 } else {
-                    // Add a dominant 7th as color on triads
                     colorPc = (static_cast<int>(ctx.root) + 10) % 12;
                 }
                 break;
@@ -362,28 +433,25 @@ void PianoVoicingPlanner::SolveInnerVoices(const std::vector<ChordTrackEvent>& c
 
         if (colorPc < 0) continue;
 
-        // Skip if this pitch class is already in the voicing
+        // Avoid-tone gate: reject color tones that create contextual clashes
+        if (IsAvoidTone(ctx, colorPc)) continue;
+
+        // Duplicate gate
         if (std::find(usedPcs.begin(), usedPcs.end(), colorPc) != usedPcs.end()) continue;
 
-        // Find the best physical placement for this color tone between guideLow and guideHigh
-        // (or between guideHigh and top if guideLow is empty)
-        int colorFloor = (guideLow != 0) ? guideLow : (guideHigh != 0 ? guideHigh : searchFloor);
-        int colorCeil = topPitch - 1;
-
+        // Find physical placement
         int bestColor = 0;
         int bestDist = 999;
-        for (int p = colorFloor; p <= colorCeil; ++p) {
+        for (int p = searchFloor; p < topPitch; ++p) {
             if (p % 12 != colorPc) continue;
             if (p < m_rhMinPitch) continue;
 
-            // Check separation from all placed voices
             bool tooClose = false;
             if (std::abs(p - topPitch) < m_minVoiceSep) tooClose = true;
             if (guideHigh != 0 && std::abs(p - guideHigh) < m_minVoiceSep) tooClose = true;
             if (guideLow != 0 && std::abs(p - guideLow) < m_minVoiceSep) tooClose = true;
             if (tooClose) continue;
 
-            // Prefer placement close to the center of the voicing
             int voiceCenter = (topPitch + (guideLow != 0 ? guideLow : guideHigh)) / 2;
             int dist = std::abs(p - voiceCenter);
             if (dist < bestDist) {

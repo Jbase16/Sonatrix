@@ -9,39 +9,31 @@ namespace Core {
 namespace MIDI {
 
 // ---------------------------------------------------------
-// Style Presets
+// Style & Contour Enums
 // ---------------------------------------------------------
 enum class PianoStyle : uint8_t {
-    PopBlock,           // Root+Fifth LH, tight RH triads, 5th optional
-    SingerSongwriter,   // Root+Tenth LH, open RH spacing, add9 friendly
-    JazzShell           // Root+7th LH (rootless option), RH guide tones + tensions
+    PopBlock,
+    SingerSongwriter,
+    JazzShell
 };
 
-// ---------------------------------------------------------
-// Left-Hand Strategy
-// ---------------------------------------------------------
 enum class LHStrategy : uint8_t {
-    RootFifth,    // Root + Perfect 5th
-    RootTenth,    // Root + 3rd one octave up (10th interval)
-    RootOnly,     // Root alone (sparse ballad)
-    Shell         // Root + 3rd or Root + 7th (jazz shell voicing)
+    RootFifth,
+    RootTenth,
+    RootOnly,
+    Shell
 };
 
-// ---------------------------------------------------------
-// Soprano Contour Mode
-// ---------------------------------------------------------
-// Controls phrase-level intent for the top-voice trajectory.
-// The Macro pass biases tone selection based on position within the phrase.
+// Controls phrase-level intent for the soprano trajectory.
+// Unlike local gravity bias, this plans an actual pitch path first
+// and then snaps it to available chord tones.
 enum class SopranoContour : uint8_t {
-    Hold,   // Minimize movement. Favor common tones. Static pedal feel.
-    Rise,   // Bias upward motion across the phrase. Tension building.
-    Fall,   // Bias downward motion. Resolution / closing feel.
-    Arch    // Rise through first half, fall through second half.
+    Hold,   // Flat trajectory — stay near initial pitch. Pedal feel.
+    Rise,   // Linear ascent across the phrase.
+    Fall,   // Linear descent across the phrase.
+    Arch    // Parabolic arc: rise to midpoint apex, then descend.
 };
 
-// ---------------------------------------------------------
-// Semantic Roles for Piano Note Mapping
-// ---------------------------------------------------------
 enum class PianoTargetRole : uint8_t {
     LH_Root = 0,
     LH_Fifth = 1,
@@ -50,7 +42,7 @@ enum class PianoTargetRole : uint8_t {
 
     RH_GuideLow = 4,
     RH_GuideHigh = 5,
-    RH_Inner = 6,      // Color tone (9th, 5th, or tension depending on style)
+    RH_Inner = 6,
     RH_Top = 7
 };
 
@@ -72,7 +64,6 @@ struct PianoVoicing {
 
     int RHSpan() const {
         int top = pitches[static_cast<int>(PianoTargetRole::RH_Top)];
-        // Find lowest populated RH voice
         int low = 127;
         for (int r = static_cast<int>(PianoTargetRole::RH_GuideLow); r <= static_cast<int>(PianoTargetRole::RH_Top); ++r) {
             if (pitches[r] != 0 && pitches[r] < low) low = pitches[r];
@@ -84,7 +75,6 @@ struct PianoVoicing {
     int LHSpan() const {
         int root = pitches[static_cast<int>(PianoTargetRole::LH_Root)];
         int upper = 0;
-        // Find highest populated LH voice
         for (int r = static_cast<int>(PianoTargetRole::LH_Root); r <= static_cast<int>(PianoTargetRole::LH_ShellLow); ++r) {
             if (pitches[r] > upper) upper = pitches[r];
         }
@@ -92,7 +82,6 @@ struct PianoVoicing {
         return upper - root;
     }
 
-    // Count of populated RH voices (density metric)
     int RHDensity() const {
         int count = 0;
         for (int r = static_cast<int>(PianoTargetRole::RH_GuideLow); r <= static_cast<int>(PianoTargetRole::RH_Top); ++r) {
@@ -103,7 +92,7 @@ struct PianoVoicing {
 };
 
 // ---------------------------------------------------------
-// Piano Voicing Planner (Hierarchical Contrapuntal Solver)
+// Piano Voicing Planner
 // ---------------------------------------------------------
 class PianoVoicingPlanner {
 public:
@@ -117,18 +106,23 @@ private:
     PianoStyle m_style;
     SopranoContour m_contour;
 
-    // Derived from style
     LHStrategy m_lhStrategy;
     int m_rhMinPitch;
     int m_maxRHSpan;
     int m_minVoiceSep;
-    bool m_allowRHInner;   // Whether to populate the color-tone seat
+    bool m_allowRHInner;
 
-    // Phase A: Outer Shell (Bass + Soprano)
-    void SolveOuterVoices(const std::vector<ChordTrackEvent>& chordTimeline, std::vector<PianoVoicing>& t) const;
+    // Pass 1: Pre-compute a target soprano trajectory for the entire phrase
+    std::vector<int> PlanSopranoTrajectory(size_t phraseLen) const;
 
-    // Phase B: Inner Voice Fill + RH_Inner color tone
-    void SolveInnerVoices(const std::vector<ChordTrackEvent>& chordTimeline, std::vector<PianoVoicing>& t) const;
+    // Pass 2: Solve outer voices (Bass + Soprano) using planned trajectory
+    void SolveOuterVoices(const std::vector<ChordTrackEvent>& chordTimeline,
+                          const std::vector<int>& sopranoPath,
+                          std::vector<PianoVoicing>& t) const;
+
+    // Pass 3: Inner voice fill + RH_Inner color tone
+    void SolveInnerVoices(const std::vector<ChordTrackEvent>& chordTimeline,
+                          std::vector<PianoVoicing>& t) const;
 };
 
 } // namespace MIDI
