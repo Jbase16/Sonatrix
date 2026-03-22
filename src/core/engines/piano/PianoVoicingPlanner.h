@@ -24,14 +24,11 @@ enum class LHStrategy : uint8_t {
     Shell
 };
 
-// Controls phrase-level intent for the soprano trajectory.
-// Unlike local gravity bias, this plans an actual pitch path first
-// and then snaps it to available chord tones.
 enum class SopranoContour : uint8_t {
-    Hold,   // Flat trajectory — stay near initial pitch. Pedal feel.
-    Rise,   // Linear ascent across the phrase.
-    Fall,   // Linear descent across the phrase.
-    Arch    // Parabolic arc: rise to midpoint apex, then descend.
+    Hold,
+    Rise,
+    Fall,
+    Arch
 };
 
 enum class PianoTargetRole : uint8_t {
@@ -47,6 +44,78 @@ enum class PianoTargetRole : uint8_t {
 };
 
 static constexpr int kPianoRoleCount = 8;
+
+// ---------------------------------------------------------
+// Harmonic Function Classification
+// ---------------------------------------------------------
+enum class HarmonicFunction : uint8_t {
+    Default,            // no special classification
+    Pedal,              // same bass, different harmony
+    DominantResolution, // root descends P5, previous has tritone
+    ReinterpretiveHold  // 3+ shared PCs, root changes
+};
+
+// ---------------------------------------------------------
+// Chord Obligation (per quality × style)
+// ---------------------------------------------------------
+struct ChordObligation {
+    std::vector<int> required;
+    std::vector<int> preferred;
+    int maxDesiredDensity;
+};
+
+// ---------------------------------------------------------
+// Transition Context
+// ---------------------------------------------------------
+struct TransitionContext {
+    HarmonicFunction function = HarmonicFunction::Default;
+    int sharedPitchClasses = 0;
+    float continuityWeight = 1.0f;
+    int sufficiencyGate = 100;
+};
+
+// ---------------------------------------------------------
+// Obligation Coverage
+// ---------------------------------------------------------
+struct ObligationCoverage {
+    ChordObligation obligation;
+    std::vector<int> coveredPcs;
+    std::vector<int> unmetRequired;
+    std::vector<int> unmetPreferred;
+};
+
+// ---------------------------------------------------------
+// Voicing Explanation (structured debug output)
+// ---------------------------------------------------------
+struct VoicingExplanation {
+    int totalRequired = 0;
+    int coveredBySoprano = 0;
+    int coveredByBass = 0;
+    int coveredByLh2 = 0;
+    int suppliedByTuple = 0;
+    int unmet = 0;
+    bool sufficient = false;
+    HarmonicFunction transitionFunction = HarmonicFunction::Default;
+    int sufficiencyGateUsed = 100;
+    float continuityWeightUsed = 1.0f;
+    int candidatesEvaluated = 0;
+    int candidatesRejected = 0;
+};
+
+// ---------------------------------------------------------
+// Tiered Score
+// ---------------------------------------------------------
+struct TieredScore {
+    int harmonic;
+    float continuity;
+    int density;
+
+    bool operator>(const TieredScore& o) const {
+        if (harmonic != o.harmonic) return harmonic > o.harmonic;
+        if (continuity != o.continuity) return continuity > o.continuity;
+        return density > o.density;
+    }
+};
 
 // ---------------------------------------------------------
 // Piano Voicing Node
@@ -100,7 +169,9 @@ public:
                                  SopranoContour contour = SopranoContour::Hold);
     ~PianoVoicingPlanner() = default;
 
-    std::vector<PianoVoicing> SolveTimeline(const std::vector<ChordTrackEvent>& chordTimeline) const;
+    std::vector<PianoVoicing> SolveTimeline(
+        const std::vector<ChordTrackEvent>& chordTimeline,
+        std::vector<VoicingExplanation>* explanations = nullptr) const;
 
 private:
     PianoStyle m_style;
@@ -112,17 +183,15 @@ private:
     int m_minVoiceSep;
     bool m_allowRHInner;
 
-    // Pass 1: Pre-compute a target soprano trajectory for the entire phrase
     std::vector<int> PlanSopranoTrajectory(size_t phraseLen) const;
 
-    // Pass 2: Solve outer voices (Bass + Soprano) using planned trajectory
     void SolveOuterVoices(const std::vector<ChordTrackEvent>& chordTimeline,
                           const std::vector<int>& sopranoPath,
                           std::vector<PianoVoicing>& t) const;
 
-    // Pass 3: Inner voice fill + RH_Inner color tone
     void SolveInnerVoices(const std::vector<ChordTrackEvent>& chordTimeline,
-                          std::vector<PianoVoicing>& t) const;
+                          std::vector<PianoVoicing>& t,
+                          std::vector<VoicingExplanation>* explanations) const;
 };
 
 } // namespace MIDI
