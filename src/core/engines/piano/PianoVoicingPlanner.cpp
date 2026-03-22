@@ -353,57 +353,72 @@ void PianoVoicingPlanner::SolveOuterVoices(const std::vector<ChordTrackEvent>& c
 }
 
 // ---------------------------------------------------------
-// Chord Obligation Model
+// Chord Obligation Model (Style-Conditioned)
 // ---------------------------------------------------------
-// Defines per chord quality which intervals from root are:
-//   required  — must appear somewhere in the voicing for harmonic identity
-//   preferred — good to have, used as tiebreaker bonus
-// The 5th is almost always expendable (omitted from both lists).
-// The sufficiency check accounts for tones already provided
-// by soprano and bass before evaluating inner voice tuples.
+// Defines per (quality × style) which intervals are required/preferred,
+// and the maximum desired inner voice density. When density exceeds
+// maxDesiredDensity, the density tier becomes a penalty instead of
+// a bonus — this encodes economy preference.
 
 struct ChordObligation {
-    std::vector<int> required;   // intervals that must appear (harmonic identity)
-    std::vector<int> preferred;  // intervals that are nice to have
+    std::vector<int> required;     // intervals that must appear for harmonic identity
+    std::vector<int> preferred;    // intervals that are nice to have (tiebreaker)
+    int maxDesiredDensity;         // inner voices beyond this count are penalized
 };
 
-static ChordObligation GetChordObligation(ChordQuality quality) {
+// Base obligation by quality (style-independent structural requirements)
+static ChordObligation GetBaseObligation(ChordQuality quality) {
     switch (quality) {
-        case ChordQuality::Major:
-            // 3rd defines quality. Root preferred (often in bass). 5th expendable.
-            return {{4}, {0}};
-        case ChordQuality::Minor:
-            return {{3}, {0}};
-        case ChordQuality::Major7:
-            // 3rd and 7th are guide tones (harmonic identity).
-            return {{4, 11}, {0}};
-        case ChordQuality::Minor7:
-            return {{3, 10}, {0}};
-        case ChordQuality::Dominant7:
-            // 3rd and b7 define the tritone (harmonic engine).
-            return {{4, 10}, {0}};
-        case ChordQuality::HalfDiminished7:
-            // b3, b5, and b7 all matter — b5 distinguishes from minor7.
-            return {{3, 6, 10}, {}};
-        case ChordQuality::Diminished:
-            return {{3, 6}, {0}};
-        case ChordQuality::Augmented:
-            // #5 defines quality.
-            return {{4, 8}, {}};
-        case ChordQuality::Sus4:
-            // Suspended 4th is the structural identity. Root preferred.
-            return {{5}, {0}};
-        case ChordQuality::Sus2:
-            return {{2}, {0}};
-        case ChordQuality::Add9:
-            // 3rd + 9th define the color.
-            return {{4, 2}, {0}};
-        case ChordQuality::PowerChord:
-            // No 3rd. Just root + 5th. Inner voices have little obligation.
-            return {{}, {7}};
-        default:
-            return {{4}, {0}};
+        case ChordQuality::Major:       return {{4}, {0}, 3};
+        case ChordQuality::Minor:       return {{3}, {0}, 3};
+        case ChordQuality::Major7:      return {{4, 11}, {0}, 3};
+        case ChordQuality::Minor7:      return {{3, 10}, {0}, 3};
+        case ChordQuality::Dominant7:   return {{4, 10}, {0}, 3};
+        case ChordQuality::HalfDiminished7: return {{3, 6, 10}, {}, 3};
+        case ChordQuality::Diminished:  return {{3, 6}, {0}, 3};
+        case ChordQuality::Augmented:   return {{4, 8}, {}, 3};
+        case ChordQuality::Sus4:        return {{5}, {0}, 3};
+        case ChordQuality::Sus2:        return {{2}, {0}, 3};
+        case ChordQuality::Add9:        return {{4, 2}, {0}, 3};
+        case ChordQuality::PowerChord:  return {{}, {7}, 2};
+        default:                        return {{4}, {0}, 3};
     }
+}
+
+// Style overlay: modifies base obligation
+static ChordObligation GetChordObligation(ChordQuality quality, PianoStyle style) {
+    auto ob = GetBaseObligation(quality);
+
+    switch (style) {
+        case PianoStyle::JazzShell:
+            // Jazz: economy is the ethos. Guide tones only.
+            // Root is almost never needed in RH (bass has it).
+            // Prefer lean voicings: max 2 inner voices.
+            ob.preferred.clear(); // no root preference
+            ob.maxDesiredDensity = 2;
+            break;
+
+        case PianoStyle::PopBlock:
+            // Pop: fuller voicings welcome. Root doubling acceptable.
+            // 5th is sometimes preferred on triads for fullness.
+            if (quality == ChordQuality::Major || quality == ChordQuality::Minor) {
+                ob.preferred.push_back(7); // 5th preferred for triads
+            }
+            ob.maxDesiredDensity = 3;
+            break;
+
+        case PianoStyle::SingerSongwriter:
+            // SS: moderate density. 9th preferred as color extension.
+            if (quality == ChordQuality::Major || quality == ChordQuality::Minor ||
+                quality == ChordQuality::Major7 || quality == ChordQuality::Minor7 ||
+                quality == ChordQuality::Dominant7) {
+                ob.preferred.push_back(2); // 9th as color
+            }
+            ob.maxDesiredDensity = 3;
+            break;
+    }
+
+    return ob;
 }
 
 // ---------------------------------------------------------
@@ -571,7 +586,7 @@ void PianoVoicingPlanner::SolveInnerVoices(const std::vector<ChordTrackEvent>& c
 
         // --- Chord obligation analysis ---
         // Determine which required tones are already covered by soprano + bass.
-        const auto obligation = GetChordObligation(ctx.quality);
+        const auto obligation = GetChordObligation(ctx.quality, m_style);
         int root = static_cast<int>(ctx.root);
         int bassPc = t[i].pitches[static_cast<int>(PianoTargetRole::LH_Root)] % 12;
 
@@ -607,12 +622,36 @@ void PianoVoicingPlanner::SolveInnerVoices(const std::vector<ChordTrackEvent>& c
             }
         }
 
+        // --- Function-sensitive obligation relaxation ---
+        // In certain harmonic contexts, the sufficiency gate is relaxed:
+        // strong continuity can compete with incomplete harmonic spelling.
+        //
+        // Pedal bass: LH root unchanged from previous chord, but harmony changed.
+        //   The listener's ear anchors to the pedal; upper voice continuity matters more.
+        // Close relation: 3+ shared PCs with previous chord.
+        //   The harmonic shift is mild; implied tones are acceptable.
+        int sufficiencyGate = 100; // default: sufficient always dominates
+        if (i > 0) {
+            int prevBassPc = t[i - 1].pitches[static_cast<int>(PianoTargetRole::LH_Root)] % 12;
+            bool isPedal = (bassPc == prevBassPc) &&
+                           (ctx.root != chordTimeline[i - 1].chord.root ||
+                            ctx.quality != chordTimeline[i - 1].chord.quality);
+            bool isCloseRelation = (SharedPitchClasses(chordTimeline[i - 1].chord, ctx) >= 3);
+
+            if (isPedal || isCloseRelation) {
+                // Relax: sufficient = 50, so a tuple with strong continuity
+                // (e.g., -5.0 vlCost) at harmonic=0 can still beat a sufficient
+                // tuple with weak continuity at harmonic=50.
+                sufficiencyGate = 50;
+            }
+        }
+
         // --- Generate and score candidate tuples ---
-        // Tier 1 (Harmonic): sufficient (all unmet required met) = +100
+        // Tier 1 (Harmonic): sufficient (all unmet required met) = sufficiencyGate
         //   + partial required count for insufficient tuples
         //   + preferred bonus (+10 each) within sufficient tuples
         // Tier 2 (Continuity): cross-role voice-leading cost
-        // Tier 3 (Density): populated seat count
+        // Tier 3 (Density): economy-conditioned seat count
 
         struct TieredScore {
             int harmonic;      // sufficiency gate + preferred bonus
@@ -688,6 +727,9 @@ void PianoVoicingPlanner::SolveInnerVoices(const std::vector<ChordTrackEvent>& c
                     if (gl > 0) tuplePcs.push_back(gl % 12);
                     if (in > 0) tuplePcs.push_back(in % 12);
 
+                    // Count populated seats (needed for register check and Tier 3)
+                    int density = (gh > 0 ? 1 : 0) + (gl > 0 ? 1 : 0) + (in > 0 ? 1 : 0);
+
                     // Count how many unmet required tones this tuple satisfies
                     int metRequired = 0;
                     for (int reqPc : unmetRequired) {
@@ -699,7 +741,7 @@ void PianoVoicingPlanner::SolveInnerVoices(const std::vector<ChordTrackEvent>& c
                     int harmonic = 0;
                     bool sufficient = (metRequired == static_cast<int>(unmetRequired.size()));
                     if (sufficient) {
-                        harmonic = 100; // binary gate: sufficient always wins
+                        harmonic = sufficiencyGate;
 
                         // Preferred tone bonus within sufficient tuples
                         for (int prefPc : unmetPreferred) {
@@ -707,9 +749,33 @@ void PianoVoicingPlanner::SolveInnerVoices(const std::vector<ChordTrackEvent>& c
                                 harmonic += 10;
                             }
                         }
+
+                        // Register-awareness: penalize required tones buried
+                        // at the bottom of a dense voicing. A required tone placed
+                        // as the lowest voice, >4 semitones below the next voice,
+                        // is perceptually masked.
+                        if (density >= 2) {
+                            // Find lowest and second-lowest tuple pitches
+                            int pitches[3] = {gh, gl, in};
+                            int lo1 = 999, lo2 = 999;
+                            for (int p : pitches) {
+                                if (p > 0 && p < lo1) { lo2 = lo1; lo1 = p; }
+                                else if (p > 0 && p < lo2) { lo2 = p; }
+                            }
+                            if (lo1 < 999 && lo2 < 999 && (lo2 - lo1) > 4) {
+                                // Check if lo1 is a required tone
+                                int lo1pc = lo1 % 12;
+                                for (int reqPc : unmetRequired) {
+                                    if (reqPc == lo1pc) {
+                                        harmonic -= 5; // buried required tone penalty
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                     } else {
                         // Partial credit: count of met required obligations
-                        // Stays well below 100 so insufficient never beats sufficient
+                        // Stays well below sufficiencyGate
                         harmonic = metRequired * 20;
                     }
 
@@ -721,10 +787,16 @@ void PianoVoicingPlanner::SolveInnerVoices(const std::vector<ChordTrackEvent>& c
                         continuity = -vlCost * continuityWeight;
                     }
 
-                    // --- Tier 3: Density ---
-                    int density = (gh > 0 ? 1 : 0) + (gl > 0 ? 1 : 0) + (in > 0 ? 1 : 0);
+                    // --- Tier 3: Density (style-conditioned economy) ---
+                    int densityScore = 0;
+                    if (density <= obligation.maxDesiredDensity) {
+                        densityScore = density; // more is better, up to threshold
+                    } else {
+                        // Economy penalty: each voice beyond threshold costs points
+                        densityScore = obligation.maxDesiredDensity - (density - obligation.maxDesiredDensity);
+                    }
 
-                    TieredScore ts = {harmonic, continuity, density};
+                    TieredScore ts = {harmonic, continuity, densityScore};
                     if (ts > bestScore) {
                         bestScore = ts;
                         bestTuple = {gh, gl, in, ts};
