@@ -521,47 +521,61 @@ void PianoVoicingPlanner::SolveInnerVoices(const std::vector<ChordTrackEvent>& c
         }
 
         // --- Generate and score candidate tuples ---
-        // A tuple is (guideHigh, guideLow, inner) where each can be 0 (empty).
-        // We also allow single-voice and two-voice tuples.
+        // Score is tiered: harmonic quality dominates, then continuity,
+        // then density. A tuple with better harmonic content always
+        // beats one with worse harmonic content, regardless of continuity.
+
+        struct TieredScore {
+            int harmonic;      // guide tone priority (always dominates)
+            float continuity;  // voice-leading cost (lower = better, stored negated)
+            int density;       // number of populated seats (tiebreaker)
+
+            bool operator>(const TieredScore& o) const {
+                if (harmonic != o.harmonic) return harmonic > o.harmonic;
+                if (continuity != o.continuity) return continuity > o.continuity;
+                return density > o.density;
+            }
+        };
 
         struct Tuple {
             int gh, gl, inner;
-            float score;
+            TieredScore score;
         };
 
-        float bestScore = -99999.0f;
-        Tuple bestTuple = {0, 0, 0, -99999.0f};
+        TieredScore bestScore = {-9999, -99999.0f, -1};
+        Tuple bestTuple = {0, 0, 0, bestScore};
 
         // Enumerate GuideHigh candidates (including 0 = skip)
         std::vector<int> ghCandidates = {0};
         for (int t : tones) ghCandidates.push_back(t);
 
         for (int gh : ghCandidates) {
-            // GuideHigh must be below soprano by minVoiceSep
+            // Hard gate: GuideHigh must be below soprano by minVoiceSep
             if (gh > 0 && topPitch - gh < m_minVoiceSep) continue;
 
             // GuideLow candidates
             std::vector<int> glCandidates = {0};
             for (int t : tones) {
+                // Hard gates
                 if (t == gh) continue;
-                if (gh > 0 && t % 12 == gh % 12) continue; // no duplicate PC
+                if (gh > 0 && t % 12 == gh % 12) continue;
                 if (gh > 0 && gh - t < m_minVoiceSep) continue;
                 if (gh == 0 && topPitch - t < m_minVoiceSep) continue;
                 glCandidates.push_back(t);
             }
 
             for (int gl : glCandidates) {
-                // Ordering constraint: gh > gl when both present
+                // Hard gate: ordering
                 if (gh > 0 && gl > 0 && gl >= gh) continue;
 
                 // Inner candidates
                 std::vector<int> inCandidates = {0};
                 for (int ct : colorTones) {
+                    // Hard gates
                     if (ct == gh || ct == gl) continue;
                     if (gh > 0 && ct % 12 == gh % 12) continue;
                     if (gl > 0 && ct % 12 == gl % 12) continue;
                     if (ct % 12 == topPc) continue;
-                    // Spacing from placed voices
                     bool tooClose = false;
                     if (gh > 0 && std::abs(ct - gh) < m_minVoiceSep) tooClose = true;
                     if (gl > 0 && std::abs(ct - gl) < m_minVoiceSep) tooClose = true;
@@ -571,46 +585,40 @@ void PianoVoicingPlanner::SolveInnerVoices(const std::vector<ChordTrackEvent>& c
                 }
 
                 for (int in : inCandidates) {
-                    float score = 0.0f;
-
-                    // --- Harmonic quality ---
-                    auto harmonicScore = [&](int pitch) -> float {
-                        if (pitch == 0) return 0.0f;
-                        int pc = pitch % 12;
-                        if (IsGuideTone(ctx, pc)) return 3.0f;
-                        if (IsFifth(ctx, pc)) return -0.5f;
-                        return 1.0f; // root or other chord tone
-                    };
-
-                    score += harmonicScore(gh);
-                    score += harmonicScore(gl);
-                    // Inner is color, not chord tone — flat harmonic bonus
-                    if (in > 0) score += 1.5f;
-
-                    // --- Density preference ---
-                    // Prefer populated voicings, but don't force them
-                    int density = (gh > 0 ? 1 : 0) + (gl > 0 ? 1 : 0) + (in > 0 ? 1 : 0);
-                    score += static_cast<float>(density) * 0.5f;
-
-                    // --- Span check ---
+                    // Hard gate: span
                     int lowest = topPitch;
                     if (gh > 0 && gh < lowest) lowest = gh;
                     if (gl > 0 && gl < lowest) lowest = gl;
                     if (in > 0 && in < lowest) lowest = in;
-                    if (topPitch - lowest > m_maxRHSpan) continue; // hard constraint
+                    if (topPitch - lowest > m_maxRHSpan) continue;
 
-                    // --- Cross-role voice-leading assignment ---
+                    // --- Tier 1: Harmonic quality (integer, dominates) ---
+                    auto harmonicVal = [&](int pitch) -> int {
+                        if (pitch == 0) return 0;
+                        int pc = pitch % 12;
+                        if (IsGuideTone(ctx, pc)) return 6;
+                        if (IsFifth(ctx, pc)) return -1;
+                        return 2; // root or other chord tone
+                    };
+
+                    int harmonic = harmonicVal(gh) + harmonicVal(gl);
+                    if (in > 0) harmonic += 3; // color tone has fixed harmonic value
+
+                    // --- Tier 2: Continuity (float, tiebreaker within harmonic tier) ---
+                    float continuity = 0.0f;
                     if (prevVoices[0] > 0 || prevVoices[1] > 0 || prevVoices[2] > 0) {
                         int curr[3] = {gh, gl, in};
                         float vlCost = MinCostAssignment(prevVoices, curr);
-                        // Convert cost to a reward (lower cost = higher score)
-                        // Scale by context: close harmony = stronger continuity preference
-                        score -= vlCost * continuityWeight;
+                        continuity = -vlCost * continuityWeight;
                     }
 
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestTuple = {gh, gl, in, score};
+                    // --- Tier 3: Density (integer, last tiebreaker) ---
+                    int density = (gh > 0 ? 1 : 0) + (gl > 0 ? 1 : 0) + (in > 0 ? 1 : 0);
+
+                    TieredScore ts = {harmonic, continuity, density};
+                    if (ts > bestScore) {
+                        bestScore = ts;
+                        bestTuple = {gh, gl, in, ts};
                     }
                 }
             }

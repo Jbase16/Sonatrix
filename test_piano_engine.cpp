@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include <set>
 
 using namespace Sonatrix::Core;
 
@@ -52,23 +53,102 @@ static ProgressionEntry Sl(double beat, PitchClass root, ChordQuality q, const c
 }
 
 // ---------------------------------------------------------
-// Voice Identity Metrics
+// Per-Transition Diagnostic
 // ---------------------------------------------------------
-struct VoiceIdentityMetrics {
-    // Per-role: same role retains same pitch or resolves by semitone
-    int roleRetained[4] = {0};
-    int roleResolved[4] = {0};
-    // Cross-role: any pitch retained or resolved across any inner voice
-    int crossRetained = 0;
-    int crossResolved = 0;
-    int totalTransitions = 0;
+struct TransitionEvent {
+    std::string description;
+};
 
-    int TotalRoleRetained() const { int s = 0; for (int i = 0; i < 4; ++i) s += roleRetained[i]; return s; }
-    int TotalRoleResolved() const { int s = 0; for (int i = 0; i < 4; ++i) s += roleResolved[i]; return s; }
+static void AnalyzeTransition(size_t idx, const MIDI::PianoVoicing& prev, const MIDI::PianoVoicing& curr,
+                               const char* prevLabel, const char* currLabel,
+                               std::vector<TransitionEvent>& events) {
+    constexpr int rhRoles[] = {
+        static_cast<int>(MIDI::PianoTargetRole::RH_GuideLow),
+        static_cast<int>(MIDI::PianoTargetRole::RH_Inner),
+        static_cast<int>(MIDI::PianoTargetRole::RH_GuideHigh),
+        static_cast<int>(MIDI::PianoTargetRole::RH_Top)
+    };
+    const char* roleNames[] = {"Lo", "In", "Hi", "Tp"};
+
+    // Collect previous and current pitches with role labels
+    std::vector<std::pair<uint8_t, int>> prevPitches, currPitches;
+    for (int r = 0; r < 4; ++r) {
+        uint8_t pp = prev.pitches[rhRoles[r]];
+        uint8_t cp = curr.pitches[rhRoles[r]];
+        if (pp > 0) prevPitches.push_back({pp, r});
+        if (cp > 0) currPitches.push_back({cp, r});
+    }
+
+    std::string line = "  " + std::string(prevLabel) + " -> " + std::string(currLabel) + ": ";
+
+    std::set<uint8_t> matchedCurr;
+    int holds = 0, resolves = 0, migrates = 0, drops = 0;
+
+    for (auto& [pp, pr] : prevPitches) {
+        // Check same-role hold
+        uint8_t sameRoleCurr = curr.pitches[rhRoles[pr]];
+        if (sameRoleCurr == pp) {
+            line += PitchToName(pp) + "[" + roleNames[pr] + " hold] ";
+            matchedCurr.insert(sameRoleCurr);
+            holds++;
+            continue;
+        }
+
+        // Check same-role semitone resolve
+        if (sameRoleCurr > 0 && std::abs(static_cast<int>(sameRoleCurr) - static_cast<int>(pp)) == 1) {
+            line += PitchToName(pp) + "->" + PitchToName(sameRoleCurr) + "[" + roleNames[pr] + " res] ";
+            matchedCurr.insert(sameRoleCurr);
+            resolves++;
+            continue;
+        }
+
+        // Check cross-role hold (pitch migrated to different role)
+        bool found = false;
+        for (auto& [cp, cr] : currPitches) {
+            if (cp == pp && cr != pr && matchedCurr.find(cp) == matchedCurr.end()) {
+                line += PitchToName(pp) + "[" + roleNames[pr] + "->" + roleNames[cr] + " migrate] ";
+                matchedCurr.insert(cp);
+                migrates++;
+                found = true;
+                break;
+            }
+        }
+        if (found) continue;
+
+        // Check cross-role semitone resolve
+        for (auto& [cp, cr] : currPitches) {
+            if (std::abs(static_cast<int>(cp) - static_cast<int>(pp)) == 1 &&
+                matchedCurr.find(cp) == matchedCurr.end()) {
+                line += PitchToName(pp) + "->" + PitchToName(cp) + "[" + roleNames[pr] + "->" + roleNames[cr] + " xres] ";
+                matchedCurr.insert(cp);
+                resolves++;
+                found = true;
+                break;
+            }
+        }
+        if (found) continue;
+
+        // Dropped
+        line += PitchToName(pp) + "[" + roleNames[pr] + " drop] ";
+        drops++;
+    }
+
+    line += " | h=" + std::to_string(holds) + " r=" + std::to_string(resolves) +
+            " m=" + std::to_string(migrates) + " d=" + std::to_string(drops);
+    events.push_back({line});
+}
+
+// ---------------------------------------------------------
+// Aggregate Metrics
+// ---------------------------------------------------------
+struct AggregateMetrics {
+    int crossHeld = 0, crossResolved = 0;
+    int perRoleHeld = 0, perRoleResolved = 0;
+    int transitions = 0;
 };
 
 static void RunTrace(const char* title, MIDI::PianoStyle style, MIDI::SopranoContour contour,
-                     const std::vector<ProgressionEntry>& entries) {
+                     const std::vector<ProgressionEntry>& entries, bool showDiagnostics = false) {
     std::cout << "\n=== " << title << " [" << StyleName(style) << "/" << ContourName(contour) << "] ===\n";
 
     std::vector<ChordTrackEvent> chordTimeline;
@@ -84,7 +164,6 @@ static void RunTrace(const char* title, MIDI::PianoStyle style, MIDI::SopranoCon
     MIDI::PianoVoicingPlanner planner(style, contour);
     auto solved = planner.SolveTimeline(chordTimeline);
 
-    // Header
     std::cout << std::left
               << std::setw(8) << "Beat"
               << std::setw(10) << "Chord"
@@ -99,13 +178,15 @@ static void RunTrace(const char* title, MIDI::PianoStyle style, MIDI::SopranoCon
               << "\n";
     std::cout << std::string(72, '-') << "\n";
 
-    VoiceIdentityMetrics vim;
     constexpr int rhRoles[] = {
         static_cast<int>(MIDI::PianoTargetRole::RH_GuideLow),
         static_cast<int>(MIDI::PianoTargetRole::RH_Inner),
         static_cast<int>(MIDI::PianoTargetRole::RH_GuideHigh),
         static_cast<int>(MIDI::PianoTargetRole::RH_Top)
     };
+
+    AggregateMetrics agg;
+    std::vector<TransitionEvent> diagEvents;
 
     for (size_t i = 0; i < entries.size(); ++i) {
         const auto& v = solved[i];
@@ -114,86 +195,80 @@ static void RunTrace(const char* title, MIDI::PianoStyle style, MIDI::SopranoCon
         uint8_t lh2 = v.GetPitch(MIDI::PianoTargetRole::LH_Fifth);
         if (lh2 == 0) lh2 = v.GetPitch(MIDI::PianoTargetRole::LH_ShellLow);
 
-        uint8_t rhLow = v.GetPitch(MIDI::PianoTargetRole::RH_GuideLow);
-        uint8_t rhInner = v.GetPitch(MIDI::PianoTargetRole::RH_Inner);
-        uint8_t rhHigh = v.GetPitch(MIDI::PianoTargetRole::RH_GuideHigh);
-        uint8_t rhTop = v.GetPitch(MIDI::PianoTargetRole::RH_Top);
-
-        if (i > 0) {
-            vim.totalTransitions++;
-            const auto& prev = solved[i - 1];
-
-            // Per-role tracking
-            for (int r = 0; r < 4; ++r) {
-                int roleIdx = rhRoles[r];
-                uint8_t curr = v.pitches[roleIdx];
-                uint8_t prv = prev.pitches[roleIdx];
-                if (curr == 0 || prv == 0) continue;
-                if (curr == prv) vim.roleRetained[r]++;
-                else if (std::abs(static_cast<int>(curr) - static_cast<int>(prv)) == 1) vim.roleResolved[r]++;
-            }
-
-            // Cross-role tracking: for each previous inner pitch,
-            // check if it appears in any current inner role (hold) or ±1 (resolve)
-            std::vector<uint8_t> prevPitches, currPitches;
-            for (int r = 0; r < 4; ++r) {
-                uint8_t pp = prev.pitches[rhRoles[r]];
-                uint8_t cp = v.pitches[rhRoles[r]];
-                if (pp > 0) prevPitches.push_back(pp);
-                if (cp > 0) currPitches.push_back(cp);
-            }
-            for (uint8_t pp : prevPitches) {
-                bool matched = false;
-                for (uint8_t cp : currPitches) {
-                    if (cp == pp) { vim.crossRetained++; matched = true; break; }
-                }
-                if (!matched) {
-                    for (uint8_t cp : currPitches) {
-                        if (std::abs(static_cast<int>(cp) - static_cast<int>(pp)) == 1) {
-                            vim.crossResolved++;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
         std::cout << std::left
                   << std::setw(8) << std::fixed << std::setprecision(1) << entries[i].beat
                   << std::setw(10) << entries[i].label
                   << std::setw(7) << PitchToName(lhRoot)
                   << std::setw(7) << PitchToName(lh2)
-                  << std::setw(7) << PitchToName(rhLow)
-                  << std::setw(7) << PitchToName(rhInner)
-                  << std::setw(7) << PitchToName(rhHigh)
-                  << std::setw(7) << PitchToName(rhTop)
+                  << std::setw(7) << PitchToName(v.GetPitch(MIDI::PianoTargetRole::RH_GuideLow))
+                  << std::setw(7) << PitchToName(v.GetPitch(MIDI::PianoTargetRole::RH_Inner))
+                  << std::setw(7) << PitchToName(v.GetPitch(MIDI::PianoTargetRole::RH_GuideHigh))
+                  << std::setw(7) << PitchToName(v.GetPitch(MIDI::PianoTargetRole::RH_Top))
                   << std::setw(5) << v.RHSpan()
                   << std::setw(5) << v.RHDensity()
                   << "\n";
-    }
 
-    // Print metrics
-    const char* roleNames[] = {"GuidLo", "Inner", "GuidHi", "Top"};
-    std::cout << "--- Per-Role: ";
-    for (int r = 0; r < 4; ++r) {
-        if (vim.roleRetained[r] > 0 || vim.roleResolved[r] > 0) {
-            std::cout << roleNames[r] << "[h=" << vim.roleRetained[r]
-                      << " r=" << vim.roleResolved[r] << "] ";
+        if (i > 0) {
+            agg.transitions++;
+            const auto& prev = solved[i - 1];
+
+            // Per-role
+            for (int r = 0; r < 4; ++r) {
+                uint8_t curr = v.pitches[rhRoles[r]];
+                uint8_t prv = prev.pitches[rhRoles[r]];
+                if (curr == 0 || prv == 0) continue;
+                if (curr == prv) agg.perRoleHeld++;
+                else if (std::abs(static_cast<int>(curr) - static_cast<int>(prv)) == 1) agg.perRoleResolved++;
+            }
+
+            // Cross-role
+            std::vector<uint8_t> prevP, currP;
+            for (int r = 0; r < 4; ++r) {
+                uint8_t pp = prev.pitches[rhRoles[r]];
+                uint8_t cp = v.pitches[rhRoles[r]];
+                if (pp > 0) prevP.push_back(pp);
+                if (cp > 0) currP.push_back(cp);
+            }
+            for (uint8_t pp : prevP) {
+                bool matched = false;
+                for (uint8_t cp : currP) {
+                    if (cp == pp) { agg.crossHeld++; matched = true; break; }
+                }
+                if (!matched) {
+                    for (uint8_t cp : currP) {
+                        if (std::abs(static_cast<int>(cp) - static_cast<int>(pp)) == 1) {
+                            agg.crossResolved++; break;
+                        }
+                    }
+                }
+            }
+
+            if (showDiagnostics) {
+                AnalyzeTransition(i, prev, v, entries[i-1].label, entries[i].label, diagEvents);
+            }
         }
     }
-    std::cout << " RoleTotal=" << (vim.TotalRoleRetained() + vim.TotalRoleResolved()) << "\n";
-    std::cout << "--- Cross-Role: held=" << vim.crossRetained
-              << " res=" << vim.crossResolved
-              << " total=" << (vim.crossRetained + vim.crossResolved)
-              << " | Transitions=" << vim.totalTransitions << "\n";
+
+    std::cout << "--- Per-Role: held=" << agg.perRoleHeld << " res=" << agg.perRoleResolved
+              << " total=" << (agg.perRoleHeld + agg.perRoleResolved) << "\n";
+    std::cout << "--- Cross-Role: held=" << agg.crossHeld << " res=" << agg.crossResolved
+              << " total=" << (agg.crossHeld + agg.crossResolved)
+              << " | Transitions=" << agg.transitions << "\n";
+
+    if (showDiagnostics && !diagEvents.empty()) {
+        std::cout << "--- Transition Details:\n";
+        for (const auto& ev : diagEvents) {
+            std::cout << ev.description << "\n";
+        }
+    }
 }
 
 int main() {
     std::cout << "==========================================\n";
-    std::cout << "  HIERARCHICAL PIANO VOICING TRACE v4\n";
+    std::cout << "  HIERARCHICAL PIANO VOICING TRACE v5\n";
     std::cout << "==========================================\n";
 
-    // --- Prog 1: ii-V-I (standard test) ---
+    // --- Standard Progressions ---
     auto iiVI = std::vector<ProgressionEntry>{
         Ch(0,  PitchClass::A,      ChordQuality::Minor7,          "Am7"),
         Ch(4,  PitchClass::D,      ChordQuality::Dominant7,       "D7"),
@@ -203,62 +278,73 @@ int main() {
         Ch(20, PitchClass::E,      ChordQuality::Minor,           "Em"),
     };
 
-    // --- Prog 2: 8-bar pop for contour divergence test ---
-    auto pop8 = std::vector<ProgressionEntry>{
-        Ch(0,  PitchClass::C,      ChordQuality::Major,    "C"),
-        Ch(4,  PitchClass::G,      ChordQuality::Major,    "G"),
-        Ch(8,  PitchClass::A,      ChordQuality::Minor,    "Am"),
-        Ch(12, PitchClass::F,      ChordQuality::Major,    "F"),
-        Ch(16, PitchClass::C,      ChordQuality::Major,    "C"),
-        Ch(20, PitchClass::G,      ChordQuality::Major,    "G"),
-        Ch(24, PitchClass::F,      ChordQuality::Major,    "F"),
-        Ch(28, PitchClass::G,      ChordQuality::Major,    "G"),
-    };
-
-    // --- Prog 3: Slash chords + pedal bass ---
-    auto slashPedal = std::vector<ProgressionEntry>{
-        Ch(0,       PitchClass::C, ChordQuality::Major,    "C"),
-        Sl(4,       PitchClass::C, ChordQuality::Major,    "C/E",  PitchClass::E),
-        Ch(8,       PitchClass::F, ChordQuality::Major,    "F"),
-        Sl(12,      PitchClass::G, ChordQuality::Major,    "G/B",  PitchClass::B),
-        Ch(16,      PitchClass::A, ChordQuality::Minor,    "Am"),
-        Sl(20,      PitchClass::A, ChordQuality::Minor,    "Am/G", PitchClass::G),
-        Sl(24,      PitchClass::F, ChordQuality::Major,    "F/A",  PitchClass::A),
-        Ch(28,      PitchClass::G, ChordQuality::Major,    "G"),
-    };
-
-    // --- Prog 4: Deceptive cadence + sus resolution + major/minor toggle ---
     auto hardProg = std::vector<ProgressionEntry>{
-        Ch(0,  PitchClass::C,      ChordQuality::Major,    "C"),
+        Ch(0,  PitchClass::C,      ChordQuality::Major,     "C"),
         Ch(4,  PitchClass::G,      ChordQuality::Dominant7, "G7"),
-        Ch(8,  PitchClass::A,      ChordQuality::Minor,    "Am"),    // deceptive
-        Ch(12, PitchClass::D,      ChordQuality::Sus4,     "Dsus4"),
-        Ch(16, PitchClass::D,      ChordQuality::Major,    "D"),     // sus resolution
-        Ch(20, PitchClass::G,      ChordQuality::Minor,    "Gm"),    // major->minor toggle
-        Ch(24, PitchClass::G,      ChordQuality::Major,    "G"),     // minor->major toggle
-        Ch(28, PitchClass::C,      ChordQuality::Major,    "C"),
+        Ch(8,  PitchClass::A,      ChordQuality::Minor,     "Am"),
+        Ch(12, PitchClass::D,      ChordQuality::Sus4,      "Dsus4"),
+        Ch(16, PitchClass::D,      ChordQuality::Major,     "D"),
+        Ch(20, PitchClass::G,      ChordQuality::Minor,     "Gm"),
+        Ch(24, PitchClass::G,      ChordQuality::Major,     "G"),
+        Ch(28, PitchClass::C,      ChordQuality::Major,     "C"),
     };
 
-    // 1. Style comparison on ii-V-I (Hold contour)
-    MIDI::PianoStyle styles[] = {MIDI::PianoStyle::PopBlock, MIDI::PianoStyle::SingerSongwriter, MIDI::PianoStyle::JazzShell};
+    // --- Adversarial Progressions ---
+
+    // Modal mixture: major key borrows from parallel minor
+    auto modalMix = std::vector<ProgressionEntry>{
+        Ch(0,  PitchClass::C,      ChordQuality::Major,     "C"),
+        Ch(4,  PitchClass::A,      ChordQuality::Minor,     "Ab"),    // bVI
+        Ch(8,  PitchClass::B,      ChordQuality::Major,     "Bb"),    // bVII
+        Ch(12, PitchClass::C,      ChordQuality::Major,     "C"),
+        Ch(16, PitchClass::F,      ChordQuality::Minor,     "Fm"),    // borrowed iv
+        Ch(20, PitchClass::C,      ChordQuality::Major,     "C"),
+        Ch(24, PitchClass::D,      ChordQuality::Major,     "Db"),    // bII (Neapolitan)
+        Ch(28, PitchClass::C,      ChordQuality::Major,     "C"),
+    };
+
+    // Pedal bass with changing upper harmony
+    auto pedalBass = std::vector<ProgressionEntry>{
+        Sl(0,  PitchClass::C,      ChordQuality::Major,     "C",      PitchClass::C),
+        Sl(4,  PitchClass::D,      ChordQuality::Minor,     "Dm/C",   PitchClass::C),
+        Sl(8,  PitchClass::E,      ChordQuality::Minor,     "Em/C",   PitchClass::C),
+        Sl(12, PitchClass::F,      ChordQuality::Major,     "F/C",    PitchClass::C),
+        Sl(16, PitchClass::G,      ChordQuality::Major,     "G/C",    PitchClass::C),
+        Sl(20, PitchClass::A,      ChordQuality::Minor,     "Am/C",   PitchClass::C),
+        Sl(24, PitchClass::F,      ChordQuality::Major,     "F/C",    PitchClass::C),
+        Sl(28, PitchClass::C,      ChordQuality::Major,     "C",      PitchClass::C),
+    };
+
+    // Backdoor dominant: bVII7 -> I
+    auto backdoor = std::vector<ProgressionEntry>{
+        Ch(0,  PitchClass::C,      ChordQuality::Major7,    "Cmaj7"),
+        Ch(4,  PitchClass::A,      ChordQuality::Minor7,    "Am7"),
+        Ch(8,  PitchClass::D,      ChordQuality::Minor7,    "Dm7"),
+        Ch(12, PitchClass::B,      ChordQuality::Dominant7, "Bb7"),  // backdoor
+        Ch(16, PitchClass::C,      ChordQuality::Major7,    "Cmaj7"),
+        Ch(20, PitchClass::F,      ChordQuality::Major7,    "Fmaj7"),
+        Ch(24, PitchClass::B,      ChordQuality::Dominant7, "Bb7"),  // backdoor again
+        Ch(28, PitchClass::C,      ChordQuality::Major7,    "Cmaj7"),
+    };
+
+    // --- Run with diagnostics ---
+    MIDI::PianoStyle styles[] = {MIDI::PianoStyle::PopBlock, MIDI::PianoStyle::JazzShell};
+
     for (auto s : styles) {
-        RunTrace("ii-V-I Chain", s, MIDI::SopranoContour::Hold, iiVI);
+        RunTrace("ii-V-I Chain", s, MIDI::SopranoContour::Hold, iiVI, true);
     }
 
-    // 2. Contour divergence on 8-bar pop (same style, all 4 contours)
-    MIDI::SopranoContour contours[] = {MIDI::SopranoContour::Hold, MIDI::SopranoContour::Rise,
-                                        MIDI::SopranoContour::Fall, MIDI::SopranoContour::Arch};
-    for (auto c : contours) {
-        RunTrace("8-Bar Pop", MIDI::PianoStyle::PopBlock, c, pop8);
-    }
+    RunTrace("Deceptive/Sus/Toggle", MIDI::PianoStyle::PopBlock, MIDI::SopranoContour::Hold, hardProg, true);
 
-    // 3. Slash chords + pedal bass
-    RunTrace("Slash + Pedal", MIDI::PianoStyle::PopBlock, MIDI::SopranoContour::Hold, slashPedal);
-
-    // 4. Hard progression
+    // Adversarial with diagnostics
     for (auto s : styles) {
-        RunTrace("Deceptive/Sus/Toggle", s, MIDI::SopranoContour::Hold, hardProg);
+        RunTrace("Modal Mixture", s, MIDI::SopranoContour::Hold, modalMix, true);
     }
+
+    RunTrace("Pedal Bass", MIDI::PianoStyle::PopBlock, MIDI::SopranoContour::Hold, pedalBass, true);
+    RunTrace("Pedal Bass", MIDI::PianoStyle::JazzShell, MIDI::SopranoContour::Hold, pedalBass, true);
+
+    RunTrace("Backdoor Dom", MIDI::PianoStyle::JazzShell, MIDI::SopranoContour::Hold, backdoor, true);
 
     std::cout << "\n==========================================\n";
     return 0;
