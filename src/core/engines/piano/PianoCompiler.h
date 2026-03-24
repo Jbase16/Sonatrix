@@ -9,24 +9,20 @@ namespace Sonatrix {
 namespace Core {
 namespace MIDI {
 
-// -----------------------------------------------------------------------------
-// Piano Engine (Intelligent Voice Leading & Pedal)
-//
-// Orchestrates comping patterns by analyzing harmonic density over time.
-// It uses PianoVoicingPlanner to resolve an energy-based voice-leading sequence
-// before compiling the semantic MIR.
-// -----------------------------------------------------------------------------
-
 class PianoCompiler : public IMIRCompiler {
 public:
-  PianoCompiler();
+  explicit PianoCompiler(PianoStyle style = PianoStyle::PopBlock,
+                         SopranoContour contour = SopranoContour::Hold);
   ~PianoCompiler() override = default;
 
-  // Implements IMIRCompiler
   MIDIStream CompileClip(
       const EditorClip &clip,
       const std::vector<ChordTrackEvent> &chordTimeline,
       Sonatrix::Core::ML::DynamicGrooveVector *grooveVectorContext = nullptr) const override;
+
+private:
+  PianoStyle m_style;
+  SopranoContour m_contour;
 };
 
 std::unique_ptr<IMIRCompiler> CreatePianoEngine();

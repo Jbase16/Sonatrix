@@ -2,6 +2,7 @@
 
 #include "BassVoiceManager.h"
 #include "GuitarVoiceManager.h"
+#include "PianoVoiceManager.h"
 #include "VoiceManager.h"
 
 #include <iostream>
@@ -42,6 +43,15 @@ CreateLoadedVoiceManager(PlaybackInstrument instrument,
     auto manager = std::make_unique<BassVoiceManager>();
     if (!manager->LoadMockBassKit(assetsAbsolutePath)) {
       std::cerr << "VoiceManagerFactory: failed to load mock bass kit from "
+                << assetsAbsolutePath << std::endl;
+      return nullptr;
+    }
+    return manager;
+  }
+  case PlaybackInstrument::AcousticPiano: {
+    auto manager = std::make_unique<PianoVoiceManager>();
+    if (!manager->LoadAcousticPianoKit(assetsAbsolutePath)) {
+      std::cerr << "VoiceManagerFactory: failed to load piano kit from "
                 << assetsAbsolutePath << std::endl;
       return nullptr;
     }

@@ -8,7 +8,8 @@ std::unique_ptr<IMIRCompiler> CreatePianoEngine() {
   return std::make_unique<PianoCompiler>();
 }
 
-PianoCompiler::PianoCompiler() {
+PianoCompiler::PianoCompiler(PianoStyle style, SopranoContour contour)
+    : m_style(style), m_contour(contour) {
 }
 
 MIDIStream PianoCompiler::CompileClip(
@@ -17,11 +18,11 @@ MIDIStream PianoCompiler::CompileClip(
   
   MIDIStream stream;
 
-  // 1. Solve the Voice Leading for the entire timeline safely on the stack
-  PianoVoicingPlanner planner;
+  // Solve voice leading with style and contour intelligence
+  PianoVoicingPlanner planner(m_style, m_contour);
   std::vector<PianoVoicing> solvedTimeline = planner.SolveTimeline(chordTimeline);
 
-  // 2. Map MIR Events to the optimized Voicing
+  // Map MIR Events to the optimized Voicing
   for (const auto &mir : clip.basePattern->events) {
     MusicalTime eventTime = clip.timelineStart + mir.offsetMap;
 
@@ -35,16 +36,15 @@ MIDIStream PianoCompiler::CompileClip(
       }
     }
 
-    if (currentChordIndex < 0 || currentChordIndex >= solvedTimeline.size()) continue;
+    if (currentChordIndex < 0 || currentChordIndex >= static_cast<int>(solvedTimeline.size())) continue;
 
-    // Retrieve optimal voicing directly from local vector
     const PianoVoicing& voicing = solvedTimeline[currentChordIndex];
     if (!voicing.IsValid()) continue;
 
     // Map Action Parameter to Semantic Role
     PianoTargetRole role = static_cast<PianoTargetRole>(mir.actionParameter);
     uint8_t pitch = voicing.GetPitch(role);
-    if (pitch == 0) continue; // Note not present in this voicing
+    if (pitch == 0) continue;
 
     // Render MIDI
     stream.events.push_back({eventTime, MIDIEventType::NoteOn, 0, pitch, mir.velocityBase});
