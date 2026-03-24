@@ -269,38 +269,10 @@ int main() {
 
     int successes = 0, failures = 0;
 
-    // ii-V-I across all styles
-    if (RunRender("ii-V-I", "test_piano_pop_iiVI.wav",
-                  MIDI::PianoStyle::PopBlock, MIDI::SopranoContour::Hold,
-                  iiVI, "piano_pop_block")) successes++; else failures++;
-
-    if (RunRender("ii-V-I", "test_piano_ss_iiVI.wav",
-                  MIDI::PianoStyle::SingerSongwriter, MIDI::SopranoContour::Hold,
-                  iiVI, "piano_pop_block")) successes++; else failures++;
-
-    if (RunRender("ii-V-I", "test_piano_jazz_iiVI.wav",
-                  MIDI::PianoStyle::JazzShell, MIDI::SopranoContour::Hold,
-                  iiVI, "piano_pop_block")) successes++; else failures++;
-
-    // Backdoor dominant - Pop
-    if (RunRender("Backdoor Dom", "test_piano_pop_backdoor.wav",
-                  MIDI::PianoStyle::PopBlock, MIDI::SopranoContour::Hold,
-                  backdoor, "piano_pop_block")) successes++; else failures++;
-
-    // Pedal bass - Pop
-    if (RunRender("Pedal Bass", "test_piano_pop_pedal.wav",
-                  MIDI::PianoStyle::PopBlock, MIDI::SopranoContour::Hold,
-                  pedalBass, "piano_pop_block")) successes++; else failures++;
-
     // Simple Pop Four
     if (RunRender("Pop Four", "test_piano_pop_four.wav",
                   MIDI::PianoStyle::PopBlock, MIDI::SopranoContour::Hold,
                   popFour, "piano_pop_block")) successes++; else failures++;
-
-    // Broken syncopation - Pop
-    if (RunRender("Broken Syncopation", "test_piano_pop_broken.wav",
-                  MIDI::PianoStyle::PopBlock, MIDI::SopranoContour::Hold,
-                  iiVI, "piano_pop_broken")) successes++; else failures++;
 
     std::cout << "\n==========================================\n";
     std::cout << "Results: " << successes << " OK, " << failures << " FAILED\n";

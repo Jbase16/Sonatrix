@@ -98,11 +98,11 @@ bool AssetManager::LoadAcousticPianoAnchors(const std::string &directoryPath) {
   return LoadAnchorSet(
       directoryPath, "Acoustic_Piano_Anchors", PlaybackInstrument::AcousticPiano,
       {
-          {"C2 Stereo Mix.wav", 36, 1.0f},
-          {"C3 Stereo Mix.wav", 48, 1.0f},
-          {"C4 Stereo Mix.wav", 60, 1.0f},
-          {"G4 Stereo Mix.wav", 67, 1.0f}, // G4 from EZKeys
-          {"C5 Stereo Mix.wav", 72, 1.0f},
+          {"C2v6.wav", 36, 1.0f},
+          {"C3v16.wav", 48, 1.0f},
+          {"C4v15.wav", 60, 1.0f},
+          {"A4v14.wav", 69, 0.7f}, // A4 is hotter, trim it down
+          {"C5v9.wav", 72, 1.0f},
       },
       0.6f,
       acousticPiano_, "piano anchor");
