@@ -176,8 +176,8 @@ void SamplerVoice::RenderNextBlock(float **outputChannels, uint32_t numFrames,
 
     StereoSample direct = ReadInterpolated(directReadPos_);
 
-    const float outL = direct.left * envelopeLevel_;
-    const float outR = direct.right * envelopeLevel_;
+    const float outL = direct.left * envelopeLevel_ * activeZone_->volumeTrim;
+    const float outR = direct.right * envelopeLevel_ * activeZone_->volumeTrim;
 
     if (numChannels >= 1) {
       outputChannels[0][f] += outL;

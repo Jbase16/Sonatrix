@@ -27,6 +27,7 @@ struct MIDIEvent {
     uint8_t channel{0};           // 0-15
     uint8_t data1{0};             // Note Number or CC Number
     uint8_t data2{0};             // Velocity or CC Value
+    uint8_t anchorOverride{0};    // Explicit rootKey to use for playback, 0 = default nearest-anchor
 };
 
 // Represents a sequence of MIDI events, usually the result of an engine compiling MIR

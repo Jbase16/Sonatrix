@@ -5,11 +5,18 @@ namespace Sonatrix {
 namespace Core {
 namespace Audio {
 
-const SampleZone* InstrumentArticulation::FindZone(uint8_t pitch, uint8_t velocity, int stringId) const {
+const SampleZone* InstrumentArticulation::FindZone(uint8_t pitch, uint8_t velocity, int stringId, uint8_t anchorOverride) const {
     if (zones.empty()) return nullptr;
 
     const SampleZone* bestZone = nullptr;
     float bestScore = 999999.0f; // Lower score is better
+
+    // If an explicit anchor is requested (e.g. for piano texturing), use it directly
+    if (anchorOverride > 0) {
+        for (const auto& zone : zones) {
+            if (zone.rootKey == anchorOverride) return &zone;
+        }
+    }
 
     for (const auto& zone : zones) {
         float score = 0.0f;
@@ -47,21 +54,11 @@ const SampleZone* InstrumentArticulation::FindZone(uint8_t pitch, uint8_t veloci
                 score += 10.0f;
             }
         } else if (instrumentType == PlaybackInstrument::AcousticPiano) {
-            // Fixed register zones to prevent timbral discontinuities.
-            // Adjacent notes must come from the same source sample.
-            // Split points chosen to keep common RH clusters together:
-            //   C2(36)..F2(41)   → C2 anchor  (pitch ≤ 41)
-            //   F#2(42)..F#3(54) → C3 anchor  (pitch 42–54)
-            //   G3(55)..A4(69)   → C4 anchor  (pitch 55–69)
-            //   A#4(70)..        → C5 anchor  (pitch ≥ 70)
-            uint8_t targetRoot;
-            if (pitch <= 41)      targetRoot = 36;  // C2
-            else if (pitch <= 54) targetRoot = 48;  // C3
-            else if (pitch <= 69) targetRoot = 60;  // C4
-            else                  targetRoot = 72;  // C5
-
-            if (zone.rootKey == targetRoot) return &zone;
-            continue; // skip non-matching zones entirely
+            // Piano fallback: Use pure nearest-anchor.
+            // (Real selection now happens via cluster logic in PianoCompiler, which provides anchorOverride).
+            if (std::abs(semitoneDifference) > 7) {
+                score += 5.0f;
+            }
         }
 
         // Keep the zone with the lowest total penalty

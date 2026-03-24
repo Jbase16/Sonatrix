@@ -169,16 +169,15 @@ static bool RunRender(const char* title, const char* outputFile,
             if (beat >= entryBeat) chordLabel = entries[i].label;
         }
 
-        // Find anchor
-        const Audio::SampleZone* zone = articulation.FindZone(pitch, vel);
+        // Find anchor (using anchorOverride to reflect PianoCompiler's cluster choice)
+        const Audio::SampleZone* zone = articulation.FindZone(pitch, vel, -1, ev.anchorOverride);
         std::string anchorStr = zone ? PitchToName(zone->rootKey) : "MISS";
         int shift = zone ? (static_cast<int>(pitch) - static_cast<int>(zone->rootKey)) : 0;
         std::string shiftStr = (shift >= 0 ? "+" : "") + std::to_string(shift);
 
-        // Role from pattern (action parameter cycles through pattern events per chord)
-        size_t patEvents = pattern->events.size();
-        int actionParam = (patEvents > 0) ? pattern->events[noteOnCount % patEvents].actionParameter : -1;
-        std::string roleStr = (actionParam >= 0) ? RoleName(actionParam) : "?";
+        // Role from pattern (safely passed through MIDI channel at compile time)
+        int actionParam = ev.channel;
+        std::string roleStr = (actionParam >= 0 && actionParam <= 7) ? RoleName(actionParam) : "?";
 
         std::cout << "  " << std::left << std::fixed << std::setprecision(1)
                   << std::setw(8) << beat

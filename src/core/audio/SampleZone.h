@@ -22,6 +22,7 @@ struct SampleZone {
     uint8_t rootKey{60};       // The natural MIDI pitch of the recording
     uint8_t lowVelocity{0};    // The lowest velocity this sample covers
     uint8_t highVelocity{127}; // The highest velocity this sample covers
+    float volumeTrim{1.0f};    // Linear gain trim for this specific file
     
     // The actual raw interleaved or planar floating-point audio data.
     // In production, this would be populated by libsndfile or CoreAudio ExtAudioFileRead.
@@ -47,7 +48,7 @@ struct InstrumentArticulation {
     std::vector<SampleZone> zones;
     
     // Real-time lookup: Find the best zone for a given requested pitch, velocity, and optional explicit physical string
-    const SampleZone* FindZone(uint8_t pitch, uint8_t velocity, int stringId = -1) const;
+    const SampleZone* FindZone(uint8_t pitch, uint8_t velocity, int stringId = -1, uint8_t anchorOverride = 0) const;
 };
 
 } // namespace Audio

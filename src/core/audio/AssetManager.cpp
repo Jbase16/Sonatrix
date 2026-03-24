@@ -14,6 +14,7 @@ namespace {
 struct AnchorDefinition {
   const char *fileName;
   uint8_t rootKey;
+  float volumeTrim{1.0f};
 };
 
 bool LoadAnchorSet(const std::string &directoryPath,
@@ -34,6 +35,7 @@ bool LoadAnchorSet(const std::string &directoryPath,
     zone.rootKey = anchor.rootKey;
     zone.lowVelocity = 0;
     zone.highVelocity = 127;
+    zone.volumeTrim = anchor.volumeTrim;
     zone.isLoaded =
         AudioFileReader::LoadFile(zone.filePath, zone.audioData, zone.sampleRate);
 
@@ -96,10 +98,11 @@ bool AssetManager::LoadAcousticPianoAnchors(const std::string &directoryPath) {
   return LoadAnchorSet(
       directoryPath, "Acoustic_Piano_Anchors", PlaybackInstrument::AcousticPiano,
       {
-          {"C2v6.wav", 36},
-          {"C3v16.wav", 48},
-          {"C4v15.wav", 60},
-          {"C5v9.wav", 72},
+          {"C2v6.wav", 36, 1.0f},
+          {"C3v16.wav", 48, 1.0f},
+          {"C4v15.wav", 60, 1.0f},
+          {"A4v14.wav", 69, 0.7f}, // A4v14.wav is hotter, trim it down
+          {"C5v9.wav", 72, 1.0f},
       },
       0.6f,
       acousticPiano_, "piano anchor");
