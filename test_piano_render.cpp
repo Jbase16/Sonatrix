@@ -119,6 +119,26 @@ static bool RunRender(const char* title, const char* outputFile,
     }
     midiStream.SortByTime();
 
+    // Dump resolved voicings per chord
+    MIDI::PianoVoicingPlanner dumpPlanner(style, contour);
+    auto voicings = dumpPlanner.SolveTimeline(chordTimeline);
+    std::cout << "  Voicings:\n";
+    for (size_t i = 0; i < entries.size() && i < voicings.size(); ++i) {
+        const auto& v = voicings[i];
+        uint8_t lh2 = v.GetPitch(MIDI::PianoTargetRole::LH_Fifth);
+        if (lh2 == 0) lh2 = v.GetPitch(MIDI::PianoTargetRole::LH_ShellLow);
+        std::cout << "    " << std::setw(8) << std::left << entries[i].label
+                  << "LH=" << std::setw(5) << PitchToName(v.GetPitch(MIDI::PianoTargetRole::LH_Root))
+                  << std::setw(5) << PitchToName(lh2)
+                  << " | RH="
+                  << std::setw(5) << PitchToName(v.GetPitch(MIDI::PianoTargetRole::RH_GuideLow))
+                  << std::setw(5) << PitchToName(v.GetPitch(MIDI::PianoTargetRole::RH_Inner))
+                  << std::setw(5) << PitchToName(v.GetPitch(MIDI::PianoTargetRole::RH_GuideHigh))
+                  << std::setw(5) << PitchToName(v.GetPitch(MIDI::PianoTargetRole::RH_Top))
+                  << " span=" << v.RHSpan() << " den=" << v.RHDensity()
+                  << "\n";
+    }
+
     // Trace MIDI events with anchor analysis
     auto& articulation = Audio::AssetManager::GetInstance().GetAcousticPianoArticulation();
 
@@ -228,7 +248,7 @@ int main() {
         Ch(0,  PitchClass::C,  ChordQuality::Major7,    "Cmaj7"),
         Ch(4,  PitchClass::A,  ChordQuality::Minor7,    "Am7"),
         Ch(8,  PitchClass::D,  ChordQuality::Minor7,    "Dm7"),
-        Ch(12, PitchClass::B,  ChordQuality::Dominant7, "Bb7"),
+        Ch(12, PitchClass::A_Sharp,  ChordQuality::Dominant7, "Bb7"),
     };
 
     auto pedalBass = std::vector<ProgressionEntry>{

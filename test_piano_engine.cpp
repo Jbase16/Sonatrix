@@ -329,10 +329,10 @@ int main() {
         Ch(0,  PitchClass::C,      ChordQuality::Major7,    "Cmaj7"),
         Ch(4,  PitchClass::A,      ChordQuality::Minor7,    "Am7"),
         Ch(8,  PitchClass::D,      ChordQuality::Minor7,    "Dm7"),
-        Ch(12, PitchClass::B,      ChordQuality::Dominant7, "Bb7"),
+        Ch(12, PitchClass::A_Sharp, ChordQuality::Dominant7, "Bb7"),
         Ch(16, PitchClass::C,      ChordQuality::Major7,    "Cmaj7"),
         Ch(20, PitchClass::F,      ChordQuality::Major7,    "Fmaj7"),
-        Ch(24, PitchClass::B,      ChordQuality::Dominant7, "Bb7"),
+        Ch(24, PitchClass::A_Sharp, ChordQuality::Dominant7, "Bb7"),
         Ch(28, PitchClass::C,      ChordQuality::Major7,    "Cmaj7"),
     };
 
