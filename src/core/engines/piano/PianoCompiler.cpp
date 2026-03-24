@@ -78,7 +78,7 @@ static uint8_t ResolvePitch(const PianoVoicing& voicing, PianoTargetRole role) {
 static uint8_t PickClusterAnchor(const std::vector<uint8_t>& rhPitches) {
     if (rhPitches.empty()) return 0;
 
-    const uint8_t candidates[] = {36, 48, 60, 69, 72};
+    const uint8_t candidates[] = {36, 48, 60, 67, 72};
     uint8_t bestAnchor = 60;
     float bestScore = 99999.0f;
 
