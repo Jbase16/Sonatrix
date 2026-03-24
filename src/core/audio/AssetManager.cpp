@@ -101,7 +101,7 @@ bool AssetManager::LoadAcousticPianoAnchors(const std::string &directoryPath) {
           {"C2 Stereo Mix.wav", 36, 1.0f},
           {"C3 Stereo Mix.wav", 48, 1.0f},
           {"C4 Stereo Mix.wav", 60, 1.0f},
-          {"G4 Stereo Mix.wav", 67, 1.0f}, // Replaced A4 with G4 from EZKeys
+          {"G4 Stereo Mix.wav", 67, 1.0f}, // G4 from EZKeys
           {"C5 Stereo Mix.wav", 72, 1.0f},
       },
       0.6f,

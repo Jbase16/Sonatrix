@@ -250,6 +250,13 @@ int main() {
         Ch(12, PitchClass::A_Sharp,  ChordQuality::Dominant7, "Bb7"),
     };
 
+    auto popFour = std::vector<ProgressionEntry>{
+        Ch(0,  PitchClass::G,  ChordQuality::Major,    "G"),
+        Ch(4,  PitchClass::D,  ChordQuality::Major,    "D"),
+        Ch(8,  PitchClass::E,  ChordQuality::Minor,    "Em"),
+        Ch(12, PitchClass::C,  ChordQuality::Major,    "C"),
+    };
+
     auto pedalBass = std::vector<ProgressionEntry>{
         Sl(0,  PitchClass::C,  ChordQuality::Major,  "C",    PitchClass::C),
         Sl(4,  PitchClass::D,  ChordQuality::Minor,  "Dm/C", PitchClass::C),
@@ -284,6 +291,11 @@ int main() {
     if (RunRender("Pedal Bass", "test_piano_pop_pedal.wav",
                   MIDI::PianoStyle::PopBlock, MIDI::SopranoContour::Hold,
                   pedalBass, "piano_pop_block")) successes++; else failures++;
+
+    // Simple Pop Four
+    if (RunRender("Pop Four", "test_piano_pop_four.wav",
+                  MIDI::PianoStyle::PopBlock, MIDI::SopranoContour::Hold,
+                  popFour, "piano_pop_block")) successes++; else failures++;
 
     // Broken syncopation - Pop
     if (RunRender("Broken Syncopation", "test_piano_pop_broken.wav",
