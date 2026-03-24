@@ -47,14 +47,10 @@ const SampleZone* InstrumentArticulation::FindZone(uint8_t pitch, uint8_t veloci
                 score += 10.0f;
             }
         } else if (instrumentType == PlaybackInstrument::AcousticPiano) {
-            // Piano tolerates moderate pitch shifts in both directions.
+            // Piano: pure nearest-anchor selection.
             // Quality degrades noticeably beyond a P5 (7 semitones).
-            // Mild preference for shifting down (preserves low-end weight in LH).
-            if (semitoneDifference < 0) {
-                score += 0.5f; // slight upward-shift preference
-            }
             if (std::abs(semitoneDifference) > 7) {
-                score += 5.0f; // heavy penalty beyond P5
+                score += 5.0f;
             }
         }
 

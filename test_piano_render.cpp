@@ -134,6 +134,7 @@ static bool RunRender(const char* title, const char* outputFile,
     std::cout << "  " << std::string(53, '-') << "\n";
 
     // Match each NoteOn to the chord it falls under
+    size_t noteOnCount = 0;
     for (const auto& ev : midiStream.events) {
         if (ev.type != MIDI::MIDIEventType::NoteOn || ev.data2 == 0) continue;
 
@@ -154,18 +155,21 @@ static bool RunRender(const char* title, const char* outputFile,
         int shift = zone ? (static_cast<int>(pitch) - static_cast<int>(zone->rootKey)) : 0;
         std::string shiftStr = (shift >= 0 ? "+" : "") + std::to_string(shift);
 
-        // Determine role (approximate from pitch range)
-        std::string roleGuess = (pitch < 55) ? "LH" : "RH";
+        // Role from pattern (action parameter cycles through pattern events per chord)
+        size_t patEvents = pattern->events.size();
+        int actionParam = (patEvents > 0) ? pattern->events[noteOnCount % patEvents].actionParameter : -1;
+        std::string roleStr = (actionParam >= 0) ? RoleName(actionParam) : "?";
 
         std::cout << "  " << std::left << std::fixed << std::setprecision(1)
                   << std::setw(8) << beat
                   << std::setw(8) << chordLabel
-                  << std::setw(8) << roleGuess
+                  << std::setw(8) << roleStr
                   << std::setw(10) << (PitchToName(pitch) + " (" + std::to_string(pitch) + ")")
                   << std::setw(8) << anchorStr
                   << std::setw(6) << shiftStr
                   << std::setw(5) << static_cast<int>(vel)
                   << "\n";
+        noteOnCount++;
     }
 
     // Render WAV

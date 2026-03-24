@@ -44,12 +44,26 @@ MIDIStream PianoCompiler::CompileClip(
     // Map Action Parameter to Semantic Role
     PianoTargetRole role = static_cast<PianoTargetRole>(mir.actionParameter);
     uint8_t pitch = voicing.GetPitch(role);
+
+    // Role fallback: patterns request LH_Fifth but SS/Jazz populate LH_ShellLow
+    if (pitch == 0) {
+      if (role == PianoTargetRole::LH_Fifth) {
+        pitch = voicing.GetPitch(PianoTargetRole::LH_ShellLow);
+      } else if (role == PianoTargetRole::LH_ShellLow) {
+        pitch = voicing.GetPitch(PianoTargetRole::LH_Fifth);
+      } else if (role == PianoTargetRole::RH_Inner) {
+        // Inner voice may be empty in sparse voicings — not an error
+      }
+    }
+
     if (pitch == 0) continue;
 
-    // Render MIDI
+    // Render MIDI — use STANDARD_PPQN consistently for tick resolution
     stream.events.push_back({eventTime, MIDIEventType::NoteOn, 0, pitch, mir.velocityBase});
     
-    uint32_t durTicks = (mir.lengthBeats > 0) ? static_cast<uint32_t>(mir.lengthBeats * 480) : 480;
+    uint32_t durTicks = (mir.lengthBeats > 0)
+        ? static_cast<uint32_t>(mir.lengthBeats * STANDARD_PPQN)
+        : static_cast<uint32_t>(STANDARD_PPQN);
     stream.events.push_back({eventTime + MusicalTime(durTicks), MIDIEventType::NoteOff, 0, pitch, 0});
   }
 
