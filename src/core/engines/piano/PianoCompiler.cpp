@@ -18,7 +18,7 @@ PianoCompiler::PianoCompiler(PianoStyle style, SopranoContour contour)
 // Determine output velocity from role and register, using the pattern velocity
 // as a dynamic intensity signal (how hard the pattern "wants" this beat) while
 // applying role/register shaping relative to a neutral baseline.
-static uint8_t ShapeVelocity(uint8_t patternVel, PianoTargetRole role, uint8_t pitch) {
+static uint8_t ShapeVelocity(uint8_t patternVel, PianoTargetRole role, uint8_t pitch, bool sparseLH) {
     // Normalize pattern velocity to a 0.0–1.0 intensity factor.
     // The pattern's velocity encodes rhythmic emphasis, not voice balance.
     float intensity = static_cast<float>(patternVel) / 127.0f;
@@ -43,6 +43,12 @@ static uint8_t ShapeVelocity(uint8_t patternVel, PianoTargetRole role, uint8_t p
     else if (pitch >= 67) baseVel -= 4;
     else if (pitch <= 42) baseVel += 8;
     else if (pitch <= 48) baseVel += 4;
+
+    // Sparse LH compensation: when LH has no second voice,
+    // the RH dominates perceptually. Pull it back.
+    if (sparseLH && role >= PianoTargetRole::RH_GuideLow) {
+        baseVel -= 8;
+    }
 
     // Scale by pattern intensity
     int outVel = static_cast<int>(baseVel * intensity);
@@ -125,6 +131,10 @@ MIDIStream PianoCompiler::CompileClip(
     const PianoVoicing& voicing = solvedTimeline[currentChordIndex];
     if (!voicing.IsValid()) continue;
 
+    // Detect sparse LH: only root, no second support note
+    bool sparseLH = (voicing.GetPitch(PianoTargetRole::LH_Fifth) == 0 &&
+                     voicing.GetPitch(PianoTargetRole::LH_ShellLow) == 0);
+
     // Resolve pitch with fallback chain
     PianoTargetRole role = static_cast<PianoTargetRole>(mir.actionParameter);
     uint8_t pitch = ResolvePitch(voicing, role);
@@ -134,7 +144,7 @@ MIDIStream PianoCompiler::CompileClip(
     if (!pitchesAtCurrentBeat.insert(pitch).second) continue;
 
     // Shape velocity by role and register
-    uint8_t outVel = ShapeVelocity(mir.velocityBase, role, pitch);
+    uint8_t outVel = ShapeVelocity(mir.velocityBase, role, pitch, sparseLH);
 
     // Render MIDI — use STANDARD_PPQN consistently for tick resolution
     stream.events.push_back({eventTime, MIDIEventType::NoteOn, 0, pitch, outVel});

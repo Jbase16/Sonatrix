@@ -96,10 +96,10 @@ bool AssetManager::LoadAcousticPianoAnchors(const std::string &directoryPath) {
   return LoadAnchorSet(
       directoryPath, "Acoustic_Piano_Anchors", PlaybackInstrument::AcousticPiano,
       {
-          {"C2v6.wav", 36},
-          {"C3v16.wav", 48},
-          {"C4v15.wav", 60},
-          {"C5v9.wav", 72},
+          {"16.wav", 36},
+          {"028.wav", 48},
+          {"40.wav", 60},
+          {"052.wav", 72},
       },
       0.6f,
       acousticPiano_, "piano anchor");

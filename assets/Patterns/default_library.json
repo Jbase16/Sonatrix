@@ -885,17 +885,19 @@
         "Piano": {
           "totalLengthBeats": 4.0,
           "events": [
-            { "offsetBeats": 0.0, "lengthBeats": 1.9, "velocityBase": 100, "type": "GenericNote", "actionParameter": 0 },
-            { "offsetBeats": 0.0, "lengthBeats": 1.9, "velocityBase": 90, "type": "GenericNote", "actionParameter": 1 },
-            { "offsetBeats": 0.0, "lengthBeats": 1.9, "velocityBase": 85, "type": "GenericNote", "actionParameter": 4 },
-            { "offsetBeats": 0.0, "lengthBeats": 1.9, "velocityBase": 85, "type": "GenericNote", "actionParameter": 5 },
-            { "offsetBeats": 0.0, "lengthBeats": 1.9, "velocityBase": 105, "type": "GenericNote", "actionParameter": 7 },
+            { "offsetBeats": 0.0, "lengthBeats": 1.9, "velocityBase": 108, "type": "GenericNote", "actionParameter": 0 },
+            { "offsetBeats": 0.0, "lengthBeats": 1.9, "velocityBase": 92, "type": "GenericNote", "actionParameter": 1 },
+            { "offsetBeats": 0.0, "lengthBeats": 1.9, "velocityBase": 72, "type": "GenericNote", "actionParameter": 4 },
+            { "offsetBeats": 0.0, "lengthBeats": 1.9, "velocityBase": 68, "type": "GenericNote", "actionParameter": 5 },
+            { "offsetBeats": 0.0, "lengthBeats": 1.9, "velocityBase": 62, "type": "GenericNote", "actionParameter": 6 },
+            { "offsetBeats": 0.0, "lengthBeats": 1.9, "velocityBase": 78, "type": "GenericNote", "actionParameter": 7 },
             
-            { "offsetBeats": 2.0, "lengthBeats": 1.9, "velocityBase": 90, "type": "GenericNote", "actionParameter": 0 },
-            { "offsetBeats": 2.0, "lengthBeats": 1.9, "velocityBase": 80, "type": "GenericNote", "actionParameter": 1 },
-            { "offsetBeats": 2.0, "lengthBeats": 1.9, "velocityBase": 75, "type": "GenericNote", "actionParameter": 4 },
-            { "offsetBeats": 2.0, "lengthBeats": 1.9, "velocityBase": 75, "type": "GenericNote", "actionParameter": 5 },
-            { "offsetBeats": 2.0, "lengthBeats": 1.9, "velocityBase": 95, "type": "GenericNote", "actionParameter": 7 }
+            { "offsetBeats": 2.0, "lengthBeats": 1.9, "velocityBase": 98, "type": "GenericNote", "actionParameter": 0 },
+            { "offsetBeats": 2.0, "lengthBeats": 1.9, "velocityBase": 84, "type": "GenericNote", "actionParameter": 1 },
+            { "offsetBeats": 2.0, "lengthBeats": 1.9, "velocityBase": 64, "type": "GenericNote", "actionParameter": 4 },
+            { "offsetBeats": 2.0, "lengthBeats": 1.9, "velocityBase": 60, "type": "GenericNote", "actionParameter": 5 },
+            { "offsetBeats": 2.0, "lengthBeats": 1.9, "velocityBase": 56, "type": "GenericNote", "actionParameter": 6 },
+            { "offsetBeats": 2.0, "lengthBeats": 1.9, "velocityBase": 70, "type": "GenericNote", "actionParameter": 7 }
           ]
         }
       }
@@ -914,18 +916,22 @@
             
             { "offsetBeats": 1.0, "lengthBeats": 0.9, "velocityBase": 85, "type": "GenericNote", "actionParameter": 4 },
             { "offsetBeats": 1.0, "lengthBeats": 0.9, "velocityBase": 85, "type": "GenericNote", "actionParameter": 5 },
+            { "offsetBeats": 1.0, "lengthBeats": 0.9, "velocityBase": 80, "type": "GenericNote", "actionParameter": 6 },
             { "offsetBeats": 1.0, "lengthBeats": 0.9, "velocityBase": 100, "type": "GenericNote", "actionParameter": 7 },
             
             { "offsetBeats": 2.0, "lengthBeats": 0.4, "velocityBase": 75, "type": "GenericNote", "actionParameter": 4 },
             { "offsetBeats": 2.0, "lengthBeats": 0.4, "velocityBase": 75, "type": "GenericNote", "actionParameter": 5 },
+            { "offsetBeats": 2.0, "lengthBeats": 0.4, "velocityBase": 70, "type": "GenericNote", "actionParameter": 6 },
             { "offsetBeats": 2.0, "lengthBeats": 0.4, "velocityBase": 90, "type": "GenericNote", "actionParameter": 7 },
             
             { "offsetBeats": 2.5, "lengthBeats": 0.9, "velocityBase": 85, "type": "GenericNote", "actionParameter": 4 },
             { "offsetBeats": 2.5, "lengthBeats": 0.9, "velocityBase": 85, "type": "GenericNote", "actionParameter": 5 },
+            { "offsetBeats": 2.5, "lengthBeats": 0.9, "velocityBase": 80, "type": "GenericNote", "actionParameter": 6 },
             { "offsetBeats": 2.5, "lengthBeats": 0.9, "velocityBase": 100, "type": "GenericNote", "actionParameter": 7 },
             
             { "offsetBeats": 3.5, "lengthBeats": 0.4, "velocityBase": 70, "type": "GenericNote", "actionParameter": 4 },
             { "offsetBeats": 3.5, "lengthBeats": 0.4, "velocityBase": 70, "type": "GenericNote", "actionParameter": 5 },
+            { "offsetBeats": 3.5, "lengthBeats": 0.4, "velocityBase": 65, "type": "GenericNote", "actionParameter": 6 },
             { "offsetBeats": 3.5, "lengthBeats": 0.4, "velocityBase": 85, "type": "GenericNote", "actionParameter": 7 }
           ]
         }
