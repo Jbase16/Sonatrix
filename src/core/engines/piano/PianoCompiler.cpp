@@ -19,40 +19,32 @@ PianoCompiler::PianoCompiler(PianoStyle style, SopranoContour contour)
 // as a dynamic intensity signal (how hard the pattern "wants" this beat) while
 // applying role/register shaping relative to a neutral baseline.
 static uint8_t ShapeVelocity(uint8_t patternVel, PianoTargetRole role, uint8_t pitch, bool sparseLH) {
-    // Normalize pattern velocity to a 0.0–1.0 intensity factor.
-    // The pattern's velocity encodes rhythmic emphasis, not voice balance.
-    float intensity = static_cast<float>(patternVel) / 127.0f;
-
-    // Role-based target velocity (at full intensity).
-    // These are the "ideal" velocities for each voice role on a real piano.
     int baseVel;
     switch (role) {
-      case PianoTargetRole::LH_Root:      baseVel = 90; break;
+      case PianoTargetRole::LH_Root:      baseVel = 84; break;
       case PianoTargetRole::LH_Fifth:
-      case PianoTargetRole::LH_ShellLow:  baseVel = 82; break;
-      case PianoTargetRole::LH_Octave:    baseVel = 78; break;
-      case PianoTargetRole::RH_GuideLow:  baseVel = 72; break;
-      case PianoTargetRole::RH_Inner:     baseVel = 64; break;
-      case PianoTargetRole::RH_GuideHigh: baseVel = 68; break;
-      case PianoTargetRole::RH_Top:       baseVel = 74; break;
-      default:                            baseVel = 72; break;
+      case PianoTargetRole::LH_ShellLow:  baseVel = 74; break;
+      case PianoTargetRole::LH_Octave:    baseVel = 70; break;
+      case PianoTargetRole::RH_GuideLow:  baseVel = 68; break;
+      case PianoTargetRole::RH_Inner:     baseVel = 62; break;
+      case PianoTargetRole::RH_GuideHigh: baseVel = 64; break;
+      case PianoTargetRole::RH_Top:       baseVel = 70; break;
+      default:                            baseVel = 66; break;
     }
 
-    // Register-based correction: high notes are perceptually louder on piano.
-    if (pitch >= 72)      baseVel -= 8;
-    else if (pitch >= 67) baseVel -= 4;
-    else if (pitch <= 42) baseVel += 8;
-    else if (pitch <= 48) baseVel += 4;
+    if (pitch >= 72)      baseVel -= 4;
+    else if (pitch >= 67) baseVel -= 2;
+    else if (pitch <= 42) baseVel += 4;
+    else if (pitch <= 48) baseVel += 2;
 
-    // Sparse LH compensation: when LH has no second voice,
-    // the RH dominates perceptually. Pull it back.
     if (sparseLH && role >= PianoTargetRole::RH_GuideLow) {
-        baseVel -= 8;
+        baseVel -= 4;
     }
 
-    // Scale by pattern intensity
-    int outVel = static_cast<int>(baseVel * intensity);
-    return static_cast<uint8_t>(std::clamp(outVel, 1, 127));
+    int deviation = static_cast<int>(patternVel) - 80;
+    int outVel = baseVel + static_cast<int>(deviation * 0.35f);
+
+    return static_cast<uint8_t>(std::clamp(outVel, 36, 108));
 }
 
 // Try to resolve a pitch for the given role from the voicing.
@@ -74,34 +66,6 @@ static uint8_t ResolvePitch(const PianoVoicing& voicing, PianoTargetRole role) {
     }
     return 0;
 }
-// Evaluate candiate anchors for a right-hand cluster and return root key that minimizes shift penalty
-static uint8_t PickClusterAnchor(const std::vector<uint8_t>& rhPitches) {
-    if (rhPitches.empty()) return 0;
-
-    const uint8_t candidates[] = {
-        36, 39, 42, 45, 
-        48, 51, 54, 57, 
-        60, 63, 66, 69, 
-        72, 75, 78, 81
-    };
-    uint8_t bestAnchor = 60;
-    float bestScore = 99999.0f;
-
-    for (uint8_t anchor : candidates) {
-        float score = 0.0f;
-        for (uint8_t pitch : rhPitches) {
-            int shift = static_cast<int>(pitch) - static_cast<int>(anchor);
-            score += std::abs(shift);
-            if (std::abs(shift) > 5) score += 20.0f; // Heavy penalty for stretching > 5 semitones
-            if (shift < -2) score += 5.0f; // Penalty for playing lower than the sample allows natively
-        }
-        if (score < bestScore) {
-            bestScore = score;
-            bestAnchor = anchor;
-        }
-    }
-    return bestAnchor;
-}
 
 MIDIStream PianoCompiler::CompileClip(
     const EditorClip &clip, const std::vector<ChordTrackEvent> &chordTimeline,
@@ -117,11 +81,15 @@ MIDIStream PianoCompiler::CompileClip(
   // Track pitches already emitted per beat to prevent doubled notes from fallback
   MusicalTime lastEventTime{-1};
   std::set<uint8_t> pitchesAtCurrentBeat;
-  std::vector<uint8_t> currentRHNotes;
-  uint8_t currentRHAnchor = 0;
 
   for (const auto &mir : clip.basePattern->events) {
     MusicalTime eventTime = clip.timelineStart + mir.offsetMap;
+
+    // Reset dedup set when beat changes
+    if (eventTime != lastEventTime) {
+      pitchesAtCurrentBeat.clear();
+      lastEventTime = eventTime;
+    }
 
     // Find active chord index
     int currentChordIndex = -1;
@@ -134,29 +102,8 @@ MIDIStream PianoCompiler::CompileClip(
     }
 
     // Reset dedup set and compute cluster anchor when beat changes
-    if (eventTime != lastEventTime) {
-      pitchesAtCurrentBeat.clear();
-      currentRHNotes.clear();
-
-      if (currentChordIndex >= 0 && currentChordIndex < static_cast<int>(solvedTimeline.size())) {
-        const PianoVoicing& v = solvedTimeline[currentChordIndex];
-        if (v.IsValid()) {
-          // Pre-fetch all RH notes occurring at this exact beat to find optimal cluster anchor
-          for (const auto& ev : clip.basePattern->events) {
-            if (clip.timelineStart + ev.offsetMap == eventTime) {
-              PianoTargetRole r = static_cast<PianoTargetRole>(ev.actionParameter);
-              if (r >= PianoTargetRole::RH_GuideLow) {
-                uint8_t p = ResolvePitch(v, r);
-                if (p != 0) currentRHNotes.push_back(p);
-              }
-            }
-          }
-        }
-      }
-      currentRHAnchor = PickClusterAnchor(currentRHNotes);
-      lastEventTime = eventTime;
-    }
-
+    // (Cluster logic was removed to avoid clone-chord effect. Notes now find their nearest respective anchors).
+    
     if (currentChordIndex < 0 || currentChordIndex >= static_cast<int>(solvedTimeline.size())) continue;
 
     const PianoVoicing& voicing = solvedTimeline[currentChordIndex];
@@ -177,15 +124,25 @@ MIDIStream PianoCompiler::CompileClip(
     // Shape velocity by role and register
     uint8_t outVel = ShapeVelocity(mir.velocityBase, role, pitch, sparseLH);
 
-    // Render MIDI — pass role in channel for debug trace, and anchorOverride for audio engine
-    uint8_t outChannel = static_cast<uint8_t>(role); // Hijack the unused channel field to pass role downwards
-    uint8_t anchorOverride = (role >= PianoTargetRole::RH_GuideLow) ? currentRHAnchor : 0;
-    stream.events.push_back({eventTime, MIDIEventType::NoteOn, outChannel, pitch, outVel, anchorOverride});
+    // Humanize timing (simulating spread pianistic attack)
+    // 1 ms = 1.92 ticks at 120bpm (960 ppqn)
+    int32_t msOffset = 0;
+    if (role == PianoTargetRole::LH_Fifth || role == PianoTargetRole::LH_ShellLow) msOffset = 6;
+    else if (role == PianoTargetRole::RH_Inner || role == PianoTargetRole::RH_GuideLow) msOffset = 12;
+    else if (role == PianoTargetRole::RH_GuideHigh || role == PianoTargetRole::RH_Top) msOffset = 18;
+    
+    int32_t tickOffset = msOffset * 2; // rough approx
+    MusicalTime humanizedTime = eventTime + MusicalTime(tickOffset);
+
+    // Render MIDI — pass role in channel for debug trace.
+    // anchorOverride is 0 (engine will dynamically select best valid velocity zone per individual note).
+    uint8_t outChannel = static_cast<uint8_t>(role);
+    stream.events.push_back({humanizedTime, MIDIEventType::NoteOn, outChannel, pitch, outVel, 0});
     
     uint32_t durTicks = (mir.lengthBeats > 0)
         ? static_cast<uint32_t>(mir.lengthBeats * STANDARD_PPQN)
         : static_cast<uint32_t>(STANDARD_PPQN);
-    stream.events.push_back({eventTime + MusicalTime(durTicks), MIDIEventType::NoteOff, outChannel, pitch, 0, 0});
+    stream.events.push_back({humanizedTime + MusicalTime(durTicks), MIDIEventType::NoteOff, outChannel, pitch, 0, 0});
   }
 
   stream.SortByTime();
