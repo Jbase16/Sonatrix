@@ -14,11 +14,15 @@ const SampleZone* InstrumentArticulation::FindZone(uint8_t pitch, uint8_t veloci
     // If an explicit anchor is requested (e.g. for piano texturing), use it directly
     if (anchorOverride > 0) {
         for (const auto& zone : zones) {
-            if (zone.rootKey == anchorOverride) return &zone;
+            if (zone.rootKey == anchorOverride && velocity >= zone.lowVelocity && velocity <= zone.highVelocity) {
+                return &zone;
+            }
         }
     }
 
     for (const auto& zone : zones) {
+        if (velocity < zone.lowVelocity || velocity > zone.highVelocity) continue;
+
         float score = 0.0f;
         int semitoneDifference = static_cast<int>(pitch) - static_cast<int>(zone.rootKey);
 

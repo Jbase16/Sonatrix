@@ -15,6 +15,8 @@ struct AnchorDefinition {
   const char *fileName;
   uint8_t rootKey;
   float volumeTrim{1.0f};
+  uint8_t lowVelocity{0};
+  uint8_t highVelocity{127};
 };
 
 bool LoadAnchorSet(const std::string &directoryPath,
@@ -33,8 +35,8 @@ bool LoadAnchorSet(const std::string &directoryPath,
     SampleZone zone;
     zone.filePath = directoryPath + "/" + anchor.fileName;
     zone.rootKey = anchor.rootKey;
-    zone.lowVelocity = 0;
-    zone.highVelocity = 127;
+    zone.lowVelocity = anchor.lowVelocity;
+    zone.highVelocity = anchor.highVelocity;
     zone.volumeTrim = anchor.volumeTrim;
     zone.isLoaded =
         AudioFileReader::LoadFile(zone.filePath, zone.audioData, zone.sampleRate);
@@ -98,13 +100,63 @@ bool AssetManager::LoadAcousticPianoAnchors(const std::string &directoryPath) {
   return LoadAnchorSet(
       directoryPath, "Acoustic_Piano_Anchors", PlaybackInstrument::AcousticPiano,
       {
-          {"C2v6.wav", 36, 1.0f},
-          {"C3v16.wav", 48, 1.0f},
-          {"C4v15.wav", 60, 1.0f},
-          {"A4v14.wav", 69, 0.7f}, // A4 is hotter, trim it down
-          {"C5v9.wav", 72, 1.0f},
+          // Octave 2
+          {"AT2035 XY Angle Dn PD C2 40 55.wav", 36, 1.0f, 1, 55},
+          {"AT2035 XY Angle Dn PD C2 81 100.wav", 36, 1.0f, 56, 100},
+          {"AT2035 XY Angle Dn PD C2 115 127.wav", 36, 1.0f, 101, 127},
+          {"AT2035 XY Angle Dn PD D#2 40 55.wav", 39, 1.0f, 1, 55},
+          {"AT2035 XY Angle Dn PD D#2 81 100.wav", 39, 1.0f, 56, 100},
+          {"AT2035 XY Angle Dn PD D#2 115 127.wav", 39, 1.0f, 101, 127},
+          {"AT2035 XY Angle Dn PD F#2 40 55.wav", 42, 1.0f, 1, 55},
+          {"AT2035 XY Angle Dn PD F#2 81 100.wav", 42, 1.0f, 56, 100},
+          {"AT2035 XY Angle Dn PD F#2 115 127.wav", 42, 1.0f, 101, 127},
+          {"AT2035 XY Angle Dn PD A2 40 55.wav", 45, 1.0f, 1, 55},
+          {"AT2035 XY Angle Dn PD A2 81 100.wav", 45, 1.0f, 56, 100},
+          {"AT2035 XY Angle Dn PD A2 115 127.wav", 45, 1.0f, 101, 127},
+
+          // Octave 3
+          {"AT2035 XY Angle Dn PD C3 40 55.wav", 48, 1.0f, 1, 55},
+          {"AT2035 XY Angle Dn PD C3 81 100.wav", 48, 1.0f, 56, 100},
+          {"AT2035 XY Angle Dn PD C3 115 127.wav", 48, 1.0f, 101, 127},
+          {"AT2035 XY Angle Dn PD D#3 40 55.wav", 51, 1.0f, 1, 55},
+          {"AT2035 XY Angle Dn PD D#3 81 100.wav", 51, 1.0f, 56, 100},
+          {"AT2035 XY Angle Dn PD D#3 115 127.wav", 51, 1.0f, 101, 127},
+          {"AT2035 XY Angle Dn PD F#3 40 55.wav", 54, 1.0f, 1, 55},
+          {"AT2035 XY Angle Dn PD F#3 81 100.wav", 54, 1.0f, 56, 100},
+          {"AT2035 XY Angle Dn PD F#3 115 127.wav", 54, 1.0f, 101, 127},
+          {"AT2035 XY Angle Dn PD A3 40 55.wav", 57, 1.0f, 1, 55},
+          {"AT2035 XY Angle Dn PD A3 81 100.wav", 57, 1.0f, 56, 100},
+          {"AT2035 XY Angle Dn PD A3 115 127.wav", 57, 1.0f, 101, 127},
+
+          // Octave 4
+          {"AT2035 XY Angle Dn PD C4 40 55.wav", 60, 1.0f, 1, 55},
+          {"AT2035 XY Angle Dn PD C4 81 100.wav", 60, 1.0f, 56, 100},
+          {"AT2035 XY Angle Dn PD C4 115 127.wav", 60, 1.0f, 101, 127},
+          {"AT2035 XY Angle Dn PD D#4 40 55.wav", 63, 1.0f, 1, 55},
+          {"AT2035 XY Angle Dn PD D#4 81 100.wav", 63, 1.0f, 56, 100},
+          {"AT2035 XY Angle Dn PD D#4 115 127.wav", 63, 1.0f, 101, 127},
+          {"AT2035 XY Angle Dn PD F#4 40 55.wav", 66, 1.0f, 1, 55},
+          {"AT2035 XY Angle Dn PD F#4 81 100.wav", 66, 1.0f, 56, 100},
+          {"AT2035 XY Angle Dn PD F#4 115 127.wav", 66, 1.0f, 101, 127},
+          {"AT2035 XY Angle Dn PD A4 40 55.wav", 69, 1.0f, 1, 55},
+          {"AT2035 XY Angle Dn PD A4 81 100.wav", 69, 1.0f, 56, 100},
+          {"AT2035 XY Angle Dn PD A4 115 127.wav", 69, 1.0f, 101, 127},
+
+          // Octave 5
+          {"AT2035 XY Angle Dn PD C5 40 55.wav", 72, 1.0f, 1, 55},
+          {"AT2035 XY Angle Dn PD C5 81 100.wav", 72, 1.0f, 56, 100},
+          {"AT2035 XY Angle Dn PD C5 115 127.wav", 72, 1.0f, 101, 127},
+          {"AT2035 XY Angle Dn PD D#5 40 55.wav", 75, 1.0f, 1, 55},
+          {"AT2035 XY Angle Dn PD D#5 81 100.wav", 75, 1.0f, 56, 100},
+          {"AT2035 XY Angle Dn PD D#5 115 127.wav", 75, 1.0f, 101, 127},
+          {"AT2035 XY Angle Dn PD F#5 40 55.wav", 78, 1.0f, 1, 55},
+          {"AT2035 XY Angle Dn PD F#5 81 100.wav", 78, 1.0f, 56, 100},
+          {"AT2035 XY Angle Dn PD F#5 115 127.wav", 78, 1.0f, 101, 127},
+          {"AT2035 XY Angle Dn PD A5 40 55.wav", 81, 1.0f, 1, 55},
+          {"AT2035 XY Angle Dn PD A5 81 100.wav", 81, 1.0f, 56, 100},
+          {"AT2035 XY Angle Dn PD A5 115 127.wav", 81, 1.0f, 101, 127},
       },
-      0.6f,
+      1.0f,
       acousticPiano_, "piano anchor");
 }
 
