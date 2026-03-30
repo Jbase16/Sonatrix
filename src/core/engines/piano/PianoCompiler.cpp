@@ -67,6 +67,47 @@ static uint8_t ResolvePitch(const PianoVoicing& voicing, PianoTargetRole role) {
     return 0;
 }
 
+static int32_t GetHumanizeMs(PianoTargetRole role, PianoStyle style) {
+    switch (style) {
+      case PianoStyle::PopBlock:
+        switch (role) {
+          case PianoTargetRole::LH_Root:      return 0;
+          case PianoTargetRole::LH_Fifth:
+          case PianoTargetRole::LH_ShellLow:  return 2;
+          case PianoTargetRole::RH_GuideLow:  return 3;
+          case PianoTargetRole::RH_Inner:     return 4;
+          case PianoTargetRole::RH_GuideHigh: return 3;
+          case PianoTargetRole::RH_Top:       return 2;
+          default:                            return 0;
+        }
+
+      case PianoStyle::SingerSongwriter:
+        switch (role) {
+          case PianoTargetRole::LH_Root:      return 0;
+          case PianoTargetRole::LH_Fifth:
+          case PianoTargetRole::LH_ShellLow:  return 2;
+          case PianoTargetRole::RH_GuideLow:  return 4;
+          case PianoTargetRole::RH_Inner:     return 5;
+          case PianoTargetRole::RH_GuideHigh: return 4;
+          case PianoTargetRole::RH_Top:       return 3;
+          default:                            return 0;
+        }
+
+      case PianoStyle::JazzShell:
+        switch (role) {
+          case PianoTargetRole::LH_Root:      return 0;
+          case PianoTargetRole::LH_Fifth:
+          case PianoTargetRole::LH_ShellLow:  return 1;
+          case PianoTargetRole::RH_GuideLow:  return 2;
+          case PianoTargetRole::RH_Inner:     return 3;
+          case PianoTargetRole::RH_GuideHigh: return 2;
+          case PianoTargetRole::RH_Top:       return 1;
+          default:                            return 0;
+        }
+    }
+    return 0;
+}
+
 MIDIStream PianoCompiler::CompileClip(
     const EditorClip &clip, const std::vector<ChordTrackEvent> &chordTimeline,
     Sonatrix::Core::ML::DynamicGrooveVector *grooveVectorContext) const {
@@ -125,13 +166,15 @@ MIDIStream PianoCompiler::CompileClip(
     uint8_t outVel = ShapeVelocity(mir.velocityBase, role, pitch, sparseLH);
 
     // Humanize timing (simulating spread pianistic attack)
-    // 1 ms = 1.92 ticks at 120bpm (960 ppqn)
-    int32_t msOffset = 0;
-    if (role == PianoTargetRole::LH_Fifth || role == PianoTargetRole::LH_ShellLow) msOffset = 6;
-    else if (role == PianoTargetRole::RH_Inner || role == PianoTargetRole::RH_GuideLow) msOffset = 12;
-    else if (role == PianoTargetRole::RH_GuideHigh || role == PianoTargetRole::RH_Top) msOffset = 18;
+    int32_t msOffset = GetHumanizeMs(role, m_style);
     
-    int32_t tickOffset = msOffset * 2; // rough approx
+    // Add deterministic jitter (-1, 0, +1 ms) to break mechanical rigidity
+    int32_t jitter = (static_cast<int>(pitch) + static_cast<int32_t>(eventTime)) % 3 - 1;
+    msOffset += jitter;
+    if (msOffset < 0) msOffset = 0; // prevent negative offset passing before root
+
+    // 1 ms = 1.92 ticks at 120bpm (960 ppqn)
+    int32_t tickOffset = msOffset * 2; 
     MusicalTime humanizedTime = eventTime + MusicalTime(tickOffset);
 
     // Render MIDI — pass role in channel for debug trace.
